@@ -9,6 +9,8 @@
 namespace simpleServer {
 
 
+
+
 class EPollAsync: public AbstractAsyncControl {
 public:
 
@@ -40,8 +42,10 @@ public:
 
 
 	typedef std::function<void(EventType)> CallbackFn;
+	typedef std::vector<std::pair<CallbackFn, EventType> > CBList;
 
 	void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn);
+	void cancelWait(WaitFor wf, unsigned int fd);
 
 
 protected:
@@ -49,25 +53,31 @@ protected:
 	bool stopped;
 	unsigned int regCounter;
 
-	std::mutex lock;
+	std::mutex workerLock;
+	std::mutex regLock;
 	typedef std::lock_guard<std::mutex> Sync;
+	typedef std::chrono::steady_clock Clock;
+	typedef Clock::time_point TimePt;
+	typedef std::chrono::milliseconds Millis;
 
-	typedef std::chrono::steady_clock::time_point TimePt;
+	struct TmReg;
 
 	struct FdReg {
 		CallbackFn cb[2];
-		unsigned int regCounter[2];
-
+		TmReg *tmPos[2];
+		unsigned int fd;
+		bool used;
+		FdReg():used(false) {}
 	};
-
-	typedef std::unordered_map<unsigned int, FdReg> FdMap;
 
 	struct TmReg {
 		TimePt time;
-		WaitFor op;
-		unsigned int fd;
+		TmReg **t;
 
-		TmReg(TimePt time,WaitFor op,unsigned int fd):time(time),op(op),fd(fd) {}
+		TmReg(TimePt time, TmReg **fdPos):time(time),t(t) {}
+		TmReg(const TmReg &) = delete;
+		TmReg(TmReg &&reg):time(reg.time),t(reg.t) {*t = this;reg.t = nullptr;}
+		~TmReg() {if (t) *t = nullptr;}
 	};
 
 	struct TmRegCmp {
@@ -76,14 +86,23 @@ protected:
 		}
 	};
 
+
 	typedef std::priority_queue<TmReg, std::vector<TmReg>, TmRegCmp> TimeoutQueue;
+	typedef std::vector<FdReg> FdRegMap;
 
+	FdReg *findReg(unsigned int fd);
+	FdReg *addReg(unsigned int fd);
+	void removeTimeout(TmReg *reg);
+	void addTimeout(TmReg &&reg);
 
-
-	TmReg popTimeout();
-	void pushTimeout(const TmReg &tm);
-
-
+private:
+	void updateTimeout(FdReg* rg, unsigned int timeout, WaitFor wf);
+	int epollUpdateFd(unsigned int fd, FdReg* rg);
+	unsigned int calcTimeout();
+	void onTimeout(CBList &cblist);
+	void onEvent(int events, int fd, CBList &cblist);
+	void clearNotify();
+	void sendNotify();
 
 };
 

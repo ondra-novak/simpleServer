@@ -5,9 +5,9 @@
 
 namespace simpleServer {
 
-template<typename Fn>
-void runNoExcept(Fn fn) noexcept(true) {
-	fn();
+template<typename Fn, class ...Args>
+void runNoExcept(Fn fn, Args... x) noexcept(true) {
+	fn(x...);
 }
 
 template<typename Fn1, typename Fn2>

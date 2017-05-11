@@ -10,4 +10,4 @@ install(TARGETS simpleServer
         ) 
 INSTALL(FILES ${simpleServer_HDR}
         DESTINATION "include/simpleServer"
-        )      
+        )       
