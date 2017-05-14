@@ -32,7 +32,7 @@ SocketConnection::SocketConnection(int sock,unsigned int iotimeout, NetAddr peer
 {
 }
 
-
+/*
 BinaryView SocketConnection::readData(unsigned int prevRead) {
 
 	BinaryView buff = getReadBuffer();
@@ -85,9 +85,8 @@ BinaryView SocketConnection::readData(unsigned int prevRead) {
 	}
 
 }
-
+*/
 void SocketConnection::waitForData() {
-	flush();
 	struct pollfd fdinfo;
 	fdinfo.events = POLLIN;
 	fdinfo.fd = sock;
@@ -131,7 +130,7 @@ void SocketConnection::sendAll(BinaryView data) {
 		}
 	}
 }
-
+/*
 void SocketConnection::writeData(const BinaryView& data) {
 	if (data.length) {
 		if (wrbuff_pos == 0 && data.length > bufferSize) {
@@ -158,6 +157,7 @@ void SocketConnection::flush() {
 	wrbuff_pos = 0;
 }
 
+*/
 void SocketConnection::closeOutput() {
 	flush();
 	shutdown(sock,SHUT_WR);
@@ -220,9 +220,22 @@ SocketConnection::~SocketConnection() {
 	::close(sock);
 }
 
+int SocketConnection::recvData(unsigned char* buffer, std::size_t size, bool nonblock) {
+	int r = recv(sock, buffer, size, MSG_DONTWAIT);
+	while (r == -1) {
+		int e = errno;
+		if (e != EWOULDBLOCK && e != EINTR) throw SystemException(e);
+		if (nonblock) return -1;
+		waitForData();
+		r = recv(sock, buffer, size, MSG_DONTWAIT);
+	}
+	return r;
+}
+
 BinaryView SocketConnection::getReadBuffer() const {
 	return BinaryView(rdbuff+rdbuff_pos, rdbuff_used - rdbuff_pos);
 }
+
 
 
 

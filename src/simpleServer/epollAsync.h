@@ -2,8 +2,11 @@
 #include <mutex>
 #include <chrono>
 #include <queue>
+
 #include <unordered_map>
 #include "async.h"
+#include "epoll.h"
+#include "prioqueue.h"
 
 
 namespace simpleServer {
@@ -22,12 +25,12 @@ public:
 	///stop listener - sets listener to finish state exiting all workers
 	virtual void stop();
 
-	~EPollAsync();
-
 
 	enum EventType {
 		///Detected event on the socket
-		etNetEvent,
+		etReadEvent,
+		///Detected event on the socket
+		etWriteEvent,
 		///No event detected before timeout
 		etTimeout,
 		///Error event detected on the socket
@@ -42,16 +45,14 @@ public:
 
 
 	typedef std::function<void(EventType)> CallbackFn;
-	typedef std::vector<std::pair<CallbackFn, EventType> > CBList;
+	typedef std::pair<CallbackFn, EventType> CallbackWithArg;
+	typedef std::vector<CallbackWithArg> CBList;
 
 	void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn);
 	void cancelWait(WaitFor wf, unsigned int fd);
 
 
 protected:
-	int epollfd;
-	bool stopped;
-	unsigned int regCounter;
 
 	std::mutex workerLock;
 	std::mutex regLock;
@@ -72,12 +73,25 @@ protected:
 
 	struct TmReg {
 		TimePt time;
-		TmReg **t;
+		FdReg *fdreg;
+		WaitFor wf;
 
-		TmReg(TimePt time, TmReg **fdPos):time(time),t(t) {}
+		TmReg():fdreg(0) {}
+		TmReg(TimePt time, FdReg *fdreg,WaitFor wf):time(time),fdreg(fdreg),wf(wf) {}
 		TmReg(const TmReg &) = delete;
-		TmReg(TmReg &&reg):time(reg.time),t(reg.t) {*t = this;reg.t = nullptr;}
-		~TmReg() {if (t) *t = nullptr;}
+		TmReg(TmReg &&reg):time(reg.time),fdreg(reg.fdreg),wf(reg.wf) {
+			if (fdreg) fdreg->tmPos[wf] = this;reg.fdreg = nullptr;
+		}
+		TmReg &operator=(TmReg &&x) {
+			time = x.time;
+			fdreg = x.fdreg;
+			wf = x.wf;
+			fdreg->tmPos[wf]= this;
+			x.fdreg = nullptr;
+			return *this;
+
+		}
+
 	};
 
 	struct TmRegCmp {
@@ -87,7 +101,7 @@ protected:
 	};
 
 
-	typedef std::priority_queue<TmReg, std::vector<TmReg>, TmRegCmp> TimeoutQueue;
+	typedef PrioQueue<TmReg,TmRegCmp> TimeoutQueue;
 	typedef std::vector<FdReg> FdRegMap;
 
 	FdReg *findReg(unsigned int fd);
@@ -97,13 +111,18 @@ protected:
 
 private:
 	void updateTimeout(FdReg* rg, unsigned int timeout, WaitFor wf);
-	int epollUpdateFd(unsigned int fd, FdReg* rg);
+	bool epollUpdateFd(FdReg* rg);
 	unsigned int calcTimeout();
 	void onTimeout(CBList &cblist);
-	void onEvent(int events, int fd, CBList &cblist);
+	void onEvent(const EPoll::Events &ev, CBList &cblist);
 	void clearNotify();
 	void sendNotify();
 
+	EPoll epoll;
+	bool stopped;
+	TimeoutQueue tmoutQueue;
+	FdRegMap fdRegMap;
+	int notifyPipe[2];
 };
 
 

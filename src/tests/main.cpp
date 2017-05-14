@@ -9,6 +9,8 @@
 
 #include "../simpleServer/TCPListener.h"
 #include "../simpleServer/mt.h"
+#include "testClass.h"
+#include "../simpleServer/prioqueue.h"
 
 using namespace simpleServer;
 
@@ -82,6 +84,31 @@ void echoTest() {
 
 int main(int argc, char *argv[]) {
 
-	echoTest();
+	TestSimple tst;
+
+	tst.test("queue.removeAt","98,56,54,44,30,23,22,21,20,20,11,10,1 - 98,54,44,30,22,21,20,20,11,10") >> [](std::ostream &out) {
+
+		int items[] = {10,30,20,1,23,44,21,22,56,20,11,54,98};
+		PrioQueue<int> r,t;
+		for (auto v:items) r.push(v);
+
+		auto printq = [&](PrioQueue<int> r){
+			out << r.top();
+			r.pop();
+			while (!r.empty()) {
+				out << "," << r.top();
+				r.pop();
+			}
+		};
+
+		printq(r);
+		r.remove_at(3);
+		r.remove_at(2);
+		r.remove_at(7);
+		out << " - ";
+		printq(r);
+	};
+
+
 
 }

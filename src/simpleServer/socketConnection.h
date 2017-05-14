@@ -16,7 +16,7 @@ namespace simpleServer {
 class SocketConnection;
 typedef RefCntPtr<SocketConnection> PSocketConnection;
 
-class SocketConnection: public IConnection {
+class SocketConnection: public AbstractConnection<2000> {
 
 
 public:
@@ -26,36 +26,36 @@ public:
 	~SocketConnection();
 
 
-	BinaryView readData(unsigned int prevRead);
 
 	///stream is closed on input (received 0)
 	bool isClosed() const;
 
 	///closes input - no more data can be read
-	void closeInput();
+	void closeInput() override;
 
 
-	void writeData(const BinaryView &data);
-	void flush();
-	void closeOutput();
+	void closeOutput() override;
 
 
 
 
 
-	NetAddr getPeerAddr() const {return peerAddr;}
+	NetAddr getPeerAddr() const override {return peerAddr;}
 
 
-	unsigned int getIOTimeout() const {return iotimeout;}
-	void setIOTimeout(unsigned int t) {iotimeout = t;}
+	unsigned int getIOTimeout() const override {return iotimeout;}
+	void setIOTimeout(unsigned int t) override {iotimeout = t;}
 
 
 
 protected:
 
+	virtual void sendAll(BinaryView data) override;
+	virtual int recvData(unsigned char *buffer, std::size_t size, bool nonblock) override;
+
+
 	void waitForData();
 	void waitForSend();
-	void sendAll(BinaryView data);
 
 
 	BinaryView getReadBuffer() const;

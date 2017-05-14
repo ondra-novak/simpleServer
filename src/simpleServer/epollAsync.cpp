@@ -1,7 +1,6 @@
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/epoll.h>
 #include "epollAsync.h"
 
 #include "../simpleServer/mt.h"
@@ -14,9 +13,11 @@ namespace simpleServer {
 
 
 EPollAsync::EPollAsync() {
-	epollfd = epoll_create1(EPOLL_CLOEXEC);
 
 	stopped = false;
+
+	pipe2(notifyPipe, O_CLOEXEC|O_NONBLOCK);
+	epoll.add(notifyPipe[0],EPoll::input);
 
 }
 
@@ -24,58 +25,68 @@ void EPollAsync::updateTimeout(FdReg* rg, unsigned int timeout, WaitFor wf) {
 	if (rg->tmPos[wf])
 		removeTimeout(rg->tmPos[wf]);
 	if (timeout != infinity) {
-		addTimeout(TmReg(Clock::now() + Millis(timeout), &(rg->tmPos[wf])));
+		addTimeout(TmReg(Clock::now() + Millis(timeout),rg, wf));
 	}
 }
 
-int EPollAsync::epollUpdateFd(unsigned int fd, FdReg* rg) {
-	int r;
-	struct epoll_event ev;
-	ev.events = EPOLLONESHOT;
-	if (rg->cb[wfRead] != nullptr)
-		ev.events |= EPOLLIN;
+EPollAsync::FdReg* EPollAsync::findReg(unsigned int fd) {
+	if (fd >= fdRegMap.size()) fdRegMap.resize(fd+1);
+	return &fdRegMap[0]+fd;
+}
 
-	if (rg->cb[wfRead] != nullptr)
-		ev.events |= EPOLLOUT;
+EPollAsync::FdReg* EPollAsync::addReg(unsigned int fd) {
+	FdReg* r = findReg(fd);
+	r->used = true;
+	r->fd = fd;
+}
 
-	if (ev.events == EPOLLONESHOT) {
-		epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &ev);
+void EPollAsync::removeTimeout(TmReg* reg) {
+	std::size_t pos = reg - &tmoutQueue.top();
+	tmoutQueue.remove_at(pos);
+}
+
+void EPollAsync::addTimeout(TmReg&& reg) {
+	tmoutQueue.push(std::move(reg));
+}
+
+bool EPollAsync::epollUpdateFd(FdReg* rg) {
+	int events = 0;
+	bool noev = true;
+	if (rg->cb[wfRead] != nullptr) {
+		events |= EPoll::input;
+		noev = false;
+	}
+
+	if (rg->cb[wfRead] != nullptr) {
+		events |= EPoll::output;
+		noev = false;
+	}
+
+	if (noev) {
+		epoll.remove(rg->fd);
 		rg->fd = 0;
-		return 1;
+		rg->used = false;
+		return false;
 	} else {
-		r = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &ev);
-		return r;
+		epoll.update(rg->fd,events);
+		return true;
 	}
 }
 
 void EPollAsync::asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn) {
 	Sync _(regLock);
+	FdReg *rg;
 
-	struct epoll_event ev;
-	ev.data.fd = fd;
-	ev.events = (wf==wfRead?EPOLLIN:EPOLLOUT)|EPOLLONESHOT;
-	int r = epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&ev);
-	if (r == -1) {
-		int e = errno;
-		if (e == EEXIST) {
-
-			FdReg *rg = findReg(fd);
-			rg->cb[wf] = fn;
-			r = epollUpdateFd(fd, rg);
-			if (r == 1) return;
-				removeTimeout(rg->tmPos[wf]);
-			if (r == 0) {
-				updateTimeout(rg, timeout, wf);
-				return;
-			}
-			e = errno;
-		}
-		throw SystemException(e);
+	if (!epoll.add(fd, wf == wfRead?EPoll::input:EPoll::output)) {
+		rg = findReg(fd);
 	} else {
-		FdReg *rg = addReg(fd);
-		rg->cb[wf] = fn;
-		updateTimeout(rg, timeout, wf);
+		rg = addReg(fd);
 	}
+	rg->cb[wf] = fn;
+	if (epollUpdateFd(rg))
+		updateTimeout(rg, timeout, wf);
+	else
+		removeTimeout(rg->tmPos[wf]);
 }
 
 void EPollAsync::cancelWait(WaitFor wf, unsigned int fd) {
@@ -84,7 +95,7 @@ void EPollAsync::cancelWait(WaitFor wf, unsigned int fd) {
 	if (rg != nullptr) {
 		removeTimeout(rg->tmPos[wf]);
 		rg->cb[wf] == nullptr;
-		epollUpdateFd(fd,rg);
+		epollUpdateFd(rg);
 	}
 }
 
@@ -95,27 +106,24 @@ void EPollAsync::run() {
 	//all calls are scheduled here and executed at the end
 	//where the worker lock is unlocked;
 	CBList cbList;
+
 	while (!stopped) {
 		unsigned int tm = calcTimeout();
-		struct epoll_event ev[32];
-		int r = epoll_wait(epollfd,ev,32,tm);
-		if (r == 0) {
+		EPoll::Events ev = epoll.getNext(tm);
+		if (ev.isTimeout()) {
 			Sync _(regLock);
 			onTimeout(cbList);
 		} else {
 			Sync _(regLock);
-			for (int i = 0; i < r; i++) {
-				if (ev[i].data.fd != 0) {
-					onEvent(ev[i].events, ev[i].data.fd, cbList);
-				} else {
-					clearNotify();
-				}
-			}
+			onEvent(ev, cbList);
 		}
+
 		workerLock.unlock();
+
 		for (auto c : cbList) {
 			runNoExcept(c.first, c.second);
 		}
+
 		cbList.clear();
 		workerLock.lock();
 	}
@@ -127,12 +135,58 @@ void EPollAsync::stop() {
 	sendNotify();
 }
 
-EPollAsync::~EPollAsync() {
-	::close(epollfd);
+
+unsigned int EPollAsync::calcTimeout() {
+	if (tmoutQueue.empty()) return -1;
+	TimePt pt = Clock::now();
+	const TmReg &reg = tmoutQueue.top();
+	if (reg.time < pt) return 0;
+	return std::chrono::duration_cast<std::chrono::milliseconds>(reg.time - pt).count();
 }
 
+void EPollAsync::onTimeout(CBList& cblist) {
+	TimePt pt = Clock::now();
+	do {
+		const TmReg &z = tmoutQueue.top();
+		FdReg *reg = z.fdreg;
+		WaitFor wf = z.wf;
+		if (z.time > pt) break;
+		cblist.push_back(CallbackWithArg(std::move(reg->cb[wf]), etTimeout));
+		tmoutQueue.pop();
+		epollUpdateFd(reg);
+	}
+	while (true);
+}
 
+void EPollAsync::onEvent(const EPoll::Events &ev, CBList& cblist) {
+	FdReg *reg = findReg(ev.data.fd);
+	if (ev.isError()) {
+		if (reg->cb[wfRead] != nullptr)
+			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etError));
+		if (reg->cb[wfWrite] != nullptr)
+			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etError));
+	}
+	if (ev.isInput()) {
+		if (reg->cb[wfRead] != nullptr)
+			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etReadEvent));
+	}
+	if (ev.isOutput()) {
+		if (reg->cb[wfWrite] != nullptr)
+			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etWriteEvent));
+	}
+	epollUpdateFd(reg);
+}
 
+void EPollAsync::clearNotify() {
+	char buff[20];
+	(void)::read(notifyPipe[0], buff, 20);
+}
+
+void EPollAsync::sendNotify() {
+	char c = 1;
+	int r = ::write(notifyPipe[1],&c,1);
+	if (r==-1) throw SystemException(errno);
+}
 
 }
 
