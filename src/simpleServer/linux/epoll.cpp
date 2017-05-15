@@ -6,7 +6,7 @@
 #include <cstring>
 
 
-#include "exceptions.h"
+#include "../exceptions.h"
 
 namespace simpleServer {
 

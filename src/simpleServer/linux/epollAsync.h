@@ -4,9 +4,9 @@
 #include <queue>
 
 #include <unordered_map>
-#include "async.h"
 #include "epoll.h"
-#include "prioqueue.h"
+#include "../prioqueue.h"
+#include "linuxAsync.h"
 
 
 namespace simpleServer {
@@ -14,7 +14,7 @@ namespace simpleServer {
 
 
 
-class EPollAsync: public AbstractAsyncControl {
+class EPollAsync: public LinuxAsync {
 public:
 
 	EPollAsync();
@@ -28,31 +28,9 @@ public:
 	///stop listener - sets listener to finish state exiting all workers
 	virtual void stop();
 
+	virtual void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn) override;
+	virtual bool cancelWait(WaitFor wf, unsigned int fd) override;
 
-	enum EventType {
-		///Detected event on the socket
-		etReadEvent,
-		///Detected event on the socket
-		etWriteEvent,
-		///No event detected before timeout
-		etTimeout,
-		///Error event detected on the socket
-		/** Called in exception handler, you can receive exception as std::current_exception() */
-		etError
-	};
-
-	enum WaitFor {
-		wfRead=0,
-		wfWrite=1
-	};
-
-
-	typedef std::function<void(EventType)> CallbackFn;
-	typedef std::pair<CallbackFn, EventType> CallbackWithArg;
-	typedef std::vector<CallbackWithArg> CBList;
-
-	void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn);
-	bool cancelWait(WaitFor wf, unsigned int fd);
 
 protected:
 

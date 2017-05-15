@@ -3,13 +3,19 @@
 #include <fcntl.h>
 #include "epollAsync.h"
 
-#include "../simpleServer/mt.h"
-#include "connection.h"
+#include "../mt.h"
+#include "../connection.h"
 
-#include "exceptions.h"
+#include "../exceptions.h"
 
 
 namespace simpleServer {
+
+
+AsyncControl AsyncControl::create() {
+	return AsyncControl(new EPollAsync);
+
+}
 
 
 EPollAsync::EPollAsync() {

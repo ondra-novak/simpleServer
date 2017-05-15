@@ -1,7 +1,7 @@
 #include <thread>
 #include "async.h"
 
-#include "epollAsync.h"
+#include "linux/epollAsync.h"
 namespace simpleServer {
 
 
@@ -23,10 +23,6 @@ AsyncControl AsyncControl::start( CallbackExecutor executor) {
 
 }
 
-AsyncControl AsyncControl::create() {
-	return AsyncControl(new EPollAsync);
-
-}
 
 AsyncControl AsyncControl::getSingleton() {
 

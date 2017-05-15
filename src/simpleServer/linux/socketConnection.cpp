@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include "epollAsync.h"
+#include "linuxAsync.h"
 
 #include <poll.h>
 #include <cstring>
@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 
-#include "exceptions.h"
+#include "../exceptions.h"
 
 namespace simpleServer {
 
@@ -33,60 +33,6 @@ SocketConnection::SocketConnection(int sock,unsigned int iotimeout, NetAddr peer
 {
 }
 
-/*
-BinaryView SocketConnection::readData(unsigned int prevRead) {
-
-	BinaryView buff = getReadBuffer();
-	if (prevRead >= buff.length) {
-		rdbuff_used = rdbuff_pos = 0;
-	} else{
-		rdbuff_pos += prevRead;
-	}
-	buff = getReadBuffer();
-	if (prevRead) {
-		if (buff.length == 0 && !eof) {
-			int res = recv(sock,rdbuff,bufferSize,MSG_DONTWAIT);
-			if (res == -1) {
-				int e = errno;
-				if (e != EWOULDBLOCK) throw SystemException(errno);
-			} else if (res == 0) {
-				eof = true;
-			} else {
-				rdbuff_used = res;
-				rdbuff_pos = 0;
-				buff = getReadBuffer();
-			}
-		}
-		return buff;
-	} else {
-		if (buff.length == 0) {
-			if (!eof) {
-				int res = recv(sock, rdbuff,bufferSize,MSG_DONTWAIT);
-				while (res == -1) {
-					int e = errno;
-					if (e != EWOULDBLOCK) throw SystemException(errno);
-					waitForData();
-					res = recv(sock, rdbuff,bufferSize,MSG_DONTWAIT);
-				}
-				if (res == 0) {
-					eof = true;
-					eofReported = true;
-				} else {
-					rdbuff_used = res;
-					rdbuff_pos = 0;
-					buff = getReadBuffer();
-				}
-			} else {
-				if (eofReported)
-					throw EndOfStreamException();
-				eofReported = true;
-			}
-		}
-		return buff;
-	}
-
-}
-*/
 void SocketConnection::waitForData() {
 	struct pollfd fdinfo;
 	fdinfo.events = POLLIN;
@@ -131,34 +77,6 @@ void SocketConnection::sendAll(BinaryView data) {
 		}
 	}
 }
-/*
-void SocketConnection::writeData(const BinaryView& data) {
-	if (data.length) {
-		if (wrbuff_pos == 0 && data.length > bufferSize) {
-			sendAll(data);
-		} else {
-			std::size_t remain = bufferSize - wrbuff_pos;
-			std::size_t transmit = std::min(remain,data.length);
-			std::memcpy(wrbuff+wrbuff_pos,data.data,transmit);
-			wrbuff_pos += transmit;
-			if (wrbuff_pos == bufferSize) {
-				flush();
-			}
-			BinaryView newdata = data.substr(transmit);
-			if (newdata.length) writeData(newdata);
-		}
-	} else {
-		closeOutput();
-	}
-}
-
-void SocketConnection::flush() {
-	BinaryView data(wrbuff, wrbuff_pos);
-	sendAll(data);
-	wrbuff_pos = 0;
-}
-
-*/
 void SocketConnection::closeOutput() {
 	flush();
 	shutdown(sock,SHUT_WR);
@@ -241,20 +159,20 @@ void SocketConnection::asyncRead(AsyncControl cntr, Callback callback,unsigned i
 		} catch (...) {
 			callback(asyncError, BinaryView(nullptr,0));
 		}
-		EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
+		LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
 		RefCntPtr<SocketConnection> me(this);
-		async.asyncWait(EPollAsync::wfRead,sock,timeoutOverride?timeoutOverride:iotimeout,[me,cntr,callback,timeoutOverride](EPollAsync::EventType ev){
+		async.asyncWait(LinuxAsync::wfRead,sock,timeoutOverride?timeoutOverride:iotimeout,[me,cntr,callback,timeoutOverride](LinuxAsync::EventType ev){
 			switch (ev) {
-			case EPollAsync::etError: try {
+			case LinuxAsync::etError: try {
 					checkSocketError(me->sock);
 				} catch (...) {
 					callback(asyncError,BinaryView(nullptr,0));
 				}
 				break;
-			case EPollAsync::etTimeout:
+			case LinuxAsync::etTimeout:
 				callback(asyncTimeout, BinaryView(nullptr,0));
 				break;
-			case EPollAsync::etReadEvent: try {
+			case LinuxAsync::etReadEvent: try {
 						int i = me->recvData(me->rdbuff, sizeof(me->rdbuff), true);
 						if (i == -1) {
 							me->asyncRead(cntr, callback, timeoutOverride);
@@ -307,18 +225,18 @@ void SocketConnection::asyncWrite(BinaryView data,AsyncControl cntr, Callback ca
 
 void SocketConnection::runAsyncWrite(BinaryView data,std::size_t offset,AsyncControl cntr, Callback callback,unsigned int timeoutOverride) {
 		RefCntPtr<SocketConnection> me(this);
-		EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
-		async.asyncWait(EPollAsync::wfWrite,sock,timeoutOverride?timeoutOverride:iotimeout,
-				[me,data,offset,cntr,callback,timeoutOverride] (EPollAsync::EventType ev) {
+		LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
+		async.asyncWait(LinuxAsync::wfWrite,sock,timeoutOverride?timeoutOverride:iotimeout,
+				[me,data,offset,cntr,callback,timeoutOverride] (LinuxAsync::EventType ev) {
 					switch (ev) {
-					case EPollAsync::etError:
+					case LinuxAsync::etError:
 						try {
 							checkSocketError(me->sock);
 						} catch (...) {
 							callback(asyncError, data);
 						}
 						break;
-					case EPollAsync::etTimeout:
+					case LinuxAsync::etTimeout:
 						callback(asyncTimeout, data);
 						break;
 					}
@@ -367,13 +285,13 @@ BinaryView SocketConnection::getReadBuffer() const {
 }
 
 bool SocketConnection::cancelAsyncRead(AsyncControl cntr) {
-	EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
-	return async.cancelWait(EPollAsync::wfRead,sock);
+	LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
+	return async.cancelWait(LinuxAsync::wfRead,sock);
 
 }
 bool SocketConnection::cancelAsyncWrite(AsyncControl cntr){
-	EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
-	return async.cancelWait(EPollAsync::wfWrite,sock);
+	LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
+	return async.cancelWait(LinuxAsync::wfWrite,sock);
 
 }
 

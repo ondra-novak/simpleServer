@@ -1,19 +1,12 @@
 #pragma once
-#include "address.h"
-#include "connection.h"
-#include "refcnt.h"
+#include "../TCPListener.h"
 
 namespace simpleServer {
 
 
-enum Range {
-	network,
-	localhost
-};
 
 
-
-class TCPListenerImpl: public RefCntObj {
+class TCPListenerImpl: public ITCPListener {
 public:
 
 
@@ -30,33 +23,14 @@ public:
 	explicit TCPListenerImpl(Range range, unsigned int &port, const ConnectParams &params = ConnectParams());
 	~TCPListenerImpl();
 
-	class Iterator {
-	public:
-
-		Iterator(RefCntPtr<TCPListenerImpl> owner, Connection firstConn):owner(owner),conn(firstConn) {}
-		Connection operator *();
-		Iterator &operator++();
-		Iterator operator++(int);
-		bool operator==(const Iterator &other) const;
-		bool operator!=(const Iterator &other) const;
-
-	protected:
-		RefCntPtr<TCPListenerImpl> owner;
-		Connection conn;
-	};
-
-
-	Iterator begin();
-	Iterator end();
 
 	///Stop listening and shutdown the opened port
 	/** Once listener is stopped, all threads blocked by accept are released */
 	void stop();
 
-	typedef std::function<void(AsyncState, const Connection *)> AsyncCallback;
 
 
-	void asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride);
+	void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride);
 
 protected:
 
@@ -84,7 +58,7 @@ protected:
 
 class TCPListenerImpl;
 
-typedef RefCntPtr<TCPListenerImpl> PTCPListener;
+
 
 
 

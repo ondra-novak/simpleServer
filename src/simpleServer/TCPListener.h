@@ -3,9 +3,63 @@
 #include "refcnt.h"
 #include "connection.h"
 #include "stringview.h"
-#include "tcplistenimpl.h"
 namespace simpleServer {
 
+enum Range {
+	///specify whole network (IPv4)
+	network,
+	///specify localhost area only (IPv4)
+	localhost,
+	///specify whole network (IPv6)
+	network6,
+	///specify localhost area only (IPv6)
+	localhost6,
+};
+
+
+
+class ITCPListener: public RefCntObj {
+public:
+
+	class Iterator {
+	public:
+
+		Iterator(RefCntPtr<ITCPListener> owner, Connection firstConn):owner(owner),conn(firstConn) {}
+		Connection operator *();
+		Iterator &operator++();
+		Iterator operator++(int);
+		bool operator==(const Iterator &other) const;
+		bool operator!=(const Iterator &other) const;
+
+	protected:
+		RefCntPtr<ITCPListener> owner;
+		Connection conn;
+	};
+
+
+
+	Iterator begin();
+	Iterator end();
+
+	///Stop listening and shutdown the opened port
+	/** Once listener is stopped, all threads blocked by accept are released */
+	virtual void stop() = 0;
+
+	typedef std::function<void(AsyncState, const Connection *)> AsyncCallback;
+
+
+	virtual void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) = 0;
+
+protected:
+
+	virtual Connection accept() = 0;
+
+	bool isBadConnection(const Connection& conn);
+
+};
+
+
+typedef RefCntPtr<ITCPListener> PTCPListener;
 
 ///Listens for incoming connections
 /**
@@ -53,7 +107,7 @@ public:
 	TCPListener(PTCPListener other);
 
 
-	typedef TCPListenerImpl::Iterator Iterator;
+	typedef ITCPListener::Iterator Iterator;
 
 	///Initiates listening and returns iterator to first connection
 	/**
@@ -84,7 +138,7 @@ public:
 	 * @param Connection * pointer to newly created connection. The pointer is defined only when AsyncState is asyncOk, otherwise it is nullptr. You have
 	 * to copy the object to new variable
 	 */
-	typedef TCPListenerImpl::AsyncCallback AsyncCallback;
+	typedef ITCPListener::AsyncCallback AsyncCallback;
 
 	///Initialize asynchronous listening
 	/**
@@ -104,7 +158,7 @@ public:
 	 * The function stop() cancels asynchronous listener
 	 *
 	 */
-	void asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
+	void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
 
 
 protected:

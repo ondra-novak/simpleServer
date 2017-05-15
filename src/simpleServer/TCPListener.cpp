@@ -3,19 +3,7 @@
 namespace simpleServer {
 
 
-TCPListener::TCPListener(NetAddr addr, const ConnectParams& params)
-:owner(new TCPListenerImpl(addr,params))
-{
-}
 
-TCPListener::TCPListener(unsigned int port, Range range,const ConnectParams& params)
-:owner(new TCPListenerImpl(port,range,params)) {
-}
-
-TCPListener::TCPListener(Range range, unsigned int& port,const ConnectParams& params)
-:owner(new TCPListenerImpl(range,port,params))
-{
-}
 
 TCPListener::TCPListener(PTCPListener other):owner(other) {
 
@@ -33,8 +21,48 @@ void TCPListener::stop() {
 	owner->stop();
 }
 
-void TCPListener::asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
-	owner->asyncListen(cntr, callback, timeoutOverride);
+void TCPListener::asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+	owner->asyncAccept(cntr, callback, timeoutOverride);
+}
+
+
+Connection ITCPListener::Iterator::operator *() {
+	return conn;
+}
+
+ITCPListener::Iterator& ITCPListener::Iterator::operator ++() {
+	conn = owner->accept();
+	return *this;
+}
+
+ITCPListener::Iterator ITCPListener::Iterator::operator ++(int) {
+	Iterator res = *this;
+	conn = owner->accept();
+	return res;
+}
+
+bool ITCPListener::isBadConnection(const Connection& conn) {
+	return conn == Connection(nullptr);
+}
+
+
+ITCPListener::Iterator ITCPListener::begin() {
+	Connection c = accept();
+	if (isBadConnection(c)) return end();
+	return Iterator(this,c);
+}
+
+ITCPListener::Iterator ITCPListener::end() {
+	return Iterator(this,Connection(nullptr));
+}
+
+
+bool ITCPListener::Iterator::operator ==(const Iterator& other) const {
+	return owner == other.owner && conn == other.conn;
+}
+
+bool ITCPListener::Iterator::operator !=(const Iterator& other) const {
+	return !operator==(other);
 }
 
 }

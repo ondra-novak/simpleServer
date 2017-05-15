@@ -1,8 +1,8 @@
 #include <cstring>
 #include <netdb.h>
-#include "address.h"
+#include "../address.h"
 
-#include "exceptions.h"
+#include "../exceptions.h"
 
 
 namespace simpleServer {

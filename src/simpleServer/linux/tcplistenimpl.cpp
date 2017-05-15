@@ -7,11 +7,25 @@
 
 #include <cstring>
 
-#include "epollAsync.h"
+#include "linuxAsync.h"
 
-#include "exceptions.h"
+#include "../exceptions.h"
 
 namespace simpleServer {
+
+TCPListener::TCPListener(NetAddr addr, const ConnectParams& params)
+:owner(new TCPListenerImpl(addr,params))
+{
+}
+
+TCPListener::TCPListener(unsigned int port, Range range,const ConnectParams& params)
+:owner(new TCPListenerImpl(port,range,params)) {
+}
+
+TCPListener::TCPListener(Range range, unsigned int& port,const ConnectParams& params)
+:owner(new TCPListenerImpl(range,port,params))
+{
+}
 
 static int createSocket(const struct sockaddr *sa, std::size_t sa_len) {
 	int s = socket(sa->sa_family,SOCK_STREAM,IPPROTO_TCP);
@@ -63,20 +77,6 @@ TCPListenerImpl::TCPListenerImpl(Range range, unsigned int& port, const ConnectP
 	port = htons(addr.sin6_port);
 }
 
-Connection TCPListenerImpl::Iterator::operator *() {
-	return conn;
-}
-
-TCPListenerImpl::Iterator& TCPListenerImpl::Iterator::operator ++() {
-	conn = owner->accept();
-	return *this;
-}
-
-TCPListenerImpl::Iterator TCPListenerImpl::Iterator::operator ++(int) {
-	Iterator res = *this;
-	conn = owner->accept();
-	return res;
-}
 
 Connection TCPListenerImpl::accept() {
 	unsigned char buff[256];
@@ -94,15 +94,6 @@ Connection TCPListenerImpl::accept() {
 	return createConnection(a,BinaryView(buff, slen));
 }
 
-TCPListenerImpl::Iterator TCPListenerImpl::begin() {
-	Connection c = accept();
-	if (isBadConnection(c)) return end();
-	return Iterator(this,c);
-}
-
-TCPListenerImpl::Iterator TCPListenerImpl::end() {
-	return Iterator(this,Connection(nullptr));
-}
 
 void TCPListenerImpl::stop() {
 	shutdown(sock,SHUT_RD);
@@ -118,10 +109,6 @@ void TCPListenerImpl::waitForConnection() {
 	if (res == -1) throw SystemException(errno);
 }
 
-bool TCPListenerImpl::isBadConnection(const Connection& conn) {
-	return conn == Connection(nullptr);
-}
-
 TCPListenerImpl::~TCPListenerImpl() {
 	::close(sock);
 }
@@ -133,35 +120,27 @@ Connection TCPListenerImpl::createConnection(int sock,const BinaryView& addrInfo
 			PSocketConnection(new SocketConnection(sock,infinity,addr))));
 }
 
-bool TCPListenerImpl::Iterator::operator ==(const Iterator& other) const {
-	return owner == other.owner && conn == other.conn;
-}
-
-bool TCPListenerImpl::Iterator::operator !=(const Iterator& other) const {
-	return !operator==(other);
-}
-
-void TCPListenerImpl::asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+void TCPListenerImpl::asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
 
 	//keep this object valid during async
 	RefCntPtr<TCPListenerImpl> me (this);
 	//extract epollasync
-	EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
+	LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
 	//request async wait - for read, the socket, timeout, and callback
-	async.asyncWait(EPollAsync::wfRead, sock, timeoutOverride?timeoutOverride:params.waitTimeout,
-			[callback,me,this](EPollAsync::EventType ev){
+	async.asyncWait(LinuxAsync::wfRead, sock, timeoutOverride?timeoutOverride:params.waitTimeout,
+			[callback,me,this](LinuxAsync::EventType ev){
 				switch(ev) {
-				case EPollAsync::etError:
+				case LinuxAsync::etError:
 					try {
 						SocketConnection::checkSocketError(sock);
 					} catch (...) {
 						callback(asyncError, nullptr);
 					}
 					break;
-				case EPollAsync::etTimeout:
+				case LinuxAsync::etTimeout:
 					callback(asyncTimeout,nullptr);
 					break;
-				case EPollAsync::etReadEvent: {
+				case LinuxAsync::etReadEvent: {
 					unsigned char buff[256];
 					struct sockaddr *sa = reinterpret_cast<struct sockaddr *>(buff);
 					socklen_t slen = sizeof(buff);

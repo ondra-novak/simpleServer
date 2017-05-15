@@ -58,6 +58,12 @@ public:
 	static AsyncControl start(CallbackExecutor executor);
 	///Create new async control object, but don't start the thread
 	static AsyncControl create();
+	///Create fake async control object which performs everthing synchronous
+	/** Result object implements interface on reduced resources but all operations are performed in current thread
+	 * by synchronous manner
+	 */
+	static AsyncControl createSync();
+
 	///Get singleton obejct - starts thread if it is necesery
 	/**
 	 * @note do not stop singleton - there is no way to restart it
