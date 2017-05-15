@@ -35,6 +35,8 @@ public:
 	virtual void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn) = 0;
 	virtual bool cancelWait(WaitFor wf, unsigned int fd) = 0;
 
+	static void checkSocketError(int fd);
+
 
 };
 

@@ -61,8 +61,11 @@ public:
 	///Create fake async control object which performs everthing synchronous
 	/** Result object implements interface on reduced resources but all operations are performed in current thread
 	 * by synchronous manner
+	 *
+	 * @param maxTimeout specifies max allowed timeout (even if the caller requests infinity timeout).
+	 * If the timeout is reached, standard exception is generated (it is not send through the callback function);
 	 */
-	static AsyncControl createSync();
+	static AsyncControl createSync(unsigned int maxTimeout);
 
 	///Get singleton obejct - starts thread if it is necesery
 	/**

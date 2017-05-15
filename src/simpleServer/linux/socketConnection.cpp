@@ -82,16 +82,29 @@ void SocketConnection::closeOutput() {
 	shutdown(sock,SHUT_WR);
 }
 
-
-
-Connection Connection::connect(const NetAddr &addr, const ConnectParams &params) {
+static int connectSocket(const NetAddr &addr, int &r) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
 	int s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
 	if (s == -1) throw SystemException(errno);
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
-	int r = ::connect(s, sa, b.length);
-	if (r) {
+	r = ::connect(s, sa, b.length);
+
+}
+
+static Connection socketToConnection(const ConnectParams &params, int sock, const NetAddr &addr) {
+	if (params.factory == nullptr) {
+		PSocketConnection conn = new SocketConnection(sock, infinity ,addr);
+		return Connection(PConnection::staticCast(conn));
+	} else {
+		return params.factory(addr,sock);
+	}
+}
+
+Connection Connection::connect(const NetAddr &addr, const ConnectParams &params) {
+	int r;
+	int s = connectSocket(addr,r);
+	if (r == -1) {
 		int e = errno;
 		if (e == EWOULDBLOCK || e == EINPROGRESS) {
 
@@ -108,12 +121,11 @@ Connection Connection::connect(const NetAddr &addr, const ConnectParams &params)
 				::close(s);
 				throw TimeoutException();
 			} else {
-				e = EFAULT;
-				socklen_t l = sizeof(e);
-				getsockopt(s,SOL_SOCKET, SO_ERROR, &e, &l);
-				if (e != 0) {
-					::close(s);
-					throw SystemException(e);
+				try {
+					LinuxAsync::checkSocketError(s);
+				} catch (...) {
+					close(s);
+					throw;
 				}
 			}
 
@@ -122,14 +134,48 @@ Connection Connection::connect(const NetAddr &addr, const ConnectParams &params)
 			throw SystemException(e);
 		}
 	}
-	if (params.factory != nullptr) return params.factory(addr, s);
-	else {
-		PSocketConnection conn = new SocketConnection(s,infinity,addr);
-		return Connection(PConnection::staticCast(conn));
-	}
-
+	return socketToConnection(params,s,addr);
 }
 
+void Connection::connect(const NetAddr &addr, AsyncControl cntr, ConnectCallback callback,const ConnectParams &params) {
+	int r;
+	int sock = connectSocket(addr,r);
+	if (r == -1) {
+		int e = errno;
+		if (e == EWOULDBLOCK || e == EINPROGRESS) {
+
+			LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
+			NetAddr a(addr);
+			ConnectParams p(params);
+			async.asyncWait(LinuxAsync::wfWrite,sock,params.waitTimeout,[a,sock,callback,p](LinuxAsync::EventType t){
+				switch (t) {
+				case LinuxAsync::etError: try {
+					LinuxAsync::checkSocketError(sock);
+				} catch (...) {
+					callback(asyncError,nullptr);
+				}
+				break;
+				case LinuxAsync::etTimeout:
+					callback(asyncTimeout,nullptr);
+				break;
+				case LinuxAsync::etWriteEvent: {
+					Connection c = socketToConnection(p,sock,a);
+					callback(asyncOK,&c);
+				}
+				break;
+				}
+			});
+
+		} else {
+			::close(sock);
+			throw SystemException(e);
+		}
+
+	} else {
+		Connection c(socketToConnection(params,sock,addr));
+		callback(asyncOK,&c);
+	}
+}
 
 void SocketConnection::closeInput() {
 	shutdown(sock,SHUT_RD);
@@ -164,7 +210,7 @@ void SocketConnection::asyncRead(AsyncControl cntr, Callback callback,unsigned i
 		async.asyncWait(LinuxAsync::wfRead,sock,timeoutOverride?timeoutOverride:iotimeout,[me,cntr,callback,timeoutOverride](LinuxAsync::EventType ev){
 			switch (ev) {
 			case LinuxAsync::etError: try {
-					checkSocketError(me->sock);
+					LinuxAsync::checkSocketError(me->sock);
 				} catch (...) {
 					callback(asyncError,BinaryView(nullptr,0));
 				}
@@ -231,7 +277,7 @@ void SocketConnection::runAsyncWrite(BinaryView data,std::size_t offset,AsyncCon
 					switch (ev) {
 					case LinuxAsync::etError:
 						try {
-							checkSocketError(me->sock);
+							LinuxAsync::checkSocketError(me->sock);
 						} catch (...) {
 							callback(asyncError, data);
 						}
@@ -272,12 +318,6 @@ void SocketConnection::asyncFlush(AsyncControl cntr, Callback callback,	unsigned
 	}
 }
 
-void SocketConnection::checkSocketError(int fd) {
-		int e = EFAULT;
-		socklen_t l = sizeof(e);
-		getsockopt(fd,SOL_SOCKET, SO_ERROR, &e, &l);
-		if (e) throw SystemException(e);
-}
 
 
 BinaryView SocketConnection::getReadBuffer() const {

@@ -57,6 +57,7 @@ class Connection {
 public:
 
 	typedef IConnection::Callback Callback;
+	typedef std::function<void(AsyncState, const Connection *)> ConnectCallback;
 
 
 	explicit Connection(PConnection conn):conn(conn) {}
@@ -82,6 +83,8 @@ public:
 	PConnection getHandle() const {return conn;}
 
 	static Connection connect(const NetAddr &addr,const ConnectParams &params = ConnectParams());
+
+	static void connect(const NetAddr &addr, AsyncControl cntr, ConnectCallback callback,const ConnectParams &params = ConnectParams());
 
 	bool operator==(const Connection &c) const {
 		return conn == c.conn;

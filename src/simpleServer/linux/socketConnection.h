@@ -46,7 +46,6 @@ public:
 	virtual bool cancelAsyncRead(AsyncControl cntr) override;
 	virtual bool cancelAsyncWrite(AsyncControl cntr) override;
 
-	static void checkSocketError(int fd);
 
 
 protected:

@@ -56,16 +56,29 @@ TCPListenerImpl::TCPListenerImpl(NetAddr addr, const ConnectParams &params)
 TCPListenerImpl::TCPListenerImpl(unsigned int port, Range range, const ConnectParams &params)
 	:params(params)
 {
-	struct sockaddr_in6 addr;
-	std::memset(&addr,0,sizeof(addr));
-	if (range == localhost) {
-		addr.sin6_addr = in6addr_loopback;
+	if (range == network6 || range == localhost6) {
+		struct sockaddr_in6 addr;
+		std::memset(&addr,0,sizeof(addr));
+		if (range == localhost6) {
+			addr.sin6_addr = in6addr_loopback;
+		} else {
+			addr.sin6_addr = in6addr_any;
+		}
+		addr.sin6_family = AF_INET6 ;
+		addr.sin6_port = htons(port);
+		sock = createSocket(reinterpret_cast<const struct sockaddr *>(&addr), sizeof(addr));
 	} else {
-		addr.sin6_addr = in6addr_any;
+		struct sockaddr_in addr;
+		std::memset(&addr,0,sizeof(addr));
+		if (range == localhost) {
+			addr.sin_addr.s_addr = INADDR_LOOPBACK;
+		} else {
+			addr.sin_addr.s_addr = INADDR_ANY;
+		}
+		addr.sin_family = AF_INET6 ;
+		addr.sin_port = htons(port);
+		sock = createSocket(reinterpret_cast<const struct sockaddr *>(&addr), sizeof(addr));
 	}
-	addr.sin6_family = AF_INET6 ;
-	addr.sin6_port = htons(port);
-	sock = createSocket(reinterpret_cast<const struct sockaddr *>(&addr), sizeof(addr));
 }
 
 TCPListenerImpl::TCPListenerImpl(Range range, unsigned int& port, const ConnectParams &params)
@@ -132,7 +145,7 @@ void TCPListenerImpl::asyncAccept(const AsyncControl &cntr, AsyncCallback callba
 				switch(ev) {
 				case LinuxAsync::etError:
 					try {
-						SocketConnection::checkSocketError(sock);
+						LinuxAsync::checkSocketError(sock);
 					} catch (...) {
 						callback(asyncError, nullptr);
 					}
