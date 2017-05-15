@@ -133,7 +133,7 @@ Connection TCPListenerImpl::createConnection(int sock,const BinaryView& addrInfo
 			PSocketConnection(new SocketConnection(sock,infinity,addr))));
 }
 
-void TCPListenerImpl::asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+void TCPListenerImpl::asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
 
 	//keep this object valid during async
 	RefCntPtr<TCPListenerImpl> me (this);

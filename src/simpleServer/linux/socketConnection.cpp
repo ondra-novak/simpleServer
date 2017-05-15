@@ -137,7 +137,7 @@ Connection Connection::connect(const NetAddr &addr, const ConnectParams &params)
 	return socketToConnection(params,s,addr);
 }
 
-void Connection::connect(const NetAddr &addr, AsyncControl cntr, ConnectCallback callback,const ConnectParams &params) {
+void Connection::connect(const NetAddr &addr, AsyncDispatcher cntr, ConnectCallback callback,const ConnectParams &params) {
 	int r;
 	int sock = connectSocket(addr,r);
 	if (r == -1) {
@@ -197,7 +197,7 @@ int SocketConnection::recvData(unsigned char* buffer, std::size_t size, bool non
 	return r;
 }
 
-void SocketConnection::asyncRead(AsyncControl cntr, Callback callback,unsigned int timeoutOverride) {
+void SocketConnection::asyncRead(AsyncDispatcher cntr, Callback callback,unsigned int timeoutOverride) {
 	BinaryView b = getReadBuffer();
 	if (b.empty()) {
 		if (eof) try {
@@ -244,7 +244,7 @@ void SocketConnection::asyncRead(AsyncControl cntr, Callback callback,unsigned i
 	}
 }
 
-void SocketConnection::asyncWrite(BinaryView data,AsyncControl cntr, Callback callback,unsigned int timeoutOverride) {
+void SocketConnection::asyncWrite(BinaryView data,AsyncDispatcher cntr, Callback callback,unsigned int timeoutOverride) {
 	std::size_t remain = sizeof(wrbuff) - wrbuff_pos;
 	if (remain > data.length) {
 		writeData(data);
@@ -269,7 +269,7 @@ void SocketConnection::asyncWrite(BinaryView data,AsyncControl cntr, Callback ca
 	}
 }
 
-void SocketConnection::runAsyncWrite(BinaryView data,std::size_t offset,AsyncControl cntr, Callback callback,unsigned int timeoutOverride) {
+void SocketConnection::runAsyncWrite(BinaryView data,std::size_t offset,AsyncDispatcher cntr, Callback callback,unsigned int timeoutOverride) {
 		RefCntPtr<SocketConnection> me(this);
 		LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
 		async.asyncWait(LinuxAsync::wfWrite,sock,timeoutOverride?timeoutOverride:iotimeout,
@@ -311,7 +311,7 @@ void SocketConnection::runAsyncWrite(BinaryView data,std::size_t offset,AsyncCon
 	}
 
 
-void SocketConnection::asyncFlush(AsyncControl cntr, Callback callback,	unsigned int timeoutOverride) {
+void SocketConnection::asyncFlush(AsyncDispatcher cntr, Callback callback,	unsigned int timeoutOverride) {
 	if (wrbuff_pos) {
 		runAsyncWrite(BinaryView(wrbuff,wrbuff_pos), 0, cntr, callback, timeoutOverride);
 		wrbuff_pos = 0;
@@ -324,12 +324,12 @@ BinaryView SocketConnection::getReadBuffer() const {
 	return BinaryView(rdbuff+rdbuff_pos, rdbuff_used - rdbuff_pos);
 }
 
-bool SocketConnection::cancelAsyncRead(AsyncControl cntr) {
+bool SocketConnection::cancelAsyncRead(AsyncDispatcher cntr) {
 	LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
 	return async.cancelWait(LinuxAsync::wfRead,sock);
 
 }
-bool SocketConnection::cancelAsyncWrite(AsyncControl cntr){
+bool SocketConnection::cancelAsyncWrite(AsyncDispatcher cntr){
 	LinuxAsync &async = dynamic_cast<LinuxAsync &>(*cntr.getHandle());
 	return async.cancelWait(LinuxAsync::wfWrite,sock);
 

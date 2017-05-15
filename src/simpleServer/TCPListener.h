@@ -48,7 +48,7 @@ public:
 	typedef std::function<void(AsyncState, const Connection *)> AsyncCallback;
 
 
-	virtual void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) = 0;
+	virtual void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) = 0;
 
 protected:
 
@@ -158,7 +158,7 @@ public:
 	 * The function stop() cancels asynchronous listener
 	 *
 	 */
-	void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
+	void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
 
 
 protected:

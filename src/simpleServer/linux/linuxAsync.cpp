@@ -35,8 +35,8 @@ public:
 
 
 
-AsyncControl AsyncControl::createSync(unsigned int maxTimeout) {
-	return AsyncControl(PAsyncControl(new FakeSync(maxTimeout)));
+AsyncDispatcher AsyncDispatcher::createSync(unsigned int maxTimeout) {
+	return AsyncDispatcher(PAsyncControl(new FakeSync(maxTimeout)));
 
 }
 

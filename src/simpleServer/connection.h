@@ -26,11 +26,11 @@ public:
 	virtual unsigned int getIOTimeout() const = 0;
 	virtual void setIOTimeout(unsigned int t) = 0;
 	virtual NetAddr getPeerAddr() const  = 0;
-	virtual void asyncRead(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
-	virtual void asyncWrite(BinaryView data, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
-	virtual void asyncFlush(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
-	virtual bool cancelAsyncRead(AsyncControl cntr) = 0;
-	virtual bool cancelAsyncWrite(AsyncControl cntr) = 0;
+	virtual void asyncRead(AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual void asyncWrite(BinaryView data, AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual void asyncFlush(AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual bool cancelAsyncRead(AsyncDispatcher cntr) = 0;
+	virtual bool cancelAsyncWrite(AsyncDispatcher cntr) = 0;
 };
 
 typedef RefCntPtr<IConnection> PConnection;
@@ -84,7 +84,7 @@ public:
 
 	static Connection connect(const NetAddr &addr,const ConnectParams &params = ConnectParams());
 
-	static void connect(const NetAddr &addr, AsyncControl cntr, ConnectCallback callback,const ConnectParams &params = ConnectParams());
+	static void connect(const NetAddr &addr, AsyncDispatcher cntr, ConnectCallback callback,const ConnectParams &params = ConnectParams());
 
 	bool operator==(const Connection &c) const {
 		return conn == c.conn;
@@ -106,7 +106,7 @@ public:
 	 * reading operations leads to undefined behaviour
 	 *
 	 */
-	void asyncRead(const AsyncControl &cntr, Callback callback,unsigned int timeoutOverride) {
+	void asyncRead(const AsyncDispatcher &cntr, Callback callback,unsigned int timeoutOverride) {
 		conn->asyncRead(cntr, callback,timeoutOverride);
 	}
 	///Performs asynchronous write
@@ -123,7 +123,7 @@ public:
 	 * @note there must be only one pending writting active at time. Running multiple
 	 * writing operations leads to undefined behaviour
 	 */
-	void asyncWrite(const BinaryView &data, const AsyncControl &cntr, Callback callback, unsigned int timeoutOverride = 0) {
+	void asyncWrite(const BinaryView &data, const AsyncDispatcher &cntr, Callback callback, unsigned int timeoutOverride = 0) {
 		conn->asyncWrite(data,cntr, callback,timeoutOverride);
 	}
 
@@ -138,7 +138,7 @@ public:
 	 * writing operations leads to undefined behaviout
 	 */
 
-	void asyncFlush(const AsyncControl &cntr, Callback callback, unsigned int timeoutOverride = 0) {
+	void asyncFlush(const AsyncDispatcher &cntr, Callback callback, unsigned int timeoutOverride = 0) {
 		conn->asyncFlush(cntr, callback,timeoutOverride);
 	}
 
@@ -154,7 +154,7 @@ public:
 	 * @note After successful cancelation, no bytes should be transfered, so you
 	 * can issue new reading operation
 	 */
-	bool cancelAsyncRead(const AsyncControl &cntr) {
+	bool cancelAsyncRead(const AsyncDispatcher &cntr) {
 		return conn->cancelAsyncRead(cntr);
 	}
 
@@ -168,7 +168,7 @@ public:
 	 * is called after the operation completted. This also means, that callback
 	 * function has been or currently is being called
 	 */
-	bool cancelAsyncWrite(const AsyncControl &cntr) {
+	bool cancelAsyncWrite(const AsyncDispatcher &cntr) {
 		return conn->cancelAsyncWrite(cntr);
 	}
 protected:

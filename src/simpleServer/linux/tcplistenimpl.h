@@ -30,7 +30,7 @@ public:
 
 
 
-	void asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride);
+	void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride);
 
 protected:
 

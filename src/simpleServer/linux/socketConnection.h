@@ -40,11 +40,11 @@ public:
 	unsigned int getIOTimeout() const override {return iotimeout;}
 	void setIOTimeout(unsigned int t) override {iotimeout = t;}
 
-	virtual void asyncRead(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
-	virtual void asyncWrite(BinaryView data, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
-	virtual void asyncFlush(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
-	virtual bool cancelAsyncRead(AsyncControl cntr) override;
-	virtual bool cancelAsyncWrite(AsyncControl cntr) override;
+	virtual void asyncRead(AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual void asyncWrite(BinaryView data, AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual void asyncFlush(AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual bool cancelAsyncRead(AsyncDispatcher cntr) override;
+	virtual bool cancelAsyncWrite(AsyncDispatcher cntr) override;
 
 
 
@@ -52,7 +52,7 @@ protected:
 
 	virtual void sendAll(BinaryView data) override;
 	virtual int recvData(unsigned char *buffer, std::size_t size, bool nonblock) override;
-	void runAsyncWrite(BinaryView data, std::size_t offset, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) ;
+	void runAsyncWrite(BinaryView data, std::size_t offset, AsyncDispatcher cntr, Callback callback, unsigned int timeoutOverride = 0) ;
 
 
 	void waitForData();

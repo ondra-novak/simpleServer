@@ -21,7 +21,7 @@ void TCPListener::stop() {
 	owner->stop();
 }
 
-void TCPListener::asyncAccept(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+void TCPListener::asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
 	owner->asyncAccept(cntr, callback, timeoutOverride);
 }
 

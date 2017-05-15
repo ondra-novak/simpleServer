@@ -5,28 +5,28 @@
 namespace simpleServer {
 
 
-AsyncControl AsyncControl::start() {
+AsyncDispatcher AsyncDispatcher::start() {
 
 
-	AsyncControl c = create();
+	AsyncDispatcher c = create();
 	std::thread thr([c] {c.run();});
 	thr.detach();
 
 }
 
-AsyncControl AsyncControl::start( CallbackExecutor executor) {
+AsyncDispatcher AsyncDispatcher::start( CallbackExecutor executor) {
 
 
-	AsyncControl c = create();
+	AsyncDispatcher c = create();
 	std::thread thr([c,executor] {c.run(executor);});
 	thr.detach();
 
 }
 
 
-AsyncControl AsyncControl::getSingleton() {
+AsyncDispatcher AsyncDispatcher::getSingleton() {
 
-	static AsyncControl singleton = AsyncControl::start();
+	static AsyncDispatcher singleton = AsyncDispatcher::start();
 	return singleton;
 
 }

@@ -44,20 +44,27 @@ enum AsyncState {
 
 
 
-class AsyncControl {
+///Provides context of asynchronous operation
+/**
+ * You need to create this object to provide context of asynchronous operation. You can execute single thread
+ * that handles async operations. You can also start multiple threads,each will be used to assign a thread to the callback
+ * function. You can also define executor, which receives the callback function to execute
+ * and the executor can create/choose a thread where the function is executed
+ */
+class AsyncDispatcher {
 public:
 
 	typedef AbstractAsyncControl::CallbackExecutor CallbackExecutor;
 
 
-	AsyncControl(PAsyncControl owner):owner(owner) {}
+	AsyncDispatcher(PAsyncControl owner):owner(owner) {}
 
 	///Start new async control object
-	static AsyncControl start();
+	static AsyncDispatcher start();
 	///Start new async control object
-	static AsyncControl start(CallbackExecutor executor);
+	static AsyncDispatcher start(CallbackExecutor executor);
 	///Create new async control object, but don't start the thread
-	static AsyncControl create();
+	static AsyncDispatcher create();
 	///Create fake async control object which performs everthing synchronous
 	/** Result object implements interface on reduced resources but all operations are performed in current thread
 	 * by synchronous manner
@@ -65,14 +72,14 @@ public:
 	 * @param maxTimeout specifies max allowed timeout (even if the caller requests infinity timeout).
 	 * If the timeout is reached, standard exception is generated (it is not send through the callback function);
 	 */
-	static AsyncControl createSync(unsigned int maxTimeout);
+	static AsyncDispatcher createSync(unsigned int maxTimeout);
 
 	///Get singleton obejct - starts thread if it is necesery
 	/**
 	 * @note do not stop singleton - there is no way to restart it
 	 * @return
 	 */
-	static AsyncControl getSingleton();
+	static AsyncDispatcher getSingleton();
 
 	///run listener (executes worker procedure)
 	void run() const {owner->run();}
@@ -85,7 +92,7 @@ public:
 	void stop() const {owner->stop();}
 
 
-	~AsyncControl() {
+	~AsyncDispatcher() {
 		if (owner != nullptr) stop();
 	}
 

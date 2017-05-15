@@ -12,8 +12,8 @@
 namespace simpleServer {
 
 
-AsyncControl AsyncControl::create() {
-	return AsyncControl(new EPollAsync);
+AsyncDispatcher AsyncDispatcher::create() {
+	return AsyncDispatcher(new EPollAsync);
 
 }
 
