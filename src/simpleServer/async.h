@@ -92,10 +92,6 @@ public:
 	void stop() const {owner->stop();}
 
 
-	~AsyncDispatcher() {
-		if (owner != nullptr) stop();
-	}
-
 	PAsyncControl getHandle() const {return owner;}
 protected:
 

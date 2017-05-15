@@ -31,6 +31,7 @@ public:
 	virtual void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn) override;
 	virtual bool cancelWait(WaitFor wf, unsigned int fd) override;
 
+	~EPollAsync() {stop();}
 
 protected:
 
@@ -52,6 +53,25 @@ protected:
 			tmPos[0] = nullptr;
 			tmPos[1] = nullptr;
 		}
+
+		void moveFrom(FdReg &&other) {
+			cb[0] = other.cb[0];other.cb[0] = nullptr;
+			cb[1] = other.cb[1];other.cb[1] = nullptr;
+			tmPos[0] = other.tmPos[0];other.tmPos[0] = nullptr;
+			tmPos[1] = other.tmPos[1];other.tmPos[1] = nullptr;
+			if (tmPos[0] != nullptr) tmPos[0]->fdreg = this;
+			if (tmPos[1] != nullptr) tmPos[1]->fdreg = this;
+		}
+
+		FdReg(FdReg &&other) {
+			moveFrom(std::move(other));
+		}
+
+		FdReg &operator=(FdReg &&other) {
+			if (tmPos[0] != nullptr) tmPos[0]->fdreg = nullptr;
+			if (tmPos[1] != nullptr) tmPos[1]->fdreg = nullptr;
+			moveFrom(std::move(other));
+		}
 	};
 
 	struct TmReg {
@@ -69,7 +89,7 @@ protected:
 			time = x.time;
 			fdreg = x.fdreg;
 			wf = x.wf;
-			fdreg->tmPos[wf]= this;
+			if (fdreg) fdreg->tmPos[wf]= this;
 			x.fdreg = nullptr;
 			return *this;
 

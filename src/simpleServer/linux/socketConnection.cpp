@@ -70,7 +70,7 @@ void SocketConnection::sendAll(BinaryView data) {
 		int r = send(sock, data.data, data.length, MSG_DONTWAIT);
 		if (r == -1) {
 			int e = errno;
-			if (e != EWOULDBLOCK) throw SystemException(errno);
+			if (e != EWOULDBLOCK && e != EINTR) throw SystemException(errno);
 			waitForSend();
 		} else {
 			data = data.substr(r);
@@ -89,6 +89,7 @@ static int connectSocket(const NetAddr &addr, int &r) {
 	if (s == -1) throw SystemException(errno);
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
 	r = ::connect(s, sa, b.length);
+	return s;
 
 }
 

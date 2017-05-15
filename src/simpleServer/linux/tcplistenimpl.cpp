@@ -71,11 +71,11 @@ TCPListenerImpl::TCPListenerImpl(unsigned int port, Range range, const ConnectPa
 		struct sockaddr_in addr;
 		std::memset(&addr,0,sizeof(addr));
 		if (range == localhost) {
-			addr.sin_addr.s_addr = INADDR_LOOPBACK;
+			addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 		} else {
-			addr.sin_addr.s_addr = INADDR_ANY;
+			addr.sin_addr.s_addr = htonl(INADDR_ANY);
 		}
-		addr.sin_family = AF_INET6 ;
+		addr.sin_family = AF_INET ;
 		addr.sin_port = htons(port);
 		sock = createSocket(reinterpret_cast<const struct sockaddr *>(&addr), sizeof(addr));
 	}

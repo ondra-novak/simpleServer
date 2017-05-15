@@ -64,9 +64,14 @@ uint64_t EPoll::Events::getData64() const {
 EPoll::Events EPoll::getNext(unsigned int timeout) {
 	if (events.empty()) {
 		struct epoll_event buffer[32];
-		int a = epoll_wait(fd,buffer,32,timeout);
-		if (a == -1)
-			throw SystemException(errno);
+		int a;
+		rep:;
+		a = epoll_wait(fd,buffer,32,timeout);
+		if (a == -1) {
+			int e = errno;
+			if (e == EINTR) goto rep;
+			else throw SystemException(errno);
+		}
 		if (a == 0)
 			return Events();
 

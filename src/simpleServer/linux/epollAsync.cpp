@@ -53,7 +53,10 @@ void EPollAsync::removeTimeout(TmReg* &reg) {
 }
 
 void EPollAsync::addTimeout(TmReg&& reg) {
+	FdReg *x = reg.fdreg;
 	tmoutQueue.push(std::move(reg));
+	if (tmoutQueue.top().fdreg == x)
+		sendNotify();
 }
 
 bool EPollAsync::epollUpdateFd(FdReg* rg) {
@@ -64,7 +67,7 @@ bool EPollAsync::epollUpdateFd(FdReg* rg) {
 		noev = false;
 	}
 
-	if (rg->cb[wfRead] != nullptr) {
+	if (rg->cb[wfWrite] != nullptr) {
 		events |= EPoll::output;
 		noev = false;
 	}
@@ -164,7 +167,7 @@ unsigned int EPollAsync::calcTimeout() {
 
 void EPollAsync::onTimeout(CBList& cblist) {
 	TimePt pt = Clock::now();
-	do {
+	while(!tmoutQueue.empty()) {
 		const TmReg &z = tmoutQueue.top();
 		FdReg *reg = z.fdreg;
 		WaitFor wf = z.wf;
@@ -173,26 +176,29 @@ void EPollAsync::onTimeout(CBList& cblist) {
 		tmoutQueue.pop();
 		epollUpdateFd(reg);
 	}
-	while (true);
 }
 
 void EPollAsync::onEvent(const EPoll::Events &ev, CBList& cblist) {
-	FdReg *reg = findReg(ev.data.fd);
-	if (ev.isError()) {
-		if (reg->cb[wfRead] != nullptr)
-			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etError));
-		if (reg->cb[wfWrite] != nullptr)
-			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etError));
+	if (ev.data.fd == notifyPipe[0]) {
+		clearNotify();
+	}else {
+		FdReg *reg = findReg(ev.data.fd);
+		if (ev.isError()) {
+			if (reg->cb[wfRead] != nullptr)
+				cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etError));
+			if (reg->cb[wfWrite] != nullptr)
+				cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etError));
+		}
+		if (ev.isInput()) {
+			if (reg->cb[wfRead] != nullptr)
+				cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etReadEvent));
+		}
+		if (ev.isOutput()) {
+			if (reg->cb[wfWrite] != nullptr)
+				cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etWriteEvent));
+		}
+		epollUpdateFd(reg);
 	}
-	if (ev.isInput()) {
-		if (reg->cb[wfRead] != nullptr)
-			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfRead]), etReadEvent));
-	}
-	if (ev.isOutput()) {
-		if (reg->cb[wfWrite] != nullptr)
-			cblist.push_back(CallbackWithArg(std::move(reg->cb[wfWrite]), etWriteEvent));
-	}
-	epollUpdateFd(reg);
 }
 
 void EPollAsync::clearNotify() {

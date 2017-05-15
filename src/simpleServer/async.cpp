@@ -11,7 +11,7 @@ AsyncDispatcher AsyncDispatcher::start() {
 	AsyncDispatcher c = create();
 	std::thread thr([c] {c.run();});
 	thr.detach();
-
+	return c;
 }
 
 AsyncDispatcher AsyncDispatcher::start( CallbackExecutor executor) {
@@ -20,7 +20,7 @@ AsyncDispatcher AsyncDispatcher::start( CallbackExecutor executor) {
 	AsyncDispatcher c = create();
 	std::thread thr([c,executor] {c.run(executor);});
 	thr.detach();
-
+	return c;
 }
 
 

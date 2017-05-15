@@ -37,6 +37,7 @@ public:
 	};
 
 
+	virtual ~ITCPListener() {}
 
 	Iterator begin();
 	Iterator end();
