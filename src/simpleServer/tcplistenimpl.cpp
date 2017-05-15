@@ -7,6 +7,7 @@
 
 #include <cstring>
 
+#include "epollAsync.h"
 
 #include "exceptions.h"
 
@@ -140,4 +141,52 @@ bool TCPListenerImpl::Iterator::operator !=(const Iterator& other) const {
 	return !operator==(other);
 }
 
+void TCPListenerImpl::asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+
+	//keep this object valid during async
+	RefCntPtr<TCPListenerImpl> me (this);
+	//extract epollasync
+	EPollAsync &async = dynamic_cast<EPollAsync &>(*cntr.getHandle());
+	//request async wait - for read, the socket, timeout, and callback
+	async.asyncWait(EPollAsync::wfRead, sock, timeoutOverride?timeoutOverride:params.waitTimeout,
+			[callback,me,this](EPollAsync::EventType ev){
+				switch(ev) {
+				case EPollAsync::etError:
+					try {
+						SocketConnection::checkSocketError(sock);
+					} catch (...) {
+						callback(asyncError, nullptr);
+					}
+					break;
+				case EPollAsync::etTimeout:
+					callback(asyncTimeout,nullptr);
+					break;
+				case EPollAsync::etReadEvent: {
+					unsigned char buff[256];
+					struct sockaddr *sa = reinterpret_cast<struct sockaddr *>(buff);
+					socklen_t slen = sizeof(buff);
+					//accept the connection
+					int a = accept4(sock, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
+					//on error
+					if (a == -1) {
+						int e = errno;
+						if (e == EINVAL) callback(asyncEOF, nullptr);
+						try {
+							throw SystemException(e);
+						} catch (...) {
+							callback(asyncError,nullptr);
+						}
+					} else {
+						//on success - create connection and call callback
+						Connection c = createConnection(a,BinaryView(buff, slen));
+						callback(asyncOK, &c);
+					}
+				}break;
+
+				}
+		});
+}
+
+
 } /* namespace simpleServer */
+

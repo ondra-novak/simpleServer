@@ -21,61 +21,16 @@ public:
 	virtual void closeOutput() = 0;
 	virtual void closeInput() = 0;
 
+	typedef std::function<void(AsyncState, BinaryView)> Callback;
+
 	virtual unsigned int getIOTimeout() const = 0;
 	virtual void setIOTimeout(unsigned int t) = 0;
 	virtual NetAddr getPeerAddr() const  = 0;
-
-	///Performs asynchronous read
-	/**
-	 * @param prevRead count of bytes processed from previous read
-	 * @param cntr object which provides asynchronous operation
-	 * @param callback function which is called when asynchronous operation is finished
-	 * @param timeoutOverride overrides default timeout. You can override with timeout other then zero, otherwise
-	 * default timeout is used.
-	 *
-	 * @note there must be only one pending reading active at time. Running multiple
-	 * reading operations leads to undefined behaviout
-	 */
-	virtual void asyncReadData(unsigned int prevRead, const AsyncControl &cntr, const std::function<BinaryView> &callback, unsigned int timeoutOverride = 0) = 0;
-	///Performs asynchronous write
-	/**
-	 * @param data data to write. Note, buffer referenced by this view must not be
-	 * released before the operation completes.
-	 * @param cntr object which provides asynchronous operation
-	 * @param callback function which is called when asynchronous operation is finished
-	 * @param timeoutOverride overrides default timeout. You can override with timeout other then zero, otherwise
-	 * default timeout is used.
-	 *
-	 * @note there must be only one pending writting active at time. Running multiple
-	 * writing operations leads to undefined behaviout
-	 */
-	virtual void asyncWriteData(const BinaryView &data, const AsyncControl &cntr, const std::function<void> &callback, unsigned int timeoutOverride = 0) = 0;
-
-	///Cancels asynchronous read
-	/**
-	 *
-	 * @param cntr object which provides asynchronous operation
-	 * @retval true asynchronous operation has been canceled
-	 * @retval false there is no pending operation. This can happen, when function
-	 * is called after the operation completted. This also means, that callback
-	 * function has been or currently is being called
-	 *
-	 * @note After successful cancelation, no bytes should be transfered, so you
-	 * can issue new reading operation
-	 */
-	virtual bool cancelAsyncRead(const AsyncControl &cntr) = 0;
-
-
-	///Cancels asynchronous write
-	/**
-	 *
-	 * @param cntr object which provides asynchronous operation
-	 * @retval true asynchronous operation has been canceled
-	 * @retval false there is no pending operation. This can happen, when function
-	 * is called after the operation completted. This also means, that callback
-	 * function has been or currently is being called
-	 */
-	virtual bool cancelAsyncWrite(const AsyncControl &cntr) = 0;
+	virtual void asyncRead(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual void asyncWrite(BinaryView data, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual void asyncFlush(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) = 0;
+	virtual bool cancelAsyncRead(AsyncControl cntr) = 0;
+	virtual bool cancelAsyncWrite(AsyncControl cntr) = 0;
 };
 
 typedef RefCntPtr<IConnection> PConnection;
@@ -101,6 +56,7 @@ public:
 class Connection {
 public:
 
+	typedef IConnection::Callback Callback;
 
 
 	explicit Connection(PConnection conn):conn(conn) {}
@@ -134,6 +90,84 @@ public:
 		return conn != c.conn;
 	}
 
+	///Performs asynchronous read
+	/**
+	 * @param cntr object which provides asynchronous operation
+	 * @param callback function which is called when asynchronous operation is finished
+	 * @param timeoutOverride overrides default timeout. You can override with timeout other then zero, otherwise
+	 * default timeout is used.
+	 *
+	 * @note Function cannot be used to commit read data. Use readData() to commit, because that operation cannot block
+	 *
+	 * @note there must be only one pending reading active at time. Running multiple
+	 * reading operations leads to undefined behaviour
+	 *
+	 */
+	void asyncRead(const AsyncControl &cntr, Callback callback,unsigned int timeoutOverride) {
+		conn->asyncRead(cntr, callback,timeoutOverride);
+	}
+	///Performs asynchronous write
+	/**
+	 * @param data data to write. Note, buffer referenced by this view must not be
+	 * released before the operation completes. Also note that internal buffers are still in effect, so operation can immediatelly complete if there is room in output
+	 * buffer. Also check for asyncFlush() function.
+	 * Sending empty buffer is equivalent to closing the output but it can be perfromed asynchronously
+	 * @param cntr object which provides asynchronous operation
+	 * @param callback function which is called when asynchronous operation is finished
+	 * @param timeoutOverride overrides default timeout. You can override with timeout other then zero, otherwise
+	 * default timeout is used.
+	 *
+	 * @note there must be only one pending writting active at time. Running multiple
+	 * writing operations leads to undefined behaviour
+	 */
+	void asyncWrite(const BinaryView &data, const AsyncControl &cntr, Callback callback, unsigned int timeoutOverride = 0) {
+		conn->asyncWrite(data,cntr, callback,timeoutOverride);
+	}
+
+	///Performs asynchronous flush of the internal buffers
+	/**
+	 * @param cntr object which provides asynchronous operation
+	 * @param callback function which is called when asynchronous operation is finished
+	 * @param timeoutOverride overrides default timeout. You can override with timeout other then zero, otherwise
+	 * default timeout is used.
+	 *
+	 * @note there must be only one pending writting active at time. Running multiple
+	 * writing operations leads to undefined behaviout
+	 */
+
+	void asyncFlush(const AsyncControl &cntr, Callback callback, unsigned int timeoutOverride = 0) {
+		conn->asyncFlush(cntr, callback,timeoutOverride);
+	}
+
+	///Cancels asynchronous read
+	/**
+	 *
+	 * @param cntr object which provides asynchronous operation
+	 * @retval true asynchronous operation has been canceled
+	 * @retval false there is no pending operation. This can happen, when function
+	 * is called after the operation completted. This also means, that callback
+	 * function has been or currently is being called
+	 *
+	 * @note After successful cancelation, no bytes should be transfered, so you
+	 * can issue new reading operation
+	 */
+	bool cancelAsyncRead(const AsyncControl &cntr) {
+		return conn->cancelAsyncRead(cntr);
+	}
+
+
+	///Cancels asynchronous write
+	/**
+	 *
+	 * @param cntr object which provides asynchronous operation
+	 * @retval true asynchronous operation has been canceled
+	 * @retval false there is no pending operation. This can happen, when function
+	 * is called after the operation completted. This also means, that callback
+	 * function has been or currently is being called
+	 */
+	bool cancelAsyncWrite(const AsyncControl &cntr) {
+		return conn->cancelAsyncWrite(cntr);
+	}
 protected:
 
 	PConnection conn;
@@ -217,9 +251,11 @@ public:
 
 	}
 	virtual void flush() override {
-		BinaryView data(wrbuff, wrbuff_pos);
-		sendAll(data);
-		wrbuff_pos = 0;
+		if (wrbuff_pos) {
+			BinaryView data(wrbuff, wrbuff_pos);
+			wrbuff_pos = 0;
+			sendAll(data);
+		}
 	}
 protected:
 	///must be implemented

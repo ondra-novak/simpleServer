@@ -29,16 +29,10 @@ public:
 
 	///stream is closed on input (received 0)
 	bool isClosed() const;
-
 	///closes input - no more data can be read
 	void closeInput() override;
 
-
 	void closeOutput() override;
-
-
-
-
 
 	NetAddr getPeerAddr() const override {return peerAddr;}
 
@@ -46,12 +40,20 @@ public:
 	unsigned int getIOTimeout() const override {return iotimeout;}
 	void setIOTimeout(unsigned int t) override {iotimeout = t;}
 
+	virtual void asyncRead(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual void asyncWrite(BinaryView data, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual void asyncFlush(AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) override;
+	virtual bool cancelAsyncRead(AsyncControl cntr) override;
+	virtual bool cancelAsyncWrite(AsyncControl cntr) override;
+
+	static void checkSocketError(int fd);
 
 
 protected:
 
 	virtual void sendAll(BinaryView data) override;
 	virtual int recvData(unsigned char *buffer, std::size_t size, bool nonblock) override;
+	void runAsyncWrite(BinaryView data, std::size_t offset, AsyncControl cntr, Callback callback, unsigned int timeoutOverride = 0) ;
 
 
 	void waitForData();

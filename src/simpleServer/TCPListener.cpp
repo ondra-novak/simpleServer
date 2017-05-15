@@ -33,9 +33,8 @@ void TCPListener::stop() {
 	owner->stop();
 }
 
-
-
-
-
+void TCPListener::asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
+	owner->asyncListen(cntr, callback, timeoutOverride);
+}
 
 }

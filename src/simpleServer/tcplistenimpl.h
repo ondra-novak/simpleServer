@@ -53,6 +53,10 @@ public:
 	/** Once listener is stopped, all threads blocked by accept are released */
 	void stop();
 
+	typedef std::function<void(AsyncState, const Connection *)> AsyncCallback;
+
+
+	void asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride);
 
 protected:
 

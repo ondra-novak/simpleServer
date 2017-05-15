@@ -78,6 +78,35 @@ public:
 	void stop();
 
 
+	///Callback definition for assynchronous listening
+	/**
+	 * @param AsyncState state of asynchronous operation
+	 * @param Connection * pointer to newly created connection. The pointer is defined only when AsyncState is asyncOk, otherwise it is nullptr. You have
+	 * to copy the object to new variable
+	 */
+	typedef TCPListenerImpl::AsyncCallback AsyncCallback;
+
+	///Initialize asynchronous listening
+	/**
+	 *
+	 * @param cntr object which probides asynchronous operation
+	 * @param callback function which will be called on new connection
+	 * @param timeoutOverride allows to override timeout (default=0 which means no override)
+	 *
+	 * @note The callback function accepts two arguments. The second argument must be nullptr, otherwise
+	 * an error condition happened. In this case, the first argument is invalid and must not be used.
+	 * The second argument then points to an exception object which describes the problem.
+	 *
+	 *
+	 * @note There can be only one pending listen operation, otherwise the behaviour is undefined. You
+	 * also have to avoid running synchronous and asynchronous listenning at time.
+	 *
+	 * The function stop() cancels asynchronous listener
+	 *
+	 */
+	void asyncListen(const AsyncControl &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
+
+
 protected:
 	PTCPListener owner;
 

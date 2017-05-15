@@ -40,9 +40,10 @@ EPollAsync::FdReg* EPollAsync::addReg(unsigned int fd) {
 	r->fd = fd;
 }
 
-void EPollAsync::removeTimeout(TmReg* reg) {
+void EPollAsync::removeTimeout(TmReg* &reg) {
 	std::size_t pos = reg - &tmoutQueue.top();
 	tmoutQueue.remove_at(pos);
+	reg = nullptr;
 }
 
 void EPollAsync::addTimeout(TmReg&& reg) {
@@ -89,18 +90,23 @@ void EPollAsync::asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, Ca
 		removeTimeout(rg->tmPos[wf]);
 }
 
-void EPollAsync::cancelWait(WaitFor wf, unsigned int fd) {
+bool EPollAsync::cancelWait(WaitFor wf, unsigned int fd) {
 	Sync _(regLock);
 	FdReg *rg = findReg(fd);
+	bool res = false;
 	if (rg != nullptr) {
-		removeTimeout(rg->tmPos[wf]);
-		rg->cb[wf] == nullptr;
-		epollUpdateFd(rg);
+		if (rg->cb[wf]) {
+			removeTimeout(rg->tmPos[wf]);
+			rg->cb[wf] == nullptr;
+			epollUpdateFd(rg);
+			res = true;
+		}
 	}
+	return res;
 }
 
 
-void EPollAsync::run() {
+void EPollAsync::run(CallbackExecutor executor) {
 	workerLock.lock();
 	//callbacks are never called directly
 	//all calls are scheduled here and executed at the end
@@ -120,8 +126,14 @@ void EPollAsync::run() {
 
 		workerLock.unlock();
 
-		for (auto c : cbList) {
-			runNoExcept(c.first, c.second);
+		if (executor==nullptr) {
+			for (auto c : cbList) {
+				runNoExcept(c.first, c.second);
+			}
+		} else{
+			for (auto c : cbList) {
+				executor([c](){c.first(c.second);});
+			}
 		}
 
 		cbList.clear();

@@ -20,7 +20,10 @@ public:
 	EPollAsync();
 
 	///run listener (executes worker procedure)
-	virtual void run();
+	virtual void run() {run(nullptr);}
+
+	///run listener (executes worker procedure)
+	virtual void run(CallbackExecutor executor);
 
 	///stop listener - sets listener to finish state exiting all workers
 	virtual void stop();
@@ -49,8 +52,7 @@ public:
 	typedef std::vector<CallbackWithArg> CBList;
 
 	void asyncWait(WaitFor wf, unsigned int fd, unsigned int timeout, CallbackFn fn);
-	void cancelWait(WaitFor wf, unsigned int fd);
-
+	bool cancelWait(WaitFor wf, unsigned int fd);
 
 protected:
 
@@ -68,7 +70,10 @@ protected:
 		TmReg *tmPos[2];
 		unsigned int fd;
 		bool used;
-		FdReg():used(false) {}
+		FdReg():used(false) {
+			tmPos[0] = nullptr;
+			tmPos[1] = nullptr;
+		}
 	};
 
 	struct TmReg {
@@ -106,7 +111,7 @@ protected:
 
 	FdReg *findReg(unsigned int fd);
 	FdReg *addReg(unsigned int fd);
-	void removeTimeout(TmReg *reg);
+	void removeTimeout(TmReg *&reg);
 	void addTimeout(TmReg &&reg);
 
 private:
