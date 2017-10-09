@@ -9,39 +9,42 @@
 
 namespace simpleServer {
 
+	template<typename T> struct RemoveConst {typedef T Result;};
+	template<typename T> struct RemoveConst<const T> {typedef T Result;};
+	template<typename T> class StringView;
+
 	///stores a refernece to string and size
 	/** Because std::string is very slow and heavy */
 	template<typename T>
-	class StringView {
+	class StringViewBase {
 	public:
-		StringView() :data(0), length(0) {}
-		StringView(const T *str) : data(str), length(calcLength(str)) {}
-		StringView(const T *str, std::size_t length): data(str),length(length) {}
-		StringView(const std::basic_string<T> &string) : data(string.data()), length(string.length()) {}
-		StringView(const std::vector<T> &string) : data(string.data()), length(string.size()) {}
-		StringView(const std::initializer_list<T> &list) :data(list.begin()), length(list.size()) {}
-		StringView(const StringView &other) :data(other.data), length(other.length) {}
+		typedef T Type;
+		typedef typename RemoveConst<T>::Result MutableType;
 
-		StringView &operator=(const StringView &other) {
+		StringViewBase() :data(0), length(0) {}
+		StringViewBase(T *str) : data(str), length(calcLength(str)) {}
+		StringViewBase(T *str, std::size_t length): data(str),length(length) {}
+
+		StringViewBase &operator=(const StringViewBase &other) {
 			if (&other != this) {
-				this->~StringView();
-				new(this) StringView(other);
+				this->~StringViewBase();
+				new(this) StringViewBase(other);
 			}
 			return *this;
 		}
 
-		operator std::basic_string<T>() const { return std::basic_string<T>(data, length); }
+		operator std::basic_string<MutableType>() const { return std::basic_string<MutableType>(data, length); }
 
-		StringView substr(std::size_t index) const {
+		StringViewBase substr(std::size_t index) const {
 			std::size_t indexadj = std::min(index, length);
-			return StringView(data + indexadj, length - indexadj);
+			return StringViewBase(data + indexadj, length - indexadj);
 		}
-		StringView substr(std::size_t index, std::size_t len) const {
+		StringViewBase substr(std::size_t index, std::size_t len) const {
 			std::size_t indexadj = std::min(index, length);
-			return StringView(data + indexadj, std::min(length-indexadj, len));
+			return StringViewBase(data + indexadj, std::min(length-indexadj, len));
 		}
 
-		int compare(const StringView &other) const {
+		int compare(const StringViewBase &other) const {
 			//equal strings by pointer and length
 			if (other.data == data && other.length == length) return 0;
 			//compare char by char
@@ -55,23 +58,23 @@ namespace simpleServer {
 			return 0;
 		}
 
-		bool operator==(const StringView &other) const { return compare(other) == 0; }
-		bool operator!=(const StringView &other) const { return compare(other) != 0; }
-		bool operator>=(const StringView &other) const { return compare(other) >= 0; }
-		bool operator<=(const StringView &other) const { return compare(other) <= 0; }
-		bool operator>(const StringView &other) const { return compare(other) > 0; }
-		bool operator<(const StringView &other) const { return compare(other) < 0; }
+		bool operator==(const StringViewBase &other) const { return compare(other) == 0; }
+		bool operator!=(const StringViewBase &other) const { return compare(other) != 0; }
+		bool operator>=(const StringViewBase &other) const { return compare(other) >= 0; }
+		bool operator<=(const StringViewBase &other) const { return compare(other) <= 0; }
+		bool operator>(const StringViewBase &other) const { return compare(other) > 0; }
+		bool operator<(const StringViewBase &other) const { return compare(other) < 0; }
 
-		const T * const data;
+		T * const data;
 		const std::size_t length;
 
-		const T &operator[](std::size_t pos) const { return data[pos]; }
+		T &operator[](std::size_t pos) const { return data[pos]; }
 		
-		const T *begin() const { return data; }
-		const T *end() const { return data + length; }
+		T *begin() const { return data; }
+		T *end() const { return data + length; }
 
-		static std::size_t calcLength(const T *str) {
-			const T *p = str;
+		static std::size_t calcLength(T *str) {
+			T *p = str;
 			if (p) {
 				while (*p) ++p;
 				return p - str;
@@ -84,7 +87,7 @@ namespace simpleServer {
 
 		static const std::size_t npos = -1;
 
-		std::size_t indexOf(const StringView sub, std::size_t pos = 0) const {
+		std::size_t indexOf(const StringView<MutableType> sub, std::size_t pos = 0) const {
 			if (sub.length > length) return npos;
 			std::size_t eflen = length - sub.length + 1;
 			while (pos < eflen) {
@@ -94,7 +97,7 @@ namespace simpleServer {
 			return npos;
 		}
 
-		std::size_t lastIndexOf(const StringView sub, std::size_t pos = 0) const {
+		std::size_t lastIndexOf(const StringView<MutableType> sub, std::size_t pos = 0) const {
 			if (sub.length > length) return -1;
 			std::size_t eflen = length - sub.length + 1;
 			while (pos < eflen) {
@@ -109,11 +112,11 @@ namespace simpleServer {
 		/** split() function */
 		class SplitFn {
 		public:
-			SplitFn(const StringView &source, const StringView &separator, unsigned int limit)
+			SplitFn(const StringViewBase &source, const StringViewBase &separator, unsigned int limit)
 				:source(source),separator(separator),startPos(0),limit(limit) {}
 
 			///returns next element
-			StringView operator()() {
+			StringViewBase operator()() {
 				std::size_t fnd = limit?source.indexOf(separator, startPos):npos;
 				std::size_t strbeg = startPos, strlen;
 				if (fnd == (std::size_t)-1) {
@@ -127,12 +130,12 @@ namespace simpleServer {
 				return source.substr(strbeg, strlen);
 			}
 			///Returns rest of the string
-			operator StringView() const {
+			operator StringViewBase() const {
 				return source.substr(startPos);
 			}
 		protected:
-			StringView source;
-			StringView separator;
+			StringViewBase source;
+			StringViewBase separator;
 			std::size_t startPos;
 			unsigned int limit;
 		};
@@ -161,7 +164,7 @@ namespace simpleServer {
 		 * @param limit allows to limit count of substrings. Default is unlimited
 		 * @return function which provides split operation.
 		 */
-		SplitFn split(const StringView &separator, unsigned int limit = (unsigned int)-1) const {
+		SplitFn split(const StringViewBase &separator, unsigned int limit = (unsigned int)-1) const {
 			return SplitFn(*this,separator, limit);
 		}
 
@@ -171,38 +174,63 @@ namespace simpleServer {
 		 * @param result
 		 * @return
 		 */
-		bool isSplitEnd(const StringView &result) const {
+		bool isSplitEnd(const StringViewBase &result) const {
 			return result.length == 0 && result.data == data + length;
 		}
 
 	};
 
 	template<typename T>
-	std::ostream &operator<<(std::ostream &out, const StringView<T> &ref) {
+	std::ostream &operator<<(std::ostream &out, const StringViewBase<T> &ref) {
 		out.write(ref.data, ref.length);
 		return out;
 	}
 
 
+	template<typename T>
+	class MutableStringView: public StringViewBase<T> {
+	public:
+		typedef StringViewBase< T> Base;
+		using StringViewBase< T>::StringViewBase;
+		MutableStringView() {}
+		MutableStringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
+
+	};
+
+	template<typename T>
+	class StringView: public StringViewBase<const T> {
+	public:
+		typedef StringViewBase<const T> Base;
+		using StringViewBase<const T>::StringViewBase;
+		StringView() {}
+		StringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
+		StringView(const StringViewBase<const T> &other):Base(other.data, other.length) {}
+		StringView(const std::basic_string<T> &string) : Base(string.data(),string.length()) {}
+		StringView(const std::vector<T> &string) : Base(string.data(),string.size()) {}
+		StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
+		StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
+		StringView(const StringView &other):Base(other) {}
+	};
+
+
 	typedef StringView<char> StrViewA;
 	typedef StringView<wchar_t> StrViewW;
+
 
 	class BinaryView: public StringView<unsigned char>{
 	public:
 		using StringView<unsigned char>::StringView;
 
-		BinaryView(const BinaryView &from)
-			:StringView<unsigned char>(from)
-		{}
+		BinaryView() {}
 
-		BinaryView(const StringView<unsigned char> &from)
+		BinaryView(const StringViewBase<unsigned char> &from)
 			:StringView<unsigned char>(from)
 		{}
 
 		///Explicit conversion from any view to binary view
 		/** it might be useful for simple serialization, however, T should be POD or flat object */
 		template<typename T>
-		explicit BinaryView(const StringView<T> &from)
+		explicit BinaryView(const StringViewBase<T> &from)
 			:StringView<unsigned char>(reinterpret_cast<const unsigned char *>(from.data), from.length*sizeof(T))
 		{}
 
@@ -214,6 +242,40 @@ namespace simpleServer {
 			return StringView<T>(reinterpret_cast<const T *>(data), length/sizeof(T));
 		}
 	};
+
+
+	class MutableBinaryView: public MutableStringView<unsigned char> {
+	public:
+		using MutableStringView<unsigned char>::MutableStringView;
+
+		MutableBinaryView() {}
+
+		MutableBinaryView(const StringViewBase<unsigned char> &from)
+			:MutableStringView<unsigned char>(from)
+		{}
+
+		///Explicit conversion from any view to binary view
+		/** it might be useful for simple serialization, however, T should be POD or flat object */
+		template<typename T>
+		explicit MutableBinaryView(const StringViewBase<T> &from)
+			:MutableStringView<unsigned char>(reinterpret_cast<unsigned char *>(from.data), from.length*sizeof(T))
+		{}
+
+
+		///Explicit conversion binary view to any view
+		/** it might be useful for simple deserialization, however, T should be POD or flat object */
+		template<typename T>
+		explicit operator MutableStringView<T>() const {
+			return MutableStringView<T>(reinterpret_cast<T *>(data), length/sizeof(T));
+		}
+		///Explicit conversion binary view to any view
+		/** it might be useful for simple deserialization, however, T should be POD or flat object */
+		template<typename T>
+		explicit operator StringView<T>() const {
+			return StringView<T>(reinterpret_cast<const T *>(data), length/sizeof(T));
+		}
+	};
+
 
 
 

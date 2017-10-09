@@ -5,6 +5,8 @@
  *      Author: ondra
  */
 
+#if 0
+
 #include "HTTPHandler.h"
 
 namespace happyfeed {
@@ -15,3 +17,5 @@ HTTPHandler::HTTPHandler() {
 }
 
 } /* namespace happyfeed */
+
+#endif
