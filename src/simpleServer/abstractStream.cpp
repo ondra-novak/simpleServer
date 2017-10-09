@@ -12,57 +12,73 @@ namespace simpleServer {
  *
  * Function uses buffer to collect small writes into single brust write.
  */
-BinaryView AbstractStream::write(BinaryView buffer, WriteMode wrmode ) {
-	bool flushAtEnd;
-	if (buffer.length > wrBuff.size) {
-		flush(wrmode);
+BinaryView AbstractStream::write(const BinaryView &databuff, WriteMode wrmode ) {
+
+	const BinaryView *b = &databuff;
+	BinaryView tmp;
+	//if databuff contains more data then buffer
+	if (databuff.length > wrBuff.size) {
+		//if the buffer is not empty
+		if (wrBuff.wrpos) {
+			//put begin of the databuff to the buffer
+			tmp = write(databuff, writeNonBlock);
+			b = &tmp;
+			//and flush the whole buffer.
+			flush(wrmode);
+			//in mode writeCanBlock - only one block is allowed, which could happen during flush
+			if (wrmode == writeCanBlock) wrmode = writeNonBlock;
+		}
+		//if the buffer is empty
 		if (wrBuff.wrpos == 0)
-			return buffer.substr(writeBuffer(buffer,wrmode));
+			//send the databuff (or rest) directly with current write mode
+			return databuff.substr(writeBuffer(*b,wrmode));
+
+		//otherwise, use buffering
 	}
+	return writeBuffered(*b, wrmode);
 
-	if (wrBuff.size == 0) wrBuff = createOutputBuffer();
+}
 
+BinaryView AbstractStream::writeBuffered(const BinaryView &databuff, WriteMode wrmode ) {
+	//depend on write mode
 	switch (wrmode) {
 	case writeAndFlush:
-		for(;;) {
-			auto remain = wrBuff.remain();
-			BinaryView part = buffer.substr(0,remain);
-			std::memcpy(wrBuff.ptr+wrBuff.wrpos, part.data, part.length);
-			buffer = buffer.substr(part.length);
-			if (buffer.empty()) {
-				flush(writeAndFlush);
-				break;
-			} else {
-				flush(writeCanBlock);
-			}
-		}
-		return buffer;
-	case writeWholeBuffer:
-		for(;;) {
-			auto remain = wrBuff.remain();
-			BinaryView part = buffer.substr(0,remain);
-			std::memcpy(wrBuff.ptr+wrBuff.wrpos, part.data, part.length);
-			buffer = buffer.substr(part.length);
-			if (buffer.empty()) {
-				break;
-			} else {
-				flush(writeCanBlock);
-			}
-		}
-		return buffer;
+		//in this mode, whole buffer is written and then flush is called
+		//so first, restart function with writeWholeBuffer mode
+		writeBuffered(databuff, writeWholeBuffer);
+		//then flush
+		flush(writeAndFlush);
+		//everything was written
+		return BinaryView(0,0);
+	case writeWholeBuffer: {
+			//in this mode, writting is repeating until everything is written
+			//write it in mode writeCanBlock
+			BinaryView b = writeBuffered(databuff, writeCanBlock);
+			//everything has been written - exit now
+			if (b.empty()) return b;
+			//otherwise, restart writing with rest of the buffer
+			else return writeBuffered(databuff.substr(b.length), writeWholeBuffer);
+		}break;
 	case writeNonBlock:
 	case writeCanBlock:{
-			auto remain = wrBuff.remain();
-			if (remain == 0) {
+			//if there is no buffer available
+			if (wrBuff.remain() == 0) {
+				//flush the buffer with specified write mode
+				//in non-block mode, nothing can happed
 				flush(wrmode);
-				remain = wrBuff.remain();
 			}
-			BinaryView part = buffer.substr(0,remain);
-			std::memcpy(wrBuff.ptr+wrBuff.wrpos, part.data, part.length);
-			buffer = buffer.substr(part.length);
-		}return buffer;
-
+			//prepare arguments
+			const void *start = databuff.data;
+			std::size_t sz = std::min(databuff.length, wrBuff.remain());
+			//put data to the buffer
+			std::memcpy(wrBuff.ptr+wrBuff.wrpos, start, sz);
+			//return unused part of databuff
+			return databuff.substr(sz);
+		}
+	default: throw std::runtime_error("Invalid write mode - unreachable code");
 	}
+
+
 }
 
 

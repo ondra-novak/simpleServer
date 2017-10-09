@@ -133,6 +133,7 @@ Connection TCPListenerImpl::createConnection(int sock,const BinaryView& addrInfo
 			PSocketConnection(new SocketConnection(sock,infinity,addr))));
 }
 
+/*
 void TCPListenerImpl::asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
 
 	//keep this object valid during async
@@ -179,6 +180,6 @@ void TCPListenerImpl::asyncAccept(const AsyncDispatcher &cntr, AsyncCallback cal
 		});
 }
 
-
+*/
 } /* namespace simpleServer */
 

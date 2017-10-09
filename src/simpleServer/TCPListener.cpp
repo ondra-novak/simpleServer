@@ -20,11 +20,13 @@ TCPListener::Iterator TCPListener::end() {
 void TCPListener::stop() {
 	owner->stop();
 }
+/*
 
 void TCPListener::asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) {
 	owner->asyncAccept(cntr, callback, timeoutOverride);
 }
 
+*/
 
 Connection ITCPListener::Iterator::operator *() {
 	return conn;

@@ -190,7 +190,7 @@ public:
 	 *
 	 * Function uses buffer to collect small writes into single brust write.
 	 */
-	BinaryView write(BinaryView buffer, WriteMode wrmode = writeWholeBuffer);
+	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer);
 
 
 	///write one byte to the output stream.
@@ -291,9 +291,110 @@ protected:
 	WrBuffer wrBuff;
 
 
+	BinaryView writeBuffered(const BinaryView &buffer, WriteMode wrmode );
 
 
 
+};
+
+
+class Stream: public RefCntPtr<AbstractStream> {
+public:
+
+	Stream() {}
+	using RefCntPtr<AbstractStream>::RefCntPtr;
+
+	int operator()() {
+		ptr->readByte();
+	}
+	void operator()(int b) {
+		ptr->writeByte((unsigned char)b);
+	}
+
+	int peek() const {
+		ptr->peekByte();
+	}
+	BinaryView read(bool nonblock=false) {
+		return ptr->read(nonblock);
+	}
+	BinaryView commit(std::size_t sz) {
+		return ptr->commit(sz);
+	}
+	void putBackByte() {
+		return ptr->putBackByte();
+	}
+	void putBackEof() {
+		return ptr->putBackEof();
+	}
+	void writeEof() {
+		ptr->writeEof();
+	}
+	void flush(IGeneralStream::WriteMode wr = IGeneralStream::writeAndFlush) {
+		ptr->flush(wr);
+	}
+	MutableBinaryView getWriteBuffer(std::size_t reqSize = AbstractStream::minimumRequiredBufferSize) {
+		return ptr->getWriteBuffer(reqSize);
+	}
+	void commitWriteBuffer(std::size_t commitSize) {
+		return ptr->commitWriteBuffer(commitSize);
+	}
+	BinaryView write(const BinaryView &buffer, IGeneralStream::WriteMode wrmode = IGeneralStream::writeWholeBuffer) {
+		return ptr->write(buffer, wrmode);
+	}
+};
+
+class InputStream: public RefCntPtr<AbstractStream> {
+public:
+
+	InputStream() {}
+	using RefCntPtr<AbstractStream>::RefCntPtr;
+	InputStream(const Stream &other):RefCntPtr<AbstractStream>(other) {}
+
+	int operator()() {
+		ptr->readByte();
+	}
+	int peek() const {
+		ptr->peekByte();
+	}
+	BinaryView read(bool nonblock=false) {
+		return ptr->read(nonblock);
+	}
+	BinaryView commit(std::size_t sz) {
+		return ptr->commit(sz);
+	}
+	void putBackByte() {
+		return ptr->putBackByte();
+	}
+	void putBackEof() {
+		return ptr->putBackEof();
+	}
+};
+
+class OutputStream: public RefCntPtr<AbstractStream> {
+public:
+
+	OutputStream() {}
+	using RefCntPtr<AbstractStream>::RefCntPtr;
+	OutputStream(const Stream &other):RefCntPtr<AbstractStream>(other) {}
+
+	void operator()(int b) {
+		ptr->writeByte((unsigned char)b);
+	}
+	void writeEof() {
+		ptr->writeEof();
+	}
+	void flush(IGeneralStream::WriteMode wr = IGeneralStream::writeAndFlush) {
+		ptr->flush(wr);
+	}
+	MutableBinaryView getWriteBuffer(std::size_t reqSize = AbstractStream::minimumRequiredBufferSize) {
+		return ptr->getWriteBuffer(reqSize);
+	}
+	void commitWriteBuffer(std::size_t commitSize) {
+		return ptr->commitWriteBuffer(commitSize);
+	}
+	BinaryView write(const BinaryView &buffer, IGeneralStream::WriteMode wrmode = IGeneralStream::writeWholeBuffer) {
+		return ptr->write(buffer, wrmode);
+	}
 };
 
 

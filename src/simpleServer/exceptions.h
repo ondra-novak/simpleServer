@@ -25,6 +25,8 @@ class SystemException: public Exception {
 public:
 
 	SystemException(int err):err(err) {}
+	SystemException(int err, const std::string &desc):err(err),desc(desc) {}
+	SystemException(int err, std::string &&desc):err(err),desc(std::move(desc)) {}
 
 	int getErrNo() const {return err;}
 
@@ -33,6 +35,7 @@ public:
 
 protected:
 	int err;
+	std::string desc;
 
 };
 

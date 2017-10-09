@@ -6,8 +6,14 @@
 namespace simpleServer {
 
 
+
 std::string SystemException::getMessage() const {
-	return std::strerror(err);
+	if (desc.empty()) {
+		return std::strerror(err);
+	} else {
+		return desc + " - " + std::strerror(err);
+	}
 }
+
 
 }

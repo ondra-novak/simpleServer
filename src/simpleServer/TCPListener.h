@@ -46,11 +46,6 @@ public:
 	/** Once listener is stopped, all threads blocked by accept are released */
 	virtual void stop() = 0;
 
-	typedef std::function<void(AsyncState, const Connection *)> AsyncCallback;
-
-
-	virtual void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride) = 0;
-
 protected:
 
 	virtual Connection accept() = 0;
@@ -139,7 +134,7 @@ public:
 	 * @param Connection * pointer to newly created connection. The pointer is defined only when AsyncState is asyncOk, otherwise it is nullptr. You have
 	 * to copy the object to new variable
 	 */
-	typedef ITCPListener::AsyncCallback AsyncCallback;
+//	typedef ITCPListener::AsyncCallback AsyncCallback;
 
 	///Initialize asynchronous listening
 	/**
@@ -159,7 +154,7 @@ public:
 	 * The function stop() cancels asynchronous listener
 	 *
 	 */
-	void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
+//	void asyncAccept(const AsyncDispatcher &cntr, AsyncCallback callback, unsigned int timeoutOverride = 0);
 
 
 protected:
