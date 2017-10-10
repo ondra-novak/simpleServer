@@ -85,8 +85,19 @@ void TCPStream::closeOutput() {
 	shutdown(sck, SHUT_WR);
 }
 
+TCPStream::TCPStream(int sck, int iotimeout, const NetAddr& peer)
+	:sck(sck),iotimeout(iotimeout),peer(peer)
+{
+}
+
 void TCPStream::flushOutput() {
-	//not necesery
+	//not implemented
+}
+
+int TCPStream::setIOTimeout(int iotimeoutms) {
+	int ret = iotimeout;
+	iotimeout = iotimeoutms;
+	return ret;
 }
 
 }

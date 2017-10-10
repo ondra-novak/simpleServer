@@ -8,6 +8,8 @@ namespace simpleServer {
 class TCPStream: public AbstractStream {
 protected:
 
+	TCPStream(int sck, int iotimeout, const NetAddr &peer);
+
 	virtual BinaryView readBuffer(bool nonblock) ;
 	virtual MutableBinaryView createOutputBuffer() ;
 	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) ;
@@ -16,7 +18,8 @@ protected:
 	virtual void closeInput() ;
 	virtual void closeOutput();
 	virtual void flushOutput();
-
+	virtual NetAddr getPeerAddr() const {return peer;}
+	virtual int setIOTimeout(int iotimeoutms) override;
 
 
 protected:
@@ -28,9 +31,8 @@ protected:
 	char outputBuffer[outputBufferSize];
 
 	int sck;
-
-
 	int iotimeout;
+	NetAddr peer;
 
 
 };

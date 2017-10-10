@@ -13,6 +13,12 @@ public:
 	virtual BinaryView toSockAddr() const = 0;
 	virtual ~INetworkAddress() {}
 
+	///in case of the address contains multiple records, this function returns next record
+	/**
+	 * @return ref pointer to next address, or nullptr
+	 */
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const = 0;
+
 
 };
 
@@ -31,6 +37,8 @@ public:
 		IPv4,
 		IPv6
 	};
+
+	RefCntPtr<INetworkAddress> getNextAddr();
 
 	static NetAddr create(StrViewA addr, unsigned int defaultPort, AddressType type = IPvAll);
 	static NetAddr create(const BinaryView &sockAddr);

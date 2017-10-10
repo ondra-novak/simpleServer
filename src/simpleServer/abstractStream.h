@@ -58,6 +58,20 @@ public:
 	 */
 	static bool isEof(const BinaryView &buffer);
 
+
+	///Changes timeout for all blocking operations
+	/**
+	 * @param timeoutms timeout in miliseconds. Set negative number to set infinite timeout
+	 *
+	 * @note not all streams support timeout. Especially streams which doesn't support waiting
+	 * also cannot have timeout.
+	 *
+	 * @return function returns previous timeout (this allows to set timeout temporary and
+	 * later to restore original value)
+	 */
+	virtual int setIOTimeout(int timeoutms) = 0;
+
+
 protected:
 
 	///Read buffer
@@ -341,62 +355,10 @@ public:
 	BinaryView write(const BinaryView &buffer, IGeneralStream::WriteMode wrmode = IGeneralStream::writeWholeBuffer) {
 		return ptr->write(buffer, wrmode);
 	}
-};
-
-class InputStream: public RefCntPtr<AbstractStream> {
-public:
-
-	InputStream() {}
-	using RefCntPtr<AbstractStream>::RefCntPtr;
-	InputStream(const Stream &other):RefCntPtr<AbstractStream>(other) {}
-
-	int operator()() {
-		ptr->readByte();
-	}
-	int peek() const {
-		ptr->peekByte();
-	}
-	BinaryView read(bool nonblock=false) {
-		return ptr->read(nonblock);
-	}
-	BinaryView commit(std::size_t sz) {
-		return ptr->commit(sz);
-	}
-	void putBackByte() {
-		return ptr->putBackByte();
-	}
-	void putBackEof() {
-		return ptr->putBackEof();
+	int setIOTimeout(int timeoutms) {
+		return ptr->setIOTimeout(timeoutms);
 	}
 };
-
-class OutputStream: public RefCntPtr<AbstractStream> {
-public:
-
-	OutputStream() {}
-	using RefCntPtr<AbstractStream>::RefCntPtr;
-	OutputStream(const Stream &other):RefCntPtr<AbstractStream>(other) {}
-
-	void operator()(int b) {
-		ptr->writeByte((unsigned char)b);
-	}
-	void writeEof() {
-		ptr->writeEof();
-	}
-	void flush(IGeneralStream::WriteMode wr = IGeneralStream::writeAndFlush) {
-		ptr->flush(wr);
-	}
-	MutableBinaryView getWriteBuffer(std::size_t reqSize = AbstractStream::minimumRequiredBufferSize) {
-		return ptr->getWriteBuffer(reqSize);
-	}
-	void commitWriteBuffer(std::size_t commitSize) {
-		return ptr->commitWriteBuffer(commitSize);
-	}
-	BinaryView write(const BinaryView &buffer, IGeneralStream::WriteMode wrmode = IGeneralStream::writeWholeBuffer) {
-		return ptr->write(buffer, wrmode);
-	}
-};
-
 
 
 

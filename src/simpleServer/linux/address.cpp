@@ -13,8 +13,10 @@ public:
 
 	virtual std::string toString(bool resolve = false) const;
 	virtual BinaryView toSockAddr() const;
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const override;
+
 	~AddressAddrInfo() {
-		freeaddrinfo(addr);
+		if (addr) freeaddrinfo(addr);
 	}
 
 
@@ -23,6 +25,26 @@ protected:
 	struct addrinfo *addr;
 
 };
+
+
+class AddressAddrInfoSlave: public AddressAddrInfo {
+public:
+	AddressAddrInfoSlave(struct addrinfo *addr, RefCntPtr<AddressAddrInfo> master)
+		:AddressAddrInfo(addr),master(master) {}
+
+	~AddressAddrInfoSlave() {
+		addr = nullptr;
+	}
+protected:
+	RefCntPtr<AddressAddrInfo> master;
+
+};
+
+RefCntPtr<INetworkAddress> AddressAddrInfo::getNextAddr() const
+{
+	if (addr->ai_next) return new AddressAddrInfoSlave(addr->ai_next, const_cast<AddressAddrInfo *>(this));
+	else return nullptr;
+}
 
 
 class AddressSockAddr: public INetworkAddress {
@@ -47,6 +69,11 @@ public:
 
 	virtual std::string toString(bool resolve) const;
 	virtual BinaryView toSockAddr() const;
+
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const override {
+		return nullptr;
+	}
+
 
 
 protected:
