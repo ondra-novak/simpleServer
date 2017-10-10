@@ -200,12 +200,12 @@ static int listenSocket(const NetAddr &addr) {
 	if (::bind(s, sa, b.length) == -1) {
 		int e = errno;
 		close(s);
-		SystemException(e,"Cannot bind socket to port");
+		throw SystemException(e,"Cannot bind socket to port");
 	}
 	if (::listen(s,SOMAXCONN) == -1) {
 		int e = errno;
 		close(s);
-		SystemException(e,"Cannot activate listen mode on the socket");
+		throw SystemException(e,"Cannot activate listen mode on the socket");
 	}
 	return s;
 }
@@ -233,6 +233,19 @@ TCPListen::TCPListen(NetAddr source, int listenTimeout, int ioTimeout):TCPStream
 		hasNext = a != nullptr;
 		t = a;
 	} while (hasNext);
+
+	unsigned char buff[256];
+	socklen_t size = sizeof(buff);
+	getsockname(socks->sockets[0].fd,reinterpret_cast<struct sockaddr *>(buff),&size);
+	target = NetAddr::create(BinaryView(buff, size));
+	for (std::size_t i = 1; i < socks->sockets.size(); i++) {
+		socklen_t size = sizeof(buff);
+		getsockname(socks->sockets[i].fd,reinterpret_cast<struct sockaddr *>(buff),&size);
+		NetAddr x = NetAddr::create(BinaryView(buff, size));
+		target = target + x;
+	}
+
+
 	std::swap(openSockets,socks);
 }
 
@@ -242,7 +255,7 @@ static NetAddr createListeningAddr(bool localhost, unsigned int port) {
 	std::memset(&sin4, 0,sizeof(sin4));
 	sin4.sin_family = AF_INET;
 	sin4.sin_port = htons(port);
-	sin4.sin_addr.s_addr = localhost?INADDR_LOOPBACK:INADDR_ANY;
+	sin4.sin_addr.s_addr = htonl(localhost?INADDR_LOOPBACK:INADDR_ANY);
 	NetAddr a4 = NetAddr::create(BinaryView(StringView<struct sockaddr_in>(&sin4,1)));
 
 

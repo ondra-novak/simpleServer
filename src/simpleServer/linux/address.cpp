@@ -77,8 +77,8 @@ public:
 
 
 protected:
-	sockaddr sa;
 	int len;
+	sockaddr sa;
 };
 
 
@@ -219,8 +219,8 @@ std::string AddressSockAddr::toString(bool resolve) const {
 		strcat(namebuff,"]");
 		n = namebuff;
 	}
-	strcat(namebuff,":");
-	return std::string(namebuff).append(svcbuff);
+	strcat(n,":");
+	return std::string(n).append(svcbuff);
 }
 
 BinaryView AddressSockAddr::toSockAddr() const {
@@ -255,6 +255,10 @@ protected:
 
 NetAddr NetAddr::operator +(const NetAddr& other) const {
 	return NetAddr(new ChainedNetworkAddr(*this,*this, other));
+}
+
+RefCntPtr<INetworkAddress> NetAddr::getNextAddr() const {
+	return addr->getNextAddr();
 }
 
 

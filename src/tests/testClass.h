@@ -8,6 +8,7 @@
 #ifndef SRC_TESTS_TESTCLASS_H_
 #define SRC_TESTS_TESTCLASS_H_
 #include <sstream>
+#include <iostream>
 
 
 class TestSimple {

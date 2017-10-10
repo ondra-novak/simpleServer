@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 		NetAddr localAddr = TCPStreamFactory::getLocalAddress(server);
 		out << localAddr.toString(false);
 	};
-	tst.test("Listener.openRandomPort.network","ok") >> [](std::ostream &out) {
+/*	tst.test("Listener.openRandomPort.network","ok") >> [](std::ostream &out) {
 		unsigned int port = 0;
 		TCPListener server(network,port);
 		if (port) out << "ok";
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
 		std::unique_lock<std::mutex> _(mx);
 		cv.wait(_,[&]{return counter2 >= 4;});
 		out << counter1 << counter2;
-	};
+	};*/
 
 	return tst.didFail()?1:0;
 
