@@ -1,5 +1,7 @@
 #pragma once
 
+#include "abstractStream.h"
+
 namespace simpleServer {
 
 
@@ -8,7 +10,19 @@ public:
 
 
 	///creates stream
+	/**
+	 * @return newly created connected stream. Function may block until new stream is connected. Function
+	 * can also return nullptr when there is no more streams available, or process has been stopped
+	 */
 	virtual Stream create() = 0;
+
+	///Asynchronously stops process of creating of the new stream
+	/**
+	 * If the stream factory is server, this function closes the opened port and exits the function create()
+	 * if it blocking the thread. Anytime later, the function create() returns nullptr. There is no way to
+	 * restart the stream factory. You need to recreate it
+	 */
+	virtual void stop() = 0;
 
 	virtual ~IStreamFactory() {}
 };
@@ -21,7 +35,7 @@ public:
 		public:
 
 			Iterator(RefCntPtr<AbstractStreamFactory> owner, Stream first)
-				:owner(owner),first(first) {
+				:owner(owner),conn(first) {
 
 
 			}
@@ -60,6 +74,10 @@ public:
 	}
 	Iterator end() const {
 		return ptr->end();
+	}
+
+	void stop() {
+		return ptr->stop();
 	}
 
 };

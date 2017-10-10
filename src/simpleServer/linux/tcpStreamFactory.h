@@ -1,4 +1,6 @@
+#include <memory>
 #include "../abstractStreamFactory.h"
+#include "../address.h"
 
 namespace simpleServer {
 
@@ -24,10 +26,18 @@ public:
 	 */
 	static NetAddr getPeerAddress(const Stream &stream);
 
+
+	virtual void stop() override {
+		stopped = true;
+	}
+
+	TCPStreamFactory(NetAddr target,int ioTimeout)
+		:target(target),ioTimeout(ioTimeout),stopped(false) {}
 protected:
 
 	NetAddr target;
 	int ioTimeout;
+	std::atomic<bool> stopped;
 
 };
 
@@ -68,13 +78,16 @@ public:
 protected:
 
 	TCPListen(NetAddr source, int listenTimeout, int ioTimeout);
+	TCPListen(bool localhost, unsigned int port, int listenTimeout, int ioTimeout);
 	virtual Stream create() override;
-	~TCPListen() {}
+	~TCPListen();
+	virtual void stop() override;
 
 protected:
 
 	int listenTimeout;
-	std::vector<int> openSockets;
+	class Sockets;
+	std::unique_ptr<Sockets> openSockets;
 
 
 };
@@ -83,7 +96,5 @@ protected:
 Stream tcpListen(NetAddr target, int listenTimeout, int ioTimeout = -1);
 
 
-NetAddr tcpGetAddr(const Stream &stream);
-NetAddr tcpGetAddr(const StreamFactory &streamFactory);
 
 }

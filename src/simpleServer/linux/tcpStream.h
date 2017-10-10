@@ -1,14 +1,19 @@
 #pragma once
 
 #include "../abstractStream.h"
+#include "../address.h"
 
 
 namespace simpleServer {
 
 class TCPStream: public AbstractStream {
-protected:
+public:
+	virtual NetAddr getPeerAddr() const {return peer;}
 
 	TCPStream(int sck, int iotimeout, const NetAddr &peer);
+
+protected:
+
 
 	virtual BinaryView readBuffer(bool nonblock) ;
 	virtual MutableBinaryView createOutputBuffer() ;
@@ -18,7 +23,6 @@ protected:
 	virtual void closeInput() ;
 	virtual void closeOutput();
 	virtual void flushOutput();
-	virtual NetAddr getPeerAddr() const {return peer;}
 	virtual int setIOTimeout(int iotimeoutms) override;
 
 

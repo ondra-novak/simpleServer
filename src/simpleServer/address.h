@@ -38,10 +38,22 @@ public:
 		IPv6
 	};
 
-	RefCntPtr<INetworkAddress> getNextAddr();
+	RefCntPtr<INetworkAddress> getNextAddr() const;
+	RefCntPtr<INetworkAddress> getHandle() const {return addr;}
 
 	static NetAddr create(StrViewA addr, unsigned int defaultPort, AddressType type = IPvAll);
 	static NetAddr create(const BinaryView &sockAddr);
+
+	///Allows to combine multiple addresses into single NetAddr object.
+	/** The stream factories can use this multiple addresses as benefit while talking with other side.
+	 *
+	 * For example for connected stream, the address can contain alternative targets which only one need
+	 * to be active. For listening stream, multiple ports can be opened for listening under single stream instance
+	 *
+	 * @param other other network address
+	 * @return Object which contains multiple addresses. Each addres can be retrieved by function getNextAddr()
+	 */
+	NetAddr operator+ (const NetAddr &other) const;
 
 protected:
 

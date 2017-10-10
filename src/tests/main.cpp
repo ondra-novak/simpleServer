@@ -7,12 +7,12 @@
 
 #include <unistd.h>
 
-#include "../simpleServer/TCPListener.h"
 #include "../simpleServer/mt.h"
 #include "testClass.h"
 #include "../simpleServer/prioqueue.h"
 #include <condition_variable>
 #include <mutex>
+#include "../simpleServer/tcp.h"
 
 using namespace simpleServer;
 
@@ -47,9 +47,9 @@ int main(int argc, char *argv[]) {
 	};
 
 	tst.test("Listener.openRandomPort.localhost","ok") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(localhost,port);
-		if (port) out << "ok";
+		StreamFactory server = TCPListen::create(true,0);
+		NetAddr localAddr = TCPStreamFactory::getLocalAddress(server);
+		out << localAddr.toString(false);
 	};
 	tst.test("Listener.openRandomPort.network","ok") >> [](std::ostream &out) {
 		unsigned int port = 0;

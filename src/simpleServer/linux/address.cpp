@@ -227,6 +227,36 @@ BinaryView AddressSockAddr::toSockAddr() const {
 	return BinaryView(reinterpret_cast<const unsigned char *>(&sa), len);
 }
 
+class ChainedNetworkAddr: public INetworkAddress {
+public:
+
+	ChainedNetworkAddr(NetAddr master, NetAddr slave, NetAddr next):master(master),slave(slave),next(next) {}
+
+	virtual std::string toString(bool resolve = false) const override {
+		return slave.toString(resolve);
+	}
+	virtual BinaryView toSockAddr() const override {
+		return slave.toSockAddr();
+	}
+
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const override {
+		auto ret = slave.getNextAddr();
+		if (ret == nullptr) return next.getHandle();
+		else {
+			return new ChainedNetworkAddr(master, ret, next);
+		}
+	};
+
+
+protected:
+	NetAddr master, slave, next;
+
+};
+
+NetAddr NetAddr::operator +(const NetAddr& other) const {
+	return NetAddr(new ChainedNetworkAddr(*this,*this, other));
+}
+
 
 }
 
