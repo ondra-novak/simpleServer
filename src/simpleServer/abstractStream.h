@@ -1,6 +1,7 @@
 #pragma once
 #include "refcnt.h"
 #include "stringview.h"
+#include "asyncProvider.h"
 
 namespace simpleServer {
 
@@ -20,6 +21,8 @@ enum WriteMode {
 
 };
 
+
+class AsyncResource;
 
 ///Very abstract interface which descibes protocol to access data in the stream
 class IGeneralStream {
@@ -123,6 +126,9 @@ protected:
 
 
 	virtual void flushOutput() = 0;
+
+	virtual void doReadAsync(const IAsyncProvider::Callback &cb) = 0;
+	virtual void doWriteAsync(const IAsyncProvider::Callback &cb, BinaryView data) = 0;
 
 	virtual ~IGeneralStream() {}
 protected:
@@ -311,12 +317,64 @@ public:
 		else return true;
 	}
 
+
+	IAsyncProvider *setAsyncProvider(IAsyncProvider *asyncProvider);
+
+
+	///Read asynchronously
+	/**
+	 * @param callbackFn function called when operation completes.
+	 *
+	 * @note function can be called immediately if there are data already available to
+	 * processing
+	 */
+	template<typename Fn>
+	void readAsync(const Fn &callbackFn) {
+
+		BinaryView data = read(true);
+		if (!data.empty() || isEof(data))
+			callbackFn(statusOK, data);
+		else
+			doReadAsync(callbackFn);
+	}
+
+	///Write synchronously
+	/**
+	 * Performs nonblocking write. If write is unsuccessful, it asynchronously flushes
+	 * obsah of the buffer and then put the data to the new empty buffer. Note the function
+	 * doesn't provide write modes. It can always transfer less bytes than requested, but
+	 * at least one.
+	 *
+	 * @param data data to write
+	 * @param callbackFn callback function called when operation completes
+	 */
+	template<typename Fn>
+	void writeAsync(BinaryView data, const Fn &callbackFn) {
+
+		BinaryView remainData = write(data,writeNonBlock);
+		if (remainData == data) {
+			doWriteAsync(wrBuff.getView(), [=](CompletionStatus status, BinaryView remain) {
+				wrBuff.wrpos = 0;
+				write(remain, writeNonBlock);
+				BinaryView x = write(data, writeNonBlock);
+				callbackFn(x);
+			});
+		}
+
+	}
+
+
+
 protected:
 
 
 
 	BinaryView rdBuff;
 	WrBuffer wrBuff;
+
+	IAsyncProvider *asyncProvider = nullptr;
+
+
 
 
 	BinaryView writeBuffered(const BinaryView &buffer, WriteMode wrmode );

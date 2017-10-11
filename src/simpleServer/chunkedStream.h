@@ -27,6 +27,9 @@ public:
 	virtual void closeOutput();
 	virtual void flushOutput();
 
+	virtual void doReadAsync(const IAsyncProvider::Callback &cb) override;
+	virtual void doWriteAsync(const IAsyncProvider::Callback &cb, BinaryView data) override;
+
 
 	Stream create(const Stream &source) {
 		return new ChunkedStream(source);

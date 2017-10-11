@@ -49,6 +49,17 @@ public:
 	}
 };
 
+class NoAsyncProviderException: public Exception {
+public:
+	NoAsyncProviderException() {}
+
+
+	std::string getMessage() const {
+		return "Asynchronous provider did not defined for the stream";
+	}
+};
+
+
 class EndOfStreamException: public Exception {
 public:
 	std::string getMessage() const {

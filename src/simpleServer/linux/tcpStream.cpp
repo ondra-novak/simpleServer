@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <netinet/tcp.h>
 #include "tcpStream.h"
+#include "async.h"
 
 #include <poll.h>
 
@@ -102,6 +103,18 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 	int ret = iotimeout;
 	iotimeout = iotimeoutms;
 	return ret;
+}
+
+void TCPStream::doReadAsync(const IAsyncProvider::Callback& cb) {
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	asyncProvider->read(AsyncResource(sck),
+			MutableBinaryView(reinterpret_cast<unsigned char *>(inputBuffer),inputBufferSize),iotimeout,cb);
+}
+
+void TCPStream::doWriteAsync(const IAsyncProvider::Callback& cb,
+		BinaryView data) {
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	asyncProvider->write(AsyncResource(sck),data,iotimeout,cb);
 }
 
 }
