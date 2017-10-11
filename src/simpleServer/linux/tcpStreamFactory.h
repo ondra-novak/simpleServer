@@ -86,8 +86,7 @@ protected:
 protected:
 
 	int listenTimeout;
-	class Sockets;
-	std::unique_ptr<Sockets> openSockets;
+	std::vector<int> openSockets;
 
 
 };

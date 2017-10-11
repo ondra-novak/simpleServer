@@ -46,52 +46,50 @@ int main(int argc, char *argv[]) {
 		printq(r);
 	};
 
-	tst.test("Listener.openRandomPort.localhost","ok") >> [](std::ostream &out) {
+	tst.test("Listener.openRandomPort.localhost","127.0.0.1") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr localAddr = TCPStreamFactory::getLocalAddress(server);
-		out << localAddr.toString(false);
+		std::string addr =  localAddr.toString(false);
+		auto splt = addr.find(':');
+		out << addr.substr(0,splt);
 	};
-/*	tst.test("Listener.openRandomPort.network","ok") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(network,port);
-		if (port) out << "ok";
-	};
-	tst.test("Listener.openRandomPort.localhost6","ok") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(localhost6,port);
-		if (port) out << "ok";
-	};
-	tst.test("Listener.openRandomPort.network6","ok") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(network6,port);
-		if (port) out << "ok";
+	tst.test("Listener.openRandomPort.network","0.0.0.0") >> [](std::ostream &out) {
+		StreamFactory server = TCPListen::create(false,0);
+		NetAddr localAddr = TCPStreamFactory::getLocalAddress(server);
+		std::string addr =  localAddr.toString(false);
+		auto splt = addr.find(':');
+		out << addr.substr(0,splt);
 	};
 	tst.test("Listener.acceptConn","ok") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(localhost,port);
-		runThreads(1,[port] {
-			Connection con = Connection::connect(NetAddr::create("0",port,NetAddr::IPv4));
+		StreamFactory server = TCPListen::create(true,0);
+		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
+		runThreads(1,[srvAddr] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(400));
+			Stream con = tcpConnect(srvAddr,30000);
 		});
-		Connection con2 = *server.begin();
-		if (con2.getHandle() != nullptr) out << "ok";
+		Stream con2 = *server.begin();
+		if (con2 != nullptr) out << "ok";
 	};
 
 	tst.test("Listener.receiveMsg","test message") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(localhost,port);
-		runThreads(1,[port] {
-			Connection con = Connection::connect(NetAddr::create("0",port,NetAddr::IPv4));
+		StreamFactory server = TCPListen::create(true,0);
+		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
+	/*	runThreads(1,[srvAddr] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(400));
+			Stream con = tcpConnect(srvAddr,30000);
 			StrViewA msg("test message");
-			con(BinaryView(msg));
-			con.closeOutput();
-		});
-		Connection con2 = *server.begin();
-		BinaryView data = con2(0);
+			con.write(BinaryView(msg),writeWholeBuffer);
+			con.writeEof();
+		});*/
+		Stream con2 = server();
+		BinaryView data = con2.read(false);
 		while (!data.empty()) {
 			out << StrViewA(data);
-			data = con2(data.length+1);
+			con2.commit(data);
+			data = con2.read();
 		}
 	};
+/*
 	tst.test("Listener.receiveMsg2","test message") >> [](std::ostream &out) {
 		unsigned int port = 0;
 		TCPListener server(localhost,port);

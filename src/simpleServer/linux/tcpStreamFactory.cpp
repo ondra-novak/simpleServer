@@ -210,25 +210,14 @@ static int listenSocket(const NetAddr &addr) {
 	return s;
 }
 
-class TCPListen::Sockets {
-public:
-	std::vector<pollfd> sockets;
-	Sockets() {}
-	~Sockets () {for(auto &&x:sockets)close(x.fd);}
-};
 
-TCPListen::TCPListen(NetAddr source, int listenTimeout, int ioTimeout):TCPStreamFactory(source, ioTimeout) {
-	std::unique_ptr<Sockets> socks (new Sockets);
+TCPListen::TCPListen(NetAddr source, int listenTimeout, int ioTimeout):TCPStreamFactory(source, ioTimeout),listenTimeout(listenTimeout) {
 	NetAddr t = source;
 	bool hasNext = true;
 	do {
 
 		int s = listenSocket(t);
-		pollfd fd;
-		fd.fd = s;
-		fd.revents = POLLIN;
-		fd.events = 0;
-		socks->sockets.push_back(fd);
+		openSockets.push_back(s);
 		auto a = t.getNextAddr();
 		hasNext = a != nullptr;
 		t = a;
@@ -236,17 +225,16 @@ TCPListen::TCPListen(NetAddr source, int listenTimeout, int ioTimeout):TCPStream
 
 	unsigned char buff[256];
 	socklen_t size = sizeof(buff);
-	getsockname(socks->sockets[0].fd,reinterpret_cast<struct sockaddr *>(buff),&size);
+	getsockname(openSockets[0],reinterpret_cast<struct sockaddr *>(buff),&size);
 	target = NetAddr::create(BinaryView(buff, size));
-	for (std::size_t i = 1; i < socks->sockets.size(); i++) {
+	for (std::size_t i = 1; i < openSockets.size(); i++) {
 		socklen_t size = sizeof(buff);
-		getsockname(socks->sockets[i].fd,reinterpret_cast<struct sockaddr *>(buff),&size);
+		getsockname(openSockets[i],reinterpret_cast<struct sockaddr *>(buff),&size);
 		NetAddr x = NetAddr::create(BinaryView(buff, size));
 		target = target + x;
 	}
 
 
-	std::swap(openSockets,socks);
 }
 
 static NetAddr createListeningAddr(bool localhost, unsigned int port) {
@@ -286,10 +274,25 @@ static void fillPollFdListen(int s, pollfd &fd) {
 Stream TCPListen::create() {
 
 
+	//this code can be called MT recursive
+
 	if (stopped) return Stream(nullptr);
+
+	auto scount = openSockets.size();
+
+	//so we need to create state on stack
+
+	pollfd fds[scount];
+	for (decltype(scount) i = 0; i <scount; i++) {
+		auto &&fd = fds[i];
+		fd.fd = openSockets[i];
+		fd.events = POLLIN;
+		fd.revents = 0;
+	}
+
 	int r;
 	do {
-		r = poll(openSockets->sockets.data(),openSockets->sockets.size(),listenTimeout);
+		r = poll(fds,scount,listenTimeout);
 		if (stopped) return Stream(nullptr);
 		if (r == 0) {
 			return Stream(nullptr);
@@ -297,12 +300,13 @@ Stream TCPListen::create() {
 			int e = errno;
 			if (e != EINTR && e != EAGAIN && e != EWOULDBLOCK) throw SystemException(e, "Failed to wait on listening socket(s)");
 		} else {
-			for (auto &&x: openSockets->sockets) if (x.revents) {
+			for (auto &&x: fds) if (x.revents) {
 				int s = x.fd;
 				x.revents = 0;
 				unsigned char buff[256];
 				struct sockaddr *sa = reinterpret_cast<struct sockaddr *>(buff);
 				socklen_t slen = sizeof(buff);
+				//non blocking because multiple threads can try to claim the socket
 				int a = accept4(s, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
 				if (a > 0) {
 					disableNagle(a);
@@ -314,6 +318,7 @@ Stream TCPListen::create() {
 					int e =errno;
 					if (e != EINTR && e != EAGAIN && e != EWOULDBLOCK)
 						throw SystemException(e, "Failed to accept socket");
+					//in case EWOULDBOCK - back to the waiting
 				}
 			}
 		}
@@ -323,12 +328,14 @@ Stream TCPListen::create() {
 }
 
 TCPListen::~TCPListen() {
+	for(auto &&x:openSockets)close(x);
 }
+
 
 void TCPListen::stop() {
 	TCPStreamFactory::stop();
-	for (auto &&f: openSockets->sockets) {
-		shutdown(f.fd, SHUT_RD);
+	for (auto &&f: openSockets) {
+		shutdown(f, SHUT_RD);
 	}
 }
 

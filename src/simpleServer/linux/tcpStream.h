@@ -11,6 +11,7 @@ public:
 	virtual NetAddr getPeerAddr() const {return peer;}
 
 	TCPStream(int sck, int iotimeout, const NetAddr &peer);
+	~TCPStream();
 
 protected:
 

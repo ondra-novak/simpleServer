@@ -94,6 +94,10 @@ void TCPStream::flushOutput() {
 	//not implemented
 }
 
+TCPStream::~TCPStream() {
+	if (sck) close(sck);
+}
+
 int TCPStream::setIOTimeout(int iotimeoutms) {
 	int ret = iotimeout;
 	iotimeout = iotimeoutms;
