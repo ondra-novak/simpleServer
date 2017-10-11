@@ -85,7 +85,6 @@ int main(int argc, char *argv[]) {
 		BinaryView data = con2.read(false);
 		while (!data.empty()) {
 			out << StrViewA(data);
-			con2.commit(data);
 			data = con2.read();
 		}
 	};

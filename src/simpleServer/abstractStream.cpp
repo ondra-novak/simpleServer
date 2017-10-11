@@ -83,5 +83,9 @@ BinaryView AbstractStream::writeBuffered(const BinaryView &databuff, WriteMode w
 
 
 
+MutableBinaryView simpleServer::AbstractStream::noOutputMode() {
+	throw std::runtime_error("Stream is read only (no writes are possible)");
 }
 
+
+}

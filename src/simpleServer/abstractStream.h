@@ -168,7 +168,7 @@ public:
 			rdBuff = readBuffer(false);
 			if (isEof(rdBuff)) return -1;
 		}
-		int r = b[0];
+		int r = rdBuff[0];
 		rdBuff = rdBuff.substr(1);
 		return r;
 	}
@@ -181,9 +181,9 @@ public:
 	int peekByte() {
 		if (rdBuff.empty()) {
 			rdBuff = readBuffer(false);
-			if (isEof(b)) return -1;
+			if (isEof(rdBuff)) return -1;
 		}
-		int r = b[0];
+		int r = rdBuff[0];
 		return r;
 	}
 
@@ -296,6 +296,19 @@ public:
 	void putBackEof() {
 		rdBuff = eofConst;
 		closeInput();
+	}
+
+	static MutableBinaryView noOutputMode();
+
+
+	bool waitForInput(int timeout) {
+		if (rdBuff.empty()) return waitForRead(timeout);
+		else return true;
+	}
+
+	bool waitForOutput(int timeout) {
+		if (wrBuff.remain()) return waitForWrite(timeout);
+		else return true;
 	}
 
 protected:
@@ -461,6 +474,14 @@ public:
 	}
 	int setIOTimeout(int timeoutms) {
 		return ptr->setIOTimeout(timeoutms);
+	}
+
+	bool waitForInput(int timeout) {
+		return ptr->waitForInput(timeout);
+	}
+
+	bool waitForOutput(int timeout) {
+		return ptr->waitForOutput(timeout);
 	}
 };
 
