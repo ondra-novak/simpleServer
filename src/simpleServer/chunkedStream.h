@@ -8,6 +8,10 @@ template<std::size_t chunkSize=4096>
 class ChunkedStream: public AbstractStream {
 public:
 	ChunkedStream(const Stream &source):source(source) {}
+	~ChunkedStream() {
+		closeOutput();
+
+	}
 
 
 	virtual int setIOTimeout(int timeoutms) {
@@ -56,9 +60,8 @@ protected:
 
 
 	unsigned char chunkBuffer[chunkBufferSize+2+10]; //2 bytes for CRLF //10 bytes for first line
-	std::size_t chunkBufferUsed = 0;
+	bool outputClosed = false;
 
-	BinaryView curWriteState;
 
 };
 
@@ -170,7 +173,7 @@ std::size_t ChunkedStream<chunkSize>::writeBuffer(BinaryView buffer, WriteMode w
 		//create transfer state
 		BinaryView chunk(chunkBuffer+wrpos, chunkBufferDataStart-wrpos+buffer.length+2);
 		//try to write buffer in current mode
-		source.write(curWriteState, wrmode==writeAndFlush?wrmode:writeWholeBuffer);
+		source.write(chunk, wrmode==writeAndFlush?wrmode:writeWholeBuffer);
 
 		return buffer.length;
 
@@ -222,8 +225,11 @@ void ChunkedStream<chunkSize>::closeInput() {
 
 template<std::size_t chunkSize>
 void ChunkedStream<chunkSize>::closeOutput() {
-	BinaryView endChunk(StrViewA("0\r\n\r\n"));
-	source.write(endChunk,writeWholeBuffer);
+	if (!outputClosed) {
+		BinaryView endChunk(StrViewA("0\r\n\r\n"));
+		source.write(endChunk,writeWholeBuffer);
+		outputClosed = true;
+	}
 }
 
 template<std::size_t chunkSize>
