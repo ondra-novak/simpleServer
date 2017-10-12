@@ -6,19 +6,18 @@ namespace simpleServer {
 
 class AsyncResource;
 
-enum CompletionStatus {
-	///request processed without errors.
-	statusOK = 0,
-	///request processed, but EOF has been reached
-	statusEof = 1,
-	///request did not completed in time (timeout error)
-	statusTimeout = 2,
-	///request did not processed, because error.
-	/** In this case, function called in exception handler.
-	 * You can rethrow exception to receive more informations
+enum AsyncState {
+	///asynchronous operation completted successfuly
+	asyncOK,
+	///asynchronous operation completted successfuly, result is EOF
+	asyncEOF,
+	///asynchronous operation timeouted
+	asyncTimeout,
+	///asynchronous operation failed with and error
+	/**
+	 * The error state is stored as current exeception. You can use std::current_exception to determine, which error happened
 	 */
-	statusError = 3
-
+	asyncError
 };
 
 
@@ -27,7 +26,7 @@ public:
 
 
 
-	typedef std::function<void(CompletionStatus, BinaryView)> Callback;
+	typedef std::function<void(AsyncState, BinaryView)> Callback;
 
 
 	///Performs asynchronous read operation
@@ -57,9 +56,61 @@ public:
 			int timeout,
 			Callback completion) = 0;
 
+
+
+
+	///Assigns the thread to the asynchronous provider
+	/** function performs one cycle of the serving
+	 *
+	 *  - acquires waiting slot
+	 *  - waits for event
+	 *  - perform tasks associated with th event
+	 *  - exit
+	 */
+	virtual void serve() = 0;
+
+	///Releases all threads in waiting state
+	/** it releases thread that waiting for acquire waiting slot or for event
+	 */
+	virtual void releaseThreads() = 0;
+
+	virtual ~IAsyncProvider() {}
 };
 
 
+class AbstractWaitingSlot: public RefCntObj, public IAsyncProvider {
+public:
+
+	class Task {
+	public:
+		Task(Callback cb, AsyncState state, BinaryView data):cb(cb), state(state), data(data) {}
+
+		void run() throw() {
+			cb(state, data);
+		}
+	protected:
+		Callback cb;
+		AsyncState state;
+		BinaryView data;
+	};
+
+	virtual Callback waitForEvent() = 0;
+
+
+	virtual void cancelWait() = 0;
+
+
+
+	virtual void serve() {
+		Task task = waitForEvent();
+		task.run();
+	}
+
+	virtual void releaseThreads() {
+		cancelWait();
+	}
+
+};
 
 
 }

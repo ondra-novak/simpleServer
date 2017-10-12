@@ -333,7 +333,7 @@ public:
 
 		BinaryView data = read(true);
 		if (!data.empty() || isEof(data))
-			callbackFn(statusOK, data);
+			callbackFn(asyncOK, data);
 		else
 			doReadAsync(callbackFn);
 	}
@@ -353,7 +353,7 @@ public:
 
 		BinaryView remainData = write(data,writeNonBlock);
 		if (remainData == data) {
-			doWriteAsync(wrBuff.getView(), [=](CompletionStatus status, BinaryView remain) {
+			doWriteAsync(wrBuff.getView(), [=](AsyncState status, BinaryView remain) {
 				wrBuff.wrpos = 0;
 				write(remain, writeNonBlock);
 				BinaryView x = write(data, writeNonBlock);
