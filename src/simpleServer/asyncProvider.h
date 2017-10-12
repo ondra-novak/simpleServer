@@ -66,8 +66,11 @@ public:
 	 *  - waits for event
 	 *  - perform tasks associated with th event
 	 *  - exit
+	 *
+	 *  @retval true please continue serving
+	 *  @retval false thread is released, do continue to serve
 	 */
-	virtual void serve() = 0;
+	virtual bool serve() = 0;
 
 	///Releases all threads in waiting state
 	/** it releases thread that waiting for acquire waiting slot or for event
@@ -81,29 +84,21 @@ public:
 class AbstractWaitingSlot: public RefCntObj, public IAsyncProvider {
 public:
 
-	class Task {
-	public:
-		Task(Callback cb, AsyncState state, BinaryView data):cb(cb), state(state), data(data) {}
+	typedef std::function<void()> Task;
 
-		void run() throw() {
-			cb(state, data);
-		}
-	protected:
-		Callback cb;
-		AsyncState state;
-		BinaryView data;
-	};
-
-	virtual Callback waitForEvent() = 0;
-
+	virtual Task waitForEvent() = 0;
 
 	virtual void cancelWait() = 0;
 
 
-
-	virtual void serve() {
-		Task task = waitForEvent();
-		task.run();
+	virtual bool serve() {
+		Task task (waitForEvent());
+		if (task != nullptr) {
+			task();
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	virtual void releaseThreads() {
