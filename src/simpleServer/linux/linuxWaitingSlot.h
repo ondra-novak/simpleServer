@@ -1,21 +1,35 @@
 #pragma once
 
+#include "linuxWaitingSlot.h"
+
+#include <poll.h>
+#include <chrono>
+#include <mutex>
+#include <queue>
+#include <utility>
+
+
+
 #include "../asyncProvider.h"
+#include "../stringview.h"
+#include "async.h"
+
+
 
 namespace simpleServer {
 
-class LinuxWaitingSlot: public AbstractWaitingSlot {
+class LinuxEventListener: public AbstractEventListenert {
 public:
-	LinuxWaitingSlot();
-	virtual ~LinuxWaitingSlot();
+	LinuxEventListener();
+	virtual ~LinuxEventListener();
 
-	virtual void read(const AsyncResource &resource,
+	virtual void receive(const AsyncResource &resource,
 			MutableBinaryView buffer,
 			int timeout,
 			Callback completion) override;
 
 
-	virtual void write(const AsyncResource &resource,
+	virtual void send(const AsyncResource &resource,
 			BinaryView buffer,
 			int timeout,
 			Callback completion) override;
@@ -39,20 +53,26 @@ protected:
 		cmdExit,
 		cmdQueue
 	};
-	typedef std::function<void(TaskState)> TaskFunction;
+	typedef std::function<void(WaitResult)> TaskFunction;
 
 
 	struct TaskInfo {
 		TaskFunction taskFn;
 		TimePoint timeout;
+		void swap(TaskInfo &other) {
+			std::swap(taskFn, other.taskFn);
+			std::swap(timeout, other.timeout);
+
+		}
 	};
+
 
 	typedef std::vector<pollfd> FDMap;
 	typedef std::vector<TaskInfo> TaskMap;
 
 	FDMap fdmap;
 	TaskMap taskMap;
-	TimePoint nextTimeout =  TimePoint::max;
+	TimePoint nextTimeout =  TimePoint::max();
 	int nextTimeoutPos = -1;
 
 
@@ -64,14 +84,13 @@ protected:
 
 	typedef std::pair<pollfd, TaskInfo> TaskAddRequest;
 
-	void addTask(const TaskAddReques &req);
+	void addTask(const TaskAddRequest &req);
 
 
 	std::mutex queueLock;
 	std::queue<TaskAddRequest> queue;
 
 
-	void addServiceTask(int fd);
 	void sendIntr(Command cmd);
 
 	template<typename Fn>

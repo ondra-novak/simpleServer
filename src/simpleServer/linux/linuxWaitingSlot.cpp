@@ -7,45 +7,60 @@
 
 #include "linuxWaitingSlot.h"
 
+#include <fcntl.h>
+#include <sys/socket.h>
+
+#include <unistd.h>
+
+#include "../exceptions.h"
+
 namespace simpleServer {
 
-LinuxWaitingSlot::LinuxWaitingSlot() {
+LinuxEventListener::LinuxEventListener() {
 	int fds[2];
-	pipe2(pipes, O_CLOEXEC);
+	pipe2(fds, O_CLOEXEC);
 	intrHandle = fds[1];
-	intrWaitHandle = fd[0];
-	addServiceTask(fds[0]);
+	intrWaitHandle = fds[0];
+	TaskInfo nfo;
+	nfo.taskFn = nullptr;
+	nfo.timeout = TimePoint::max();
+	pollfd xfd;
+	xfd.fd = intrWaitHandle;
+	xfd.events = POLLIN;
+	xfd.revents = 0;
+	taskMap.push_back(nfo);
+	fdmap.push_back(xfd);
 }
 
-LinuxWaitingSlot::~LinuxWaitingSlot() {
+LinuxEventListener::~LinuxEventListener() {
 	close(intrHandle);
 	close(intrWaitHandle);
 }
 
 template<typename Fn>
-void LinuxWaitingSlot::addTaskToQueue(int s, const Fn &fn, int timeout, int event) {
+void LinuxEventListener::addTaskToQueue(int s, const Fn &fn, int timeout, int event) {
 	TaskInfo nfo;
 	nfo.taskFn = fn;
-	nfo.timeout = timeout;
+	nfo.timeout = timeout == -1?TimePoint::max():std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
 	pollfd fd;
 	fd.fd = s;
 	fd.events = event;
 	fd.revents = 0;
 	{
 	std::lock_guard<std::mutex> _(queueLock);
-	queueLock.push(TaskAddRequest(fd, nfo));
+	queue.push(TaskAddRequest(fd, nfo));
 	}
 	sendIntr(cmdQueue);
 
 }
 
-void LinuxWaitingSlot::read(const AsyncResource& resource,
+void LinuxEventListener::receive(const AsyncResource& resource,
 		MutableBinaryView buffer, int timeout, Callback completion) {
 
 	int s = resource.socket;
-	auto fn = [=]{
+	auto fn = [=](WaitResult res){
 		try {
-			int r = recv(s, buffer.data, buffer.length, MSG_DONTWAIT);
+			int r = ::recv(s, buffer.data, buffer.length, MSG_DONTWAIT);
 			if (r > 0) {
 				completion(asyncOK, BinaryView(buffer.data, r));
 			} else if (r == 0) {
@@ -53,7 +68,7 @@ void LinuxWaitingSlot::read(const AsyncResource& resource,
 			} else {
 				int e = errno;
 				if (e == EWOULDBLOCK || e == EAGAIN) {
-					read(AsyncResource(s), buffer,timeout,completion);
+					receive(AsyncResource(s), buffer,timeout,completion);
 				} else {
 						throw SystemException(e, "Async recv error");
 				}
@@ -66,19 +81,19 @@ void LinuxWaitingSlot::read(const AsyncResource& resource,
 
 }
 
-void LinuxWaitingSlot::write(const AsyncResource& resource, BinaryView buffer,
+void LinuxEventListener::send(const AsyncResource& resource, BinaryView buffer,
 		int timeout, Callback completion) {
 
 	int s = resource.socket;
-	auto fn = [=]{
+	auto fn = [=](WaitResult res){
 		try {
-			int r = send(s, buffer.data, buffer.length, MSG_DONTWAIT);
+			int r = ::send(s, buffer.data, buffer.length, MSG_DONTWAIT);
 			if (r > 0) {
 				completion(asyncOK, buffer.substr(r));
 			} else {
 				int e = errno;
 				if (e == EWOULDBLOCK || e == EAGAIN) {
-					read(AsyncResource(s), buffer,timeout,completion);
+					send(AsyncResource(s), buffer,timeout,completion);
 				} else {
 						throw SystemException(e, "Async send error");
 				}
@@ -90,7 +105,7 @@ void LinuxWaitingSlot::write(const AsyncResource& resource, BinaryView buffer,
 	addTaskToQueue(s, fn, timeout, POLLOUT);
 }
 
-LinuxWaitingSlot::Task LinuxWaitingSlot::waitForEvent() {
+LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 
 	do {
@@ -113,7 +128,7 @@ LinuxWaitingSlot::Task LinuxWaitingSlot::waitForEvent() {
 			n = std::chrono::steady_clock::now();
 			for (std::size_t i = 0, cnt = taskMap.size(); i < cnt; i++) {
 				if (n > taskMap[i].timeout) {
-					Task t (taskMap[i].taskFn,wrTimeout);
+					Task t = std::bind(taskMap[i].taskFn,wrTimeout);
 					removeTask(i);
 					return t;
 				}
@@ -131,17 +146,21 @@ LinuxWaitingSlot::Task LinuxWaitingSlot::waitForEvent() {
 							switch (b) {
 								case cmdExit: return nullptr;
 								case cmdQueue:{
-									std::lock_guard<std::mutex> _(queuelock);
+									std::lock_guard<std::mutex> _(queueLock);
 									if (!queue.empty()) {
-										addTask(queue.front());
+										auto &&x = queue.front();
+										addTask(x);
 										queue.pop();
+										if (x.second.timeout < nextTimeout) {
+											nextTimeout = x.second.timeout;
+										}
 									}
 								}
 								break;
 							}
 						}
 					} else {
-						Task t (taskMap[i].taskFn,wrEvent);
+						Task t (std::bind(taskMap[i].taskFn,wrEvent));
 						removeTask(i);
 						return t;
 					}
@@ -152,33 +171,26 @@ LinuxWaitingSlot::Task LinuxWaitingSlot::waitForEvent() {
 	while (true);
 }
 
-void LinuxWaitingSlot::cancelWait() {
+void LinuxEventListener::cancelWait() {
 	sendIntr(cmdExit);
 }
 
 
-void LinuxWaitingSlot::removeTask(int index) {
+void LinuxEventListener::removeTask(int index) {
 	std::size_t end = taskMap.size()-1;
 	if (index < taskMap.size()-1) {
-		std::swap(taskMap[index], task[end]);
+		taskMap[index].swap(taskMap[end]);
 		std::swap(fdmap[index],fdmap[end]);
 	}
 	taskMap.resize(end);
 	fdmap.resize(end);
 }
 
-void LinuxWaitingSlot::addServiceTask(int fd) {
-	TaskInfo nfo;
-	nfo.taskFn = nullptr;
-	nfo.timeout = TimePoint::max();
-	pollfd xfd;
-	xfd.fd = fd;
-	xfd.events = POLLIN;
-	xfd.revents = 0;
-	taskMap.push_back(TaskInfo()
-}
-
-void LinuxWaitingSlot::sendIntr() {
+void LinuxEventListener::sendIntr(Command cmd) {
+	int r = ::write(intrHandle, &cmd, 1);
+	if (r < 0) {
+		throw SystemException(errno);
+	}
 }
 
 } /* namespace simpleServer */

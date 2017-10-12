@@ -107,14 +107,14 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 
 void TCPStream::doReadAsync(const IAsyncProvider::Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->read(AsyncResource(sck),
+	asyncProvider->receive(AsyncResource(sck),
 			MutableBinaryView(reinterpret_cast<unsigned char *>(inputBuffer),inputBufferSize),iotimeout,cb);
 }
 
 void TCPStream::doWriteAsync(const IAsyncProvider::Callback& cb,
 		BinaryView data) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->write(AsyncResource(sck),data,iotimeout,cb);
+	asyncProvider->send(AsyncResource(sck),data,iotimeout,cb);
 }
 
 }
