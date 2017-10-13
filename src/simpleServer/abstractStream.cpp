@@ -87,5 +87,18 @@ MutableBinaryView simpleServer::AbstractStream::noOutputMode() {
 	throw std::runtime_error("Stream is read only (no writes are possible)");
 }
 
+BinaryView IGeneralStream::eofConst(StrViewA("!EOF",0));
+
+bool simpleServer::IGeneralStream::isEof(const BinaryView& buffer) {
+	return buffer.data == eofConst.data;
+}
+
+IAsyncProvider* simpleServer::AbstractStream::setAsyncProvider( IAsyncProvider* asyncProvider) {
+	std::swap(this->asyncProvider, asyncProvider);
+	return asyncProvider;
+}
+
 
 }
+
+

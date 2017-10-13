@@ -18,7 +18,7 @@
 
 namespace simpleServer {
 
-class LinuxEventListener: public AbstractEventListenert {
+class LinuxEventListener: public AbstractStreamEventDispatcher {
 public:
 	LinuxEventListener();
 	virtual ~LinuxEventListener();

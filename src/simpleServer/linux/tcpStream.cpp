@@ -11,6 +11,20 @@
 namespace simpleServer {
 
 BinaryView TCPStream::readBuffer(bool nonblock) {
+
+	do {
+		int r = recv(sck,inputBuffer, inputBufferSize, MSG_DONTWAIT);
+		if (r < 0) {
+			int e = errno;
+			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN) ;
+				throw SystemException(e,__FUNCTION__);
+			if (nonblock) return BinaryView();
+		} else if (r == 0) {
+			return eofConst;
+		} else {
+			return BinaryView(inputBuffer, r);
+		}
+	} while (true);
 }
 
 MutableBinaryView TCPStream::createOutputBuffer() {
@@ -107,14 +121,14 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 
 void TCPStream::doReadAsync(const IAsyncProvider::Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->receive(AsyncResource(sck),
+	asyncProvider->receive(AsyncResource(sck, this),
 			MutableBinaryView(reinterpret_cast<unsigned char *>(inputBuffer),inputBufferSize),iotimeout,cb);
 }
 
 void TCPStream::doWriteAsync(const IAsyncProvider::Callback& cb,
 		BinaryView data) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->send(AsyncResource(sck),data,iotimeout,cb);
+	asyncProvider->send(AsyncResource(sck,this),data,iotimeout,cb);
 }
 
 }

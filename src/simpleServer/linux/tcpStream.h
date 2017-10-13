@@ -36,8 +36,8 @@ protected:
 	static const int inputBufferSize = 4096;
 	static const int outputBufferSize = 4096;
 
-	char inputBuffer[inputBufferSize];
-	char outputBuffer[outputBufferSize];
+	unsigned char inputBuffer[inputBufferSize];
+	unsigned char outputBuffer[outputBufferSize];
 
 	int sck;
 	int iotimeout;

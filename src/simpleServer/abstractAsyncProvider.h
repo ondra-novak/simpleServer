@@ -33,6 +33,7 @@ public:
 
 
 	typedef std::function<void(AsyncState, BinaryView)> Callback;
+	typedef std::function<void(AsyncState, AsyncResource, NetAddr)> AcceptCallback;
 
 
 	///Performs asynchronous read operation
@@ -63,6 +64,8 @@ public:
 			Callback completion) = 0;
 
 
+	virtual void accept(const AsyncResource &resource,
+			int timeout, AcceptCallback cb) = 0;
 
 
 	///Assigns the thread to the asynchronous provider
@@ -87,7 +90,7 @@ public:
 };
 
 
-class AbstractEventListenert: public RefCntObj, public IAsyncProvider {
+class AbstractStreamEventDispatcher: public RefCntObj, public IAsyncProvider {
 public:
 
 	typedef std::function<void()> Task;
@@ -111,11 +114,17 @@ public:
 		cancelWait();
 	}
 
+	///returns true, if the listener doesn't contain any asynchronous task
+	virtual bool empty() const = 0;
+	///clears all asynchronous tasks
+	virtual void clear() = 0;
+	///Move all asynchronous tasks to different listener (must be the same type)
+	virtual void moveTo(AbstractStreamEventDispatcher &target) = 0;
 
-	static RefCntPtr<AbstractEventListenert> create();
+	static RefCntPtr<AbstractStreamEventDispatcher> create();
 };
 
-typedef RefCntPtr<AbstractEventListenert> PEventListener;
+typedef RefCntPtr<AbstractStreamEventDispatcher> PEventListener;
 
 
 

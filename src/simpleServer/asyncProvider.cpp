@@ -10,16 +10,37 @@ AsyncProvider::~AsyncProvider() {
 }
 
 bool AsyncProvider::serve() {
+	PEventListener lst = tQueue.pop();
+	if (lst == nullptr) {
+		tQueue.push(nullptr);
+		return;
+	}
+	auto t = lst->waitForEvent();
+	tQueue.push(lst);
+	if (t != nullptr) {
+		t();
+		return true;
+	} else {
+		return false;
+	}
+
 }
 
 void AsyncProvider::releaseThreads() {
+	tQueue.push(nullptr);
+	Sync _(lock);
+	while (!cQueue.empty()) {
+		auto l = cQueue.front();
+		cQueue.pop();
+		l->releaseThreads();
+	}
 }
 
 PEventListener AsyncProvider::getListener() {
 	Sync _(lock);
 	PEventListener lst;
 	while (cQueue.size() < reqListenerCount) {
-		lst = AbstractEventListenert::create();
+		lst = AbstractStreamEventDispatcher::create();
 		cQueue.push(lst);
 		tQueue.push(lst);
 	}
@@ -51,9 +72,10 @@ void AsyncProvider::send(const AsyncResource& resource,
 	lst->send(resource,buffer,timeout,completion);
 }
 
-RefCntPtr<AsyncProvider> AsyncProvider::create(unsigned int numThreads,
-		unsigned int numListeners) {
-
+RefCntPtr<AsyncProvider> AsyncProvider::create(unsigned int numThreads, unsigned int numListeners) {
+	RefCntPtr<AsyncProvider> provider = new AsyncProvider;
+	provider->setCountOfListeners(numListeners);
+	provider->setCountOfThreads(numThreads);
 }
 
 void AsyncProvider::setCountOfListeners(unsigned int count) {
@@ -67,15 +89,7 @@ void AsyncProvider::setCountOfThreads(unsigned int count) {
 }
 
 void AsyncProvider::stop() {
-	tQueue.push(nullptr);
-	{
-		Sync _(lock);
-		while (!cQueue.empty()) {
-			auto l = cQueue.front();
-			cQueue.pop();
-			l->releaseThreads();
-		}
-	}
+	releaseThreads();
 	threadCount.zeroWait();
 
 }

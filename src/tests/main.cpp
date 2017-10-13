@@ -74,13 +74,13 @@ int main(int argc, char *argv[]) {
 	tst.test("Listener.receiveMsg","test message") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
-	/*	runThreads(1,[srvAddr] {
+		runThreads(1,[srvAddr] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(400));
 			Stream con = tcpConnect(srvAddr,30000);
 			StrViewA msg("test message");
 			con.write(BinaryView(msg),writeWholeBuffer);
 			con.writeEof();
-		});*/
+		});
 		Stream con2 = server();
 		BinaryView data = con2.read(false);
 		while (!data.empty()) {
@@ -88,24 +88,7 @@ int main(int argc, char *argv[]) {
 			data = con2.read();
 		}
 	};
-/*
-	tst.test("Listener.receiveMsg2","test message") >> [](std::ostream &out) {
-		unsigned int port = 0;
-		TCPListener server(localhost,port);
-		runThreads(1,[port] {
-			Connection con = Connection::connect(NetAddr::create("0",port,NetAddr::IPv4));
-			StrViewA msg("test message");
-			con(BinaryView(msg));
-			con.closeOutput();
-		});
-		Connection con2 = *server.begin();
-		BinaryView data = con2(0);
-		while (!data.empty()) {
-			out.put(data[0]);
-			data = con2(1);
-			if (data.empty()) data = con2(0);
-		}
-	};
+
 	tst.test("Listener.async.receiveMsg","test message") >> [](std::ostream &out) {
 		unsigned int port = 0;
 		TCPListener server(localhost,port);

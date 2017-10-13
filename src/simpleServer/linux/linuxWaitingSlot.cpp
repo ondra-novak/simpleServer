@@ -193,7 +193,7 @@ void LinuxEventListener::sendIntr(Command cmd) {
 	}
 }
 
-PEventListener AbstractEventListenert::create() {
+PEventListener AbstractStreamEventDispatcher::create() {
 	return new LinuxEventListener;
 }
 
