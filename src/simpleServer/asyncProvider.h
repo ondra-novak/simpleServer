@@ -2,15 +2,17 @@
 #pragma once
 
 #include "abstractAsyncProvider.h"
+#include "common/msgqueue.h"
+#include "common/mtcounter.h"
 
 namespace simpleServer {
 
 
-class AsyncProvider: public IAsyncProvider {
-public:
+
+class AsyncProvider: public IAsyncProvider, public RefCntObj {
+protected:
 
 
-	AsyncProvider(int evListenerCount);
 
 	virtual void receive(const AsyncResource &resource,
 			MutableBinaryView buffer,
@@ -27,18 +29,43 @@ public:
 	virtual void releaseThreads();
 
 
+	AsyncProvider();
 
 
 
+public:
+	static RefCntPtr<AsyncProvider> create(unsigned int numThreads=1, unsigned int numListeners=1);
 
+	void setCountOfListeners(unsigned int count);
+
+	void setCountOfThreads(unsigned int count);
+
+	void stop();
+
+	~AsyncProvider();
 
 
 protected:
-	MsgQueue<PEventListener> tQueue, cQueue;
+	MsgQueue<PEventListener> tQueue;
+	unsigned int reqListenerCount = 1;
+	unsigned int reqThreadCount = 1;
+	MTCounter threadCount;
+	std::queue<PEventListener> cQueue;
+	std::mutex lock;
+	typedef std::lock_guard<std::mutex> Sync;
 
+
+	PEventListener getListener();
+
+	void worker();
 
 
 };
+
+
+
+
+typedef RefCntPtr<AsyncProvider> PAsyncProvider;
 
 
 }

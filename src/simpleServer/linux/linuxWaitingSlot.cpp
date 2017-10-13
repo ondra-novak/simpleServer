@@ -193,4 +193,9 @@ void LinuxEventListener::sendIntr(Command cmd) {
 	}
 }
 
+PEventListener AbstractEventListenert::create() {
+	return new LinuxEventListener;
+}
+
+
 } /* namespace simpleServer */

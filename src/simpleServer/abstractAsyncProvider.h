@@ -111,10 +111,12 @@ public:
 		cancelWait();
 	}
 
+
+	static RefCntPtr<AbstractEventListenert> create();
 };
 
 typedef RefCntPtr<AbstractEventListenert> PEventListener;
 
-static PEventListener createEventListener();
+
 
 }
