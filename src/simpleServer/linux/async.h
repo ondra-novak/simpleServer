@@ -6,10 +6,13 @@ namespace simpleServer {
 class AsyncResource {
 public:
 
-	AsyncResource(int socket, RefCntPtr<AbstractStream> stream):socket(socket),stream(stream) {}
+	AsyncResource(int socket, int op)
+
+	:socket(socket)
+	,op(op) {}
 
 	int socket;
-	RefCntPtr<AbstractStream> stream;
+	int op;
 
 };
 

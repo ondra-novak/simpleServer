@@ -30,10 +30,14 @@ enum AsyncState {
 class IAsyncProvider {
 public:
 
+	typedef std::function<void(AsyncState)> CompletionFn;
 
 
+	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) = 0;
+
+
+#if 0
 	typedef std::function<void(AsyncState, BinaryView)> Callback;
-	typedef std::function<void(AsyncState, AsyncResource, NetAddr)> AcceptCallback;
 
 
 	///Performs asynchronous read operation
@@ -63,10 +67,7 @@ public:
 			int timeout,
 			Callback completion) = 0;
 
-
-	virtual void accept(const AsyncResource &resource,
-			int timeout, AcceptCallback cb) = 0;
-
+#endif
 
 	///Assigns the thread to the asynchronous provider
 	/** function performs one cycle of the serving

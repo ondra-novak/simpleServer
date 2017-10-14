@@ -16,6 +16,16 @@ public:
 	 */
 	virtual Stream create() = 0;
 
+	typedef std::function<void(AsyncState, Stream)> Callback;
+
+
+	///create stream asynchronously
+	/**
+	 * @param provuider pointer to async. provider
+	 * @param cb callback which is called once the stream is created
+	 */
+	virtual void create(AsyncProvider *provider, const Callback &cb) = 0;
+
 	///Asynchronously stops process of creating of the new stream
 	/**
 	 * If the stream factory is server, this function closes the opened port and exits the function create()
@@ -23,6 +33,9 @@ public:
 	 * restart the stream factory. You need to recreate it
 	 */
 	virtual void stop() = 0;
+
+
+
 
 	virtual ~IStreamFactory() {}
 };
@@ -78,6 +91,11 @@ public:
 
 	void stop() {
 		return ptr->stop();
+	}
+
+
+	void operator()(AsyncProvider *provider, const IStreamFactory::Callback &cb) const {
+		ptr->create(provider, cb);
 	}
 
 };

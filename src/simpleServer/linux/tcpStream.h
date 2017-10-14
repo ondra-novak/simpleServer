@@ -27,8 +27,8 @@ protected:
 	virtual int setIOTimeout(int iotimeoutms) override;
 
 
-	virtual void doReadAsync(const IAsyncProvider::Callback &cb);
-	virtual void doWriteAsync(const IAsyncProvider::Callback &cb, BinaryView data);
+	virtual void doReadAsync(const Callback &cb);
+	virtual void doWriteAsync(const Callback &cb, BinaryView data);
 
 
 protected:

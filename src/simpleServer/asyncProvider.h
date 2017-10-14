@@ -13,7 +13,7 @@ class AsyncProvider: public IAsyncProvider, public RefCntObj {
 protected:
 
 
-
+/*
 	virtual void receive(const AsyncResource &resource,
 			MutableBinaryView buffer,
 			int timeout,
@@ -23,6 +23,9 @@ protected:
 			BinaryView buffer,
 			int timeout,
 			Callback completion);
+*/
+	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
+
 
 	virtual bool serve();
 

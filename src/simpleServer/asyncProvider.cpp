@@ -13,7 +13,7 @@ bool AsyncProvider::serve() {
 	PEventListener lst = tQueue.pop();
 	if (lst == nullptr) {
 		tQueue.push(nullptr);
-		return;
+		return false;
 	}
 	auto t = lst->waitForEvent();
 	tQueue.push(lst);
@@ -57,20 +57,12 @@ PEventListener AsyncProvider::getListener() {
 }
 
 
-
-void AsyncProvider::receive(const AsyncResource& resource,
-		MutableBinaryView buffer, int timeout, Callback completion) {
-
+void AsyncProvider::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
 	auto lst = getListener();
-	lst->receive(resource,buffer,timeout,completion);
+	lst->runAsync(resource,timeout, fn);
+
 }
 
-void AsyncProvider::send(const AsyncResource& resource,
-		BinaryView buffer, int timeout, Callback completion) {
-
-	auto lst = getListener();
-	lst->send(resource,buffer,timeout,completion);
-}
 
 RefCntPtr<AsyncProvider> AsyncProvider::create(unsigned int numThreads, unsigned int numListeners) {
 	RefCntPtr<AsyncProvider> provider = new AsyncProvider;

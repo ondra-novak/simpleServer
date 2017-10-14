@@ -23,31 +23,29 @@ public:
 	LinuxEventListener();
 	virtual ~LinuxEventListener();
 
-	virtual void receive(const AsyncResource &resource,
-			MutableBinaryView buffer,
-			int timeout,
-			Callback completion) override;
+	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
 
-	virtual void send(const AsyncResource &resource,
-			BinaryView buffer,
-			int timeout,
-			Callback completion) override;
 
 	virtual Task waitForEvent() override;
 
 
 	virtual void cancelWait() override;
 
+	///returns true, if the listener doesn't contain any asynchronous task
+	virtual bool empty() const override;
+	///clears all asynchronous tasks
+	virtual void clear() override;
+	///Move all asynchronous tasks to different listener (must be the same type)
+	virtual void moveTo(AbstractStreamEventDispatcher &target) override;
+
+
 protected:
 
 	typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
 
+	typedef AsyncState WaitResult;
 
-	enum WaitResult {
-		wrEvent,
-		wrTimeout,
-	};
 
 	enum Command {
 		cmdExit,

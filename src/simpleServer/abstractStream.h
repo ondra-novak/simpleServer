@@ -48,6 +48,8 @@ public:
 
 
 
+
+
 	///Determines whether buffer returned by readBuffer() is empty because end of file has been reached
 	/**
 	 * For blocking reading, returning empty buffer is always considered as end of file. However
@@ -127,8 +129,12 @@ protected:
 
 	virtual void flushOutput() = 0;
 
-	virtual void doReadAsync(const IAsyncProvider::Callback &cb) = 0;
-	virtual void doWriteAsync(const IAsyncProvider::Callback &cb, BinaryView data) = 0;
+
+	typedef std::function<void(AsyncState, BinaryView)> Callback;
+
+
+	virtual void doReadAsync(const Callback &cb) = 0;
+	virtual void doWriteAsync(const Callback &cb, BinaryView data) = 0;
 
 	virtual ~IGeneralStream() {}
 protected:

@@ -54,6 +54,7 @@ void LinuxEventListener::addTaskToQueue(int s, const Fn &fn, int timeout, int ev
 
 }
 
+/*
 void LinuxEventListener::receive(const AsyncResource& resource,
 		MutableBinaryView buffer, int timeout, Callback completion) {
 
@@ -105,6 +106,7 @@ void LinuxEventListener::send(const AsyncResource& resource, BinaryView buffer,
 	addTaskToQueue(s, fn, timeout, POLLOUT);
 }
 
+*/
 LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 
@@ -128,7 +130,7 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 			n = std::chrono::steady_clock::now();
 			for (std::size_t i = 0, cnt = taskMap.size(); i < cnt; i++) {
 				if (n > taskMap[i].timeout) {
-					Task t = std::bind(taskMap[i].taskFn,wrTimeout);
+					Task t = std::bind(taskMap[i].taskFn,asyncTimeout);
 					removeTask(i);
 					return t;
 				}
@@ -160,7 +162,7 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 							}
 						}
 					} else {
-						Task t (std::bind(taskMap[i].taskFn,wrEvent));
+						Task t (std::bind(taskMap[i].taskFn,asyncOK));
 						removeTask(i);
 						return t;
 					}
@@ -184,6 +186,14 @@ void LinuxEventListener::removeTask(int index) {
 	}
 	taskMap.resize(end);
 	fdmap.resize(end);
+}
+
+void LinuxEventListener::runAsync(const AsyncResource& resource, int timeout,const CompletionFn &complfn) {
+
+	int s = resource.socket;
+	int op = resource.op;
+	addTaskToQueue(s,complfn,timeout,op);
+
 }
 
 void LinuxEventListener::sendIntr(Command cmd) {

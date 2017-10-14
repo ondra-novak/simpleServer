@@ -119,16 +119,53 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 	return ret;
 }
 
-void TCPStream::doReadAsync(const IAsyncProvider::Callback& cb) {
+void TCPStream::doReadAsync(const Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->receive(AsyncResource(sck, this),
-			MutableBinaryView(reinterpret_cast<unsigned char *>(inputBuffer),inputBufferSize),iotimeout,cb);
+	RefCntPtr<TCPStream> me(this);
+
+	Callback cbc = cb;
+
+	auto fn = [me,cbc](AsyncState state) {
+		if (state == asyncOK) {
+			BinaryView r = me->readBuffer(true);
+			if (isEof(r)) {
+				cbc(asyncEOF,r);
+			} else if (r.empty()) {
+				me->doReadAsync(cbc);
+			}else {
+				cbc(state, r);
+			}
+		} else {
+			cbc(state, BinaryView(0,0));
+		}
+
+	};
+
+	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
 }
 
-void TCPStream::doWriteAsync(const IAsyncProvider::Callback& cb,
-		BinaryView data) {
+void TCPStream::doWriteAsync(const Callback& cb,BinaryView data) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->send(AsyncResource(sck,this),data,iotimeout,cb);
+	RefCntPtr<TCPStream> me(this);
+
+	Callback cbc = cb;
+
+	auto fn = [me,cbc, data](AsyncState state) {
+		if (state == asyncOK) {
+			size_t sz = me->writeBuffer(data, writeNonBlock);
+			if (sz == 0) {
+				me->doWriteAsync(cbc, data);
+			}else {
+				cbc(state, data.substr(sz));
+			}
+		} else {
+			cbc(state, BinaryView(0,0));
+		}
+	};
+
+
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
 }
 
 }

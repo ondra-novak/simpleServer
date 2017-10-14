@@ -82,11 +82,15 @@ protected:
 	virtual Stream create() override;
 	~TCPListen();
 	virtual void stop() override;
+	virtual void create(AsyncProvider *provider, const Callback &cb);
 
 protected:
 
 	int listenTimeout;
 	std::vector<int> openSockets;
+
+	Callback curCb;
+	std::mutex cbLock;
 
 
 };
