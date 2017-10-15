@@ -9,9 +9,11 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "../common/raii.h"
 
 
 #include "../exceptions.h"
+#include "async.h"
 
 
 #include "tcpStream.h"
@@ -54,10 +56,13 @@ static void disableNagle(int socket) {
 
 }
 
-static int connectSocket(const NetAddr &addr, int &r) {
+
+typedef RAII<int, decltype(&::close), &::close> RAIISocket;
+
+static RAIISocket connectSocket(const NetAddr &addr, int &r) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
-	int s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+	RAIISocket s(socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP));
 	if (s == -1) throw SystemException(errno);
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
 	disableNagle(s);
@@ -117,11 +122,13 @@ Stream TCPConnect::create() {
 		do {
 			int r;
 			connAdr = t;
-			int s = connectSocket(t,r);
 
 			auto a = t.getNextAddr();
 			isNext = a != nullptr;
 			t = a;
+
+			auto s = connectSocket(connAdr,r);
+
 
 			if (r == 0) {
 				selectedSocket = s;
@@ -271,6 +278,25 @@ static void fillPollFdListen(int s, pollfd &fd) {
 
 
 
+static Stream acceptConnect(int s, int iotimeout) {
+	unsigned char buff[256];
+	struct sockaddr *sa = reinterpret_cast<struct sockaddr *>(buff);
+	socklen_t slen = sizeof(buff);
+	//non blocking because multiple threads can try to claim the socket
+	int a = accept4(s, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
+	if (a > 0) {
+		disableNagle(a);
+		NetAddr addr = NetAddr::create(BinaryView(reinterpret_cast<const unsigned char *>(&sa), slen));
+		return new TCPStream(a,iotimeout, addr);
+	} else {
+		int e =errno;
+		if (e != EINTR && e != EAGAIN && e != EWOULDBLOCK)
+			throw SystemException(e, "Failed to accept socket");
+		return nullptr;
+	}
+
+}
+
 Stream TCPListen::create() {
 
 
@@ -303,22 +329,11 @@ Stream TCPListen::create() {
 			for (auto &&x: fds) if (x.revents) {
 				int s = x.fd;
 				x.revents = 0;
-				unsigned char buff[256];
-				struct sockaddr *sa = reinterpret_cast<struct sockaddr *>(buff);
-				socklen_t slen = sizeof(buff);
-				//non blocking because multiple threads can try to claim the socket
-				int a = accept4(s, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
-				if (a > 0) {
-					disableNagle(a);
-					NetAddr addr = NetAddr::create(BinaryView(reinterpret_cast<const unsigned char *>(&sa), slen));
-					return new TCPStream(a,ioTimeout, addr);
-				} else if (stopped) {
-					return Stream(nullptr);
-				} else {
-					int e =errno;
-					if (e != EINTR && e != EAGAIN && e != EWOULDBLOCK)
-						throw SystemException(e, "Failed to accept socket");
-					//in case EWOULDBOCK - back to the waiting
+				try {
+					return acceptConnect(s,ioTimeout);
+				} catch (...) {
+					if (stopped) return nullptr;
+					throw;
 				}
 			}
 		}
@@ -336,6 +351,147 @@ void TCPListen::stop() {
 	TCPStreamFactory::stop();
 	for (auto &&f: openSockets) {
 		shutdown(f, SHUT_RD);
+	}
+}
+
+struct ConnectShared {
+	IStreamFactory::Callback cb;
+	std::atomic<bool> finished;
+	std::atomic<int> pending;
+	std::exception_ptr cError;
+	int timeout;
+	int iotimeout;
+
+
+	ConnectShared(IStreamFactory::Callback cb, int timeout,int iotimeout):cb(cb),finished(false),timeout(timeout),iotimeout(iotimeout) {}
+
+	void inc_pending() {
+		++pending;
+	}
+	void dec_pending() {
+		if (--pending == 0) {
+			if (!((bool)finished)) {
+				if (cError != nullptr) {
+					try {
+						std::rethrow_exception(cError);
+					} catch (...) {
+						cb(asyncError, nullptr);
+					}
+				} else {
+					cb(asyncTimeout,nullptr);
+				}
+			}
+		}
+	}
+};
+
+
+
+static void connectAsyncCycle(AsyncProvider* provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
+
+	int r;
+	//receive this addr
+	NetAddr thisAddr(addr);
+
+	//create socket
+	std::shared_ptr<RAIISocket> s(new RAIISocket(connectSocket(addr,r)));
+	//if error in connect
+	if (r) {
+		//if not wouldblock
+		int e = errno;
+		if (e != EINPROGRESS && e != EWOULDBLOCK && e != EAGAIN) {
+			//throw exception
+			throw SystemException(e, "Connect failed");
+		}
+
+		auto fnLong = [=](AsyncState st) {
+			//in case of OK
+			if (st == asyncOK) {
+				bool exp = false;
+				//check whether still waiting for connection
+				if (shared->finished.compare_exchange_strong(exp,true)) {
+					//if yes, create stream
+					Stream sx = new TCPStream(s->detach(), shared->iotimeout, thisAddr);
+					//give the result to the callback function
+					shared->cb(st, sx);
+				}
+				//otherwise nothing here
+			} else if (st == asyncError) {
+				shared->cError = std::current_exception();
+			}
+			shared->dec_pending();
+		};
+		//declare callback
+		auto fnShort = [=](AsyncState st) {
+			//in case of OK
+			if (st == asyncOK) {
+				fnLong(st);
+			} else  {
+				//connect has longPart and shortPart/
+				//in case of shortPart, create connection to next address
+				auto nx = thisAddr.getNextAddr();
+				//cycle addresses
+				while (nx != nullptr) {
+					try {
+						//recursively call connect for next address (in shortPart)
+						connectAsyncCycle(provider,nx,shared);
+						//break
+						break;
+					} catch (...) {
+						//if exception, store it
+						shared->cError = std::current_exception();
+						//get next address
+						nx = NetAddr(nx).getNextAddr();
+					}
+				}
+				if (st == asyncTimeout) {
+					shared->inc_pending();
+					provider->runAsync(AsyncResource(*s, POLLOUT), shared->timeout, fnLong);
+				}
+			}
+			shared->dec_pending();
+		};
+
+		shared->inc_pending();
+		provider->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
+	} else {
+		bool exp = false;
+		if (shared->finished.compare_exchange_strong(exp,true)) {
+			Stream sx = new TCPStream(s->detach(), shared->timeout, thisAddr);
+			shared->cb(asyncOK, sx);
+		}
+	}
+}
+
+
+void TCPConnect::createAsync(AsyncProvider* provider, const Callback& cb) {
+	std::shared_ptr<ConnectShared> shared(new ConnectShared(cb, connectTimeout, ioTimeout));
+	connectAsyncCycle(provider,target,shared);
+}
+
+void TCPListen::createAsync(AsyncProvider* provider, const Callback& cb) {
+	cbrace = false;
+	RefCntPtr<TCPListen> me(this);
+	for (int s: openSockets) {
+
+		auto fn = [me, s, provider, cb](AsyncState st){
+			bool exp = false;
+			if (me->cbrace.compare_exchange_strong(exp, true)) {
+				if (st == asyncOK) {
+					try {
+						Stream sx = acceptConnect(s,me->ioTimeout);
+						if (sx == nullptr) me->createAsync(provider, cb);
+						cb(st, sx);
+					} catch (...) {
+						cb(asyncError,nullptr);
+					}
+				} else {
+					cb(st, nullptr);
+				}
+			}
+		};
+
+		provider->runAsync(AsyncResource(s, POLLIN), listenTimeout, fn);
 	}
 }
 

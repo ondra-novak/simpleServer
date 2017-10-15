@@ -10,20 +10,8 @@ namespace simpleServer {
 
 
 class AsyncProvider: public IAsyncProvider, public RefCntObj {
-protected:
+public:
 
-
-/*
-	virtual void receive(const AsyncResource &resource,
-			MutableBinaryView buffer,
-			int timeout,
-			Callback completion);
-
-	virtual void send(const AsyncResource &resource,
-			BinaryView buffer,
-			int timeout,
-			Callback completion);
-*/
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
 

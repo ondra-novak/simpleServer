@@ -56,6 +56,8 @@ protected:
 
 	virtual Stream create() override;
 
+	virtual void createAsync(AsyncProvider *provider, const Callback &cb);
+
 	int connectTimeout;
 
 };
@@ -75,24 +77,21 @@ public:
 	static StreamFactory create(bool localhost = true, unsigned int port=0,
 			 int listenTimeout = -1, int ioTimeout=-1);
 
+	~TCPListen();
+
 protected:
 
 	TCPListen(NetAddr source, int listenTimeout, int ioTimeout);
 	TCPListen(bool localhost, unsigned int port, int listenTimeout, int ioTimeout);
 	virtual Stream create() override;
-	~TCPListen();
 	virtual void stop() override;
-	virtual void create(AsyncProvider *provider, const Callback &cb);
+	virtual void createAsync(AsyncProvider *provider, const Callback &cb);
 
 protected:
 
 	int listenTimeout;
 	std::vector<int> openSockets;
-
-	Callback curCb;
-	std::mutex cbLock;
-
-
+	std::atomic<bool> cbrace;
 };
 
 
