@@ -21,15 +21,7 @@ LinuxEventListener::LinuxEventListener() {
 	pipe2(fds, O_CLOEXEC);
 	intrHandle = fds[1];
 	intrWaitHandle = fds[0];
-	TaskInfo nfo;
-	nfo.taskFn = nullptr;
-	nfo.timeout = TimePoint::max();
-	pollfd xfd;
-	xfd.fd = intrWaitHandle;
-	xfd.events = POLLIN;
-	xfd.revents = 0;
-	taskMap.push_back(nfo);
-	fdmap.push_back(xfd);
+	clear();
 }
 
 LinuxEventListener::~LinuxEventListener() {
@@ -112,11 +104,12 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 	do {
 		TimePoint n = std::chrono::steady_clock::now();
+		auto tme = taskMap.end();
 
 		if (n > nextTimeout) {
 			nextTimeout = TimePoint::max();
 			for (auto &&x : taskMap)
-				if (x.timeout < nextTimeout) nextTimeout = x.timeout;
+				if (x.second.timeout < nextTimeout) nextTimeout = x.second.timeout;
 		}
 
 		auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - n);
@@ -128,10 +121,11 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 				throw SystemException(e, "Failed to call poll()");
 		} else if (r == 0) {
 			n = std::chrono::steady_clock::now();
-			for (std::size_t i = 0, cnt = taskMap.size(); i < cnt; i++) {
-				if (n > taskMap[i].timeout) {
-					Task t = std::bind(taskMap[i].taskFn,asyncTimeout);
-					removeTask(i);
+			for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; i++) {
+				auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
+				if (tmi != tme) {
+					Task t = std::bind(tme->second.taskFn,asyncTimeout);
+					removeTask(i,tmi);
 					return t;
 				}
 			}
@@ -162,9 +156,12 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 							}
 						}
 					} else {
-						Task t (std::bind(taskMap[i].taskFn,asyncOK));
-						removeTask(i);
-						return t;
+						auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
+						if (tmi != tme) {
+							Task t (std::bind(tmi->second.taskFn,asyncOK));
+							removeTask(i,tmi);
+							return t;
+						}
 					}
 				}
 			}
@@ -178,14 +175,13 @@ void LinuxEventListener::cancelWait() {
 }
 
 
-void LinuxEventListener::removeTask(int index) {
+void LinuxEventListener::removeTask(int index, TaskMap::iterator &iter) {
 	std::size_t end = taskMap.size()-1;
 	if (index < taskMap.size()-1) {
-		taskMap[index].swap(taskMap[end]);
 		std::swap(fdmap[index],fdmap[end]);
 	}
-	taskMap.resize(end);
 	fdmap.resize(end);
+	taskMap.erase(iter);
 }
 
 void LinuxEventListener::runAsync(const AsyncResource& resource, int timeout,const CompletionFn &complfn) {
@@ -194,6 +190,44 @@ void LinuxEventListener::runAsync(const AsyncResource& resource, int timeout,con
 	int op = resource.op;
 	addTaskToQueue(s,complfn,timeout,op);
 
+}
+
+bool LinuxEventListener::empty() const {
+	return taskMap.empty();
+}
+
+void LinuxEventListener::clear() {
+	taskMap.clear();
+	fdmap.clear();
+
+	pollfd xfd;
+	xfd.fd = intrWaitHandle;
+	xfd.events = POLLIN;
+	xfd.revents = 0;
+	fdmap.push_back(xfd);
+
+}
+
+void LinuxEventListener::moveTo(AbstractStreamEventDispatcher& target) {
+	auto e = taskMap.end();
+	for (auto &&f: fdmap) {
+		auto itr = taskMap.find(RKey(f.fd,f.events));
+		if (itr != e) {
+			target.runAsync(AsyncResource(f.fd, f.events), itr->second.org_timeout, itr->second.taskFn);
+		}
+	}
+	clear();
+}
+
+void LinuxEventListener::addTask(const TaskAddRequest& req) {
+	RKey kk(req.first.fd, req.first.events);
+	auto itr = taskMap.find(kk);
+	if (itr == taskMap.end()) {
+		itr->second = req.second;
+	} else {
+		fdmap.push_back(req.first);
+		taskMap.insert(std::make_pair(kk, req.second));
+	}
 }
 
 void LinuxEventListener::sendIntr(Command cmd) {
@@ -207,5 +241,10 @@ PEventListener AbstractStreamEventDispatcher::create() {
 	return new LinuxEventListener;
 }
 
+std::size_t LinuxEventListener::HashRKey::operator ()(const RKey& key) const {
+	return key.first*16+key.second;
+}
+
 
 } /* namespace simpleServer */
+

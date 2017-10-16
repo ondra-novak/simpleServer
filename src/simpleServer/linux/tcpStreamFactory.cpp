@@ -393,12 +393,14 @@ static void connectAsyncCycle(AsyncProvider* provider, const NetAddr &addr, std:
 	//receive this addr
 	NetAddr thisAddr(addr);
 
-	//create socket
-	std::shared_ptr<RAIISocket> s(new RAIISocket(connectSocket(addr,r)));
+	int sock = connectSocket(addr,r);
 	//if error in connect
 	if (r) {
 		//if not wouldblock
 		int e = errno;
+		//create socket
+		std::shared_ptr<RAIISocket> s(new RAIISocket(sock));
+
 		if (e != EINPROGRESS && e != EWOULDBLOCK && e != EAGAIN) {
 			//throw exception
 			throw SystemException(e, "Connect failed");
@@ -456,6 +458,9 @@ static void connectAsyncCycle(AsyncProvider* provider, const NetAddr &addr, std:
 		provider->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
 	} else {
 		bool exp = false;
+		//create socket
+		std::shared_ptr<RAIISocket> s(new RAIISocket(sock));
+
 		if (shared->finished.compare_exchange_strong(exp,true)) {
 			Stream sx = new TCPStream(s->detach(), shared->timeout, thisAddr);
 			shared->cb(asyncOK, sx);

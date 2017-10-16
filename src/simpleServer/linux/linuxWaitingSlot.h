@@ -6,6 +6,7 @@
 #include <chrono>
 #include <mutex>
 #include <queue>
+#include <unordered_map>
 #include <utility>
 
 
@@ -51,12 +52,13 @@ protected:
 		cmdExit,
 		cmdQueue
 	};
-	typedef std::function<void(WaitResult)> TaskFunction;
+
 
 
 	struct TaskInfo {
-		TaskFunction taskFn;
+		CompletionFn taskFn;
 		TimePoint timeout;
+		int org_timeout;
 		void swap(TaskInfo &other) {
 			std::swap(taskFn, other.taskFn);
 			std::swap(timeout, other.timeout);
@@ -66,7 +68,12 @@ protected:
 
 
 	typedef std::vector<pollfd> FDMap;
-	typedef std::vector<TaskInfo> TaskMap;
+	typedef std::pair<int,int> RKey;
+	struct HashRKey {
+	public:
+		std::size_t operator()(const RKey &key) const;
+	};
+	typedef std::unordered_map<RKey, TaskInfo, HashRKey> TaskMap;
 
 	FDMap fdmap;
 	TaskMap taskMap;
@@ -74,7 +81,7 @@ protected:
 	int nextTimeoutPos = -1;
 
 
-	void removeTask(int index);
+	void removeTask(int index, TaskMap::iterator &it);
 
 	int intrHandle;
 	int intrWaitHandle;
@@ -101,5 +108,4 @@ protected:
 };
 
 } /* namespace simpleServer */
-
 
