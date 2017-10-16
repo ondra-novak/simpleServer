@@ -56,7 +56,7 @@ protected:
 
 	virtual Stream create() override;
 
-	virtual void createAsync(AsyncProvider *provider, const Callback &cb);
+	virtual void createAsync(AsyncProviderImpl *provider, const Callback &cb);
 
 	int connectTimeout;
 
@@ -85,7 +85,7 @@ protected:
 	TCPListen(bool localhost, unsigned int port, int listenTimeout, int ioTimeout);
 	virtual Stream create() override;
 	virtual void stop() override;
-	virtual void createAsync(AsyncProvider *provider, const Callback &cb);
+	virtual void createAsync(AsyncProviderImpl *provider, const Callback &cb);
 
 protected:
 

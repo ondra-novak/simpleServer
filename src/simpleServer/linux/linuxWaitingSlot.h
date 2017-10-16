@@ -26,6 +26,7 @@ public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
+	virtual void runAsync(const CompletionFn &completion) override;
 
 
 	virtual Task waitForEvent() override;
@@ -89,7 +90,7 @@ protected:
 
 	typedef std::pair<pollfd, TaskInfo> TaskAddRequest;
 
-	void addTask(const TaskAddRequest &req);
+	Task addTask(const TaskAddRequest &req);
 
 
 	std::mutex queueLock;
@@ -103,6 +104,7 @@ protected:
 
 
 
+	Task runQueue();
 
 
 };

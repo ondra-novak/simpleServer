@@ -35,6 +35,8 @@ public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) = 0;
 
+	virtual void runAsync(const CompletionFn &completion) = 0;
+
 
 #if 0
 	typedef std::function<void(AsyncState, BinaryView)> Callback;

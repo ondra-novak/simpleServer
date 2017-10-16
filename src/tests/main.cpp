@@ -89,6 +89,25 @@ int main(int argc, char *argv[]) {
 		}
 	};
 
+	tst.test("Listener.async.receiveMsg","test message") >> [](std::ostream &out) {
+		StreamFactory server = TCPListen::create(true,0);
+		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
+		AsyncProvider async = AsyncProvider::create();
+		server(async, [&](AsyncState, Stream s){
+			if (s != nullptr) {
+				s.readASync([&](AsyncState, const BinaryView &data){
+					out << StrViewA(data);
+				});
+			}
+		});
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		Stream s = tcpConnect(srvAddr,30000);
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		StrViewA msg("test message");
+		s.write(BinaryView(msg));
+		s.closeOutput();
+	};
+
 	/*
 	tst.test("Listener.async.receiveMsg","test message") >> [](std::ostream &out) {
 		unsigned int port = 0;

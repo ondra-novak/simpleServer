@@ -9,10 +9,12 @@ namespace simpleServer {
 
 
 
-class AsyncProvider: public IAsyncProvider, public RefCntObj {
+class AsyncProviderImpl: public IAsyncProvider, public RefCntObj {
 public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
+
+	virtual void runAsync(const CompletionFn &completion) override;
 
 
 	virtual bool serve();
@@ -20,12 +22,11 @@ public:
 	virtual void releaseThreads();
 
 
-	AsyncProvider();
+	AsyncProviderImpl();
 
 
 
 public:
-	static RefCntPtr<AsyncProvider> create(unsigned int numThreads=1, unsigned int numListeners=1);
 
 	void setCountOfListeners(unsigned int count);
 
@@ -33,7 +34,7 @@ public:
 
 	void stop();
 
-	~AsyncProvider();
+	~AsyncProviderImpl();
 
 
 protected:
@@ -54,9 +55,20 @@ protected:
 };
 
 
+class AsyncProvider: public RefCntPtr<AsyncProviderImpl> {
+public:
+
+	using RefCntPtr<AsyncProviderImpl>::RefCntPtr;
+
+	static AsyncProvider create(unsigned int numThreads=1, unsigned int numListeners=1);
+	void setCountOfListeners(unsigned int count);
+	void setCountOfThreads(unsigned int count);
+	void stop();
+
+	~AsyncProvider();
 
 
-typedef RefCntPtr<AsyncProvider> PAsyncProvider;
+};
 
 
 }

@@ -24,7 +24,7 @@ public:
 	 * @param provuider pointer to async. provider
 	 * @param cb callback which is called once the stream is created
 	 */
-	virtual void createAsync(AsyncProvider *provider, const Callback &cb) = 0;
+	virtual void createAsync(AsyncProviderImpl *provider, const Callback &cb) = 0;
 
 	///Asynchronously stops process of creating of the new stream
 	/**
@@ -94,7 +94,7 @@ public:
 	}
 
 
-	void operator()(AsyncProvider *provider, const IStreamFactory::Callback &cb) const {
+	void operator()(AsyncProviderImpl *provider, const IStreamFactory::Callback &cb) const {
 		ptr->createAsync(provider, cb);
 	}
 

@@ -387,7 +387,7 @@ struct ConnectShared {
 
 
 
-static void connectAsyncCycle(AsyncProvider* provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
+static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
 
 	int r;
 	//receive this addr
@@ -469,12 +469,12 @@ static void connectAsyncCycle(AsyncProvider* provider, const NetAddr &addr, std:
 }
 
 
-void TCPConnect::createAsync(AsyncProvider* provider, const Callback& cb) {
+void TCPConnect::createAsync(AsyncProviderImpl* provider, const Callback& cb) {
 	std::shared_ptr<ConnectShared> shared(new ConnectShared(cb, connectTimeout, ioTimeout));
 	connectAsyncCycle(provider,target,shared);
 }
 
-void TCPListen::createAsync(AsyncProvider* provider, const Callback& cb) {
+void TCPListen::createAsync(AsyncProviderImpl* provider, const Callback& cb) {
 	cbrace = false;
 	RefCntPtr<TCPListen> me(this);
 	for (int s: openSockets) {

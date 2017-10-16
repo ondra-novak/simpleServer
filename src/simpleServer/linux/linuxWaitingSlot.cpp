@@ -34,6 +34,7 @@ void LinuxEventListener::addTaskToQueue(int s, const Fn &fn, int timeout, int ev
 	TaskInfo nfo;
 	nfo.taskFn = fn;
 	nfo.timeout = timeout == -1?TimePoint::max():std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
+	nfo.org_timeout = timeout;
 	pollfd fd;
 	fd.fd = s;
 	fd.events = event;
@@ -102,6 +103,10 @@ void LinuxEventListener::send(const AsyncResource& resource, BinaryView buffer,
 LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 
+
+	Task ret = runQueue();
+	if (ret != nullptr) return ret;
+
 	do {
 		TimePoint n = std::chrono::steady_clock::now();
 		auto tme = taskMap.end();
@@ -141,18 +146,10 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 							Command cmd = (Command)b;
 							switch (b) {
 								case cmdExit: return nullptr;
-								case cmdQueue:{
-									std::lock_guard<std::mutex> _(queueLock);
-									if (!queue.empty()) {
-										auto &&x = queue.front();
-										addTask(x);
-										queue.pop();
-										if (x.second.timeout < nextTimeout) {
-											nextTimeout = x.second.timeout;
-										}
-									}
-								}
-								break;
+								case cmdQueue:
+									ret = runQueue();
+									if (ret != nullptr) return ret;
+									break;
 							}
 						}
 					} else {
@@ -219,15 +216,25 @@ void LinuxEventListener::moveTo(AbstractStreamEventDispatcher& target) {
 	clear();
 }
 
-void LinuxEventListener::addTask(const TaskAddRequest& req) {
-	RKey kk(req.first.fd, req.first.events);
-	auto itr = taskMap.find(kk);
-	if (itr == taskMap.end()) {
-		itr->second = req.second;
+LinuxEventListener::Task LinuxEventListener::addTask(const TaskAddRequest& req) {
+	if (req.first.fd == -1) {
+		CompletionFn fn(req.second.taskFn);
+		return [fn] {fn(asyncOK);};
 	} else {
-		fdmap.push_back(req.first);
-		taskMap.insert(std::make_pair(kk, req.second));
+		RKey kk(req.first.fd, req.first.events);
+		auto itr = taskMap.find(kk);
+		if (itr == taskMap.end()) {
+			itr->second = req.second;
+		} else {
+			fdmap.push_back(req.first);
+			taskMap.insert(std::make_pair(kk, req.second));
+		}
+		return nullptr;
 	}
+}
+
+void LinuxEventListener::runAsync(const CompletionFn& completion) {
+	addTaskToQueue(-1, completion,0,0);
 }
 
 void LinuxEventListener::sendIntr(Command cmd) {
@@ -245,6 +252,19 @@ std::size_t LinuxEventListener::HashRKey::operator ()(const RKey& key) const {
 	return key.first*16+key.second;
 }
 
+LinuxEventListener::Task LinuxEventListener::runQueue() {
+	std::lock_guard<std::mutex> _(queueLock);
+	while (!queue.empty()) {
+		auto &&x = queue.front();
+		Task s = addTask(x);
+		if (x.second.timeout < nextTimeout) {
+			nextTimeout = x.second.timeout;
+		}
+		queue.pop();
+		if (s != nullptr) return s;
+	}
+	return nullptr;
+}
 
 } /* namespace simpleServer */
 

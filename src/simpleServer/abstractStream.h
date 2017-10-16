@@ -547,6 +547,16 @@ public:
 	bool waitForOutput(int timeout) {
 		return ptr->waitForOutput(timeout);
 	}
+	template<typename Fn>
+	void readASync(const Fn &completion) {
+		return ptr->readAsync(completion);
+	}
+	template<typename Fn>
+	void writeAsync(const BinaryView &data, const Fn &completion) {
+		return ptr->writeAsync(data, completion);
+	}
+
+
 };
 
 
