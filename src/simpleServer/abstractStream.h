@@ -324,7 +324,7 @@ public:
 	}
 
 
-	IAsyncProvider *setAsyncProvider(IAsyncProvider *asyncProvider);
+	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider);
 
 
 	///Read asynchronously
@@ -378,7 +378,7 @@ protected:
 	BinaryView rdBuff;
 	WrBuffer wrBuff;
 
-	IAsyncProvider *asyncProvider = nullptr;
+	AsyncProvider asyncProvider;
 
 
 
@@ -554,6 +554,10 @@ public:
 	template<typename Fn>
 	void writeAsync(const BinaryView &data, const Fn &completion) {
 		return ptr->writeAsync(data, completion);
+	}
+
+	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {
+		ptr->setAsyncProvider(asyncProvider);
 	}
 
 

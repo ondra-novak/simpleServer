@@ -38,72 +38,26 @@ public:
 	virtual void runAsync(const CompletionFn &completion) = 0;
 
 
-#if 0
-	typedef std::function<void(AsyncState, BinaryView)> Callback;
-
-
-	///Performs asynchronous read operation
-	/**
-	 * @param resource identifies resource. Resources are not available directly on
-	 * the public interface, they are provided by the stream providers
-	 * @param buffer mutable buffer, where to result will be put
-	 * @param timeout total timeout
-	 * @param completion function called for completion result.
-	 */
-	virtual void receive(const AsyncResource &resource,
-			MutableBinaryView buffer,
-			int timeout,
-			Callback completion) = 0;
-
-	///Performs asynchronous write operation
-	/**
-	 *
-	 * @param resource identifies resource. Resources are not available directly on
-	 * the public interface, they are provided by the stream providers
-	 * @param buffer buffer to write.
-	 * @param timeout total timeout
-	 * @param completion function called for completion result
-	 */
-	virtual void send(const AsyncResource &resource,
-			BinaryView buffer,
-			int timeout,
-			Callback completion) = 0;
-
-#endif
-
-	///Assigns the thread to the asynchronous provider
-	/** function performs one cycle of the serving
-	 *
-	 *  - acquires waiting slot
-	 *  - waits for event
-	 *  - perform tasks associated with th event
-	 *  - exit
-	 *
-	 *  @retval true please continue serving
-	 *  @retval false thread is released, do continue to serve
-	 */
-	virtual bool serve() = 0;
-
-	///Releases all threads in waiting state
-	/** it releases thread that waiting for acquire waiting slot or for event
-	 */
-	virtual void releaseThreads() = 0;
+	virtual void stop() = 0;
 
 	virtual ~IAsyncProvider() {}
 };
 
 
-class AbstractStreamEventDispatcher: public RefCntObj, public IAsyncProvider {
+class AbstractAsyncProvider: public IAsyncProvider, public RefCntObj {
+public:
+
+
+};
+
+class AbstractStreamEventDispatcher: public AbstractAsyncProvider {
 public:
 
 	typedef std::function<void()> Task;
 
 	virtual Task waitForEvent() = 0;
 
-	virtual void cancelWait() = 0;
-
-
-	virtual bool serve() {
+	bool serve() {
 		Task task (waitForEvent());
 		if (task != nullptr) {
 			task();
@@ -113,9 +67,6 @@ public:
 		}
 	}
 
-	virtual void releaseThreads() {
-		cancelWait();
-	}
 
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const = 0;
@@ -128,6 +79,28 @@ public:
 };
 
 typedef RefCntPtr<AbstractStreamEventDispatcher> PEventListener;
+
+class AsyncProvider: public RefCntPtr<AbstractAsyncProvider> {
+public:
+
+	using RefCntPtr<AbstractAsyncProvider>::RefCntPtr;
+
+	template<typename Fn>
+	void runAsync(const AsyncResource &resource, int timeout, const Fn &completion) {
+		ptr->runAsync(resource, timeout,completion);
+	}
+
+	template<typename Fn>
+	void runAsync(const Fn &completion) {
+		Fn ccpy(completion);
+		ptr->runAsync([ccpy](AsyncState){ccpy();});
+	}
+
+	void stop() {
+		ptr->stop();
+	}
+
+};
 
 
 

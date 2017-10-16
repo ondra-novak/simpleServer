@@ -93,7 +93,7 @@ bool simpleServer::IGeneralStream::isEof(const BinaryView& buffer) {
 	return buffer.data == eofConst.data;
 }
 
-IAsyncProvider* simpleServer::AbstractStream::setAsyncProvider( IAsyncProvider* asyncProvider) {
+AsyncProvider simpleServer::AbstractStream::setAsyncProvider( AsyncProvider asyncProvider) {
 	std::swap(this->asyncProvider, asyncProvider);
 	return asyncProvider;
 }

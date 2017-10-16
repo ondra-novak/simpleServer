@@ -9,7 +9,7 @@ namespace simpleServer {
 
 
 
-class AsyncProviderImpl: public IAsyncProvider, public RefCntObj {
+class ThreadPoolAsyncImpl: public AbstractAsyncProvider {
 public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
@@ -17,12 +17,10 @@ public:
 	virtual void runAsync(const CompletionFn &completion) override;
 
 
-	virtual bool serve();
-
-	virtual void releaseThreads();
+	virtual void stop() override;
 
 
-	AsyncProviderImpl();
+	ThreadPoolAsyncImpl();
 
 
 
@@ -32,9 +30,8 @@ public:
 
 	void setCountOfThreads(unsigned int count);
 
-	void stop();
 
-	~AsyncProviderImpl();
+	~ThreadPoolAsyncImpl();
 
 
 protected:
@@ -55,17 +52,19 @@ protected:
 };
 
 
-class AsyncProvider: public RefCntPtr<AsyncProviderImpl> {
+class ThreadPoolAsync: public RefCntPtr<ThreadPoolAsyncImpl> {
 public:
 
-	using RefCntPtr<AsyncProviderImpl>::RefCntPtr;
+	using RefCntPtr<ThreadPoolAsyncImpl>::RefCntPtr;
 
 	static AsyncProvider create(unsigned int numThreads=1, unsigned int numListeners=1);
 	void setCountOfListeners(unsigned int count);
 	void setCountOfThreads(unsigned int count);
 	void stop();
 
-	~AsyncProvider();
+	~ThreadPoolAsync();
+
+	operator AsyncProvider() const;
 
 
 };

@@ -387,11 +387,12 @@ struct ConnectShared {
 
 
 
-static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
+static void connectAsyncCycle(const AsyncProvider& provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
 
 	int r;
 	//receive this addr
 	NetAddr thisAddr(addr);
+	AsyncProvider p(provider);
 
 	int sock = connectSocket(addr,r);
 	//if error in connect
@@ -415,6 +416,7 @@ static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, 
 					//if yes, create stream
 					Stream sx = new TCPStream(s->detach(), shared->iotimeout, thisAddr);
 					//give the result to the callback function
+					sx.setAsyncProvider(provider);
 					shared->cb(st, sx);
 				}
 				//otherwise nothing here
@@ -436,7 +438,7 @@ static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, 
 				while (nx != nullptr) {
 					try {
 						//recursively call connect for next address (in shortPart)
-						connectAsyncCycle(provider,nx,shared);
+						connectAsyncCycle(p,nx,shared);
 						//break
 						break;
 					} catch (...) {
@@ -448,14 +450,14 @@ static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, 
 				}
 				if (st == asyncTimeout) {
 					shared->inc_pending();
-					provider->runAsync(AsyncResource(*s, POLLOUT), shared->timeout, fnLong);
+					p->runAsync(AsyncResource(*s, POLLOUT), shared->timeout, fnLong);
 				}
 			}
 			shared->dec_pending();
 		};
 
 		shared->inc_pending();
-		provider->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
+		p->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
 	} else {
 		bool exp = false;
 		//create socket
@@ -463,30 +465,38 @@ static void connectAsyncCycle(AsyncProviderImpl* provider, const NetAddr &addr, 
 
 		if (shared->finished.compare_exchange_strong(exp,true)) {
 			Stream sx = new TCPStream(s->detach(), shared->timeout, thisAddr);
+			sx.setAsyncProvider(provider);
 			shared->cb(asyncOK, sx);
 		}
 	}
 }
 
 
-void TCPConnect::createAsync(AsyncProviderImpl* provider, const Callback& cb) {
+void TCPConnect::createAsync(const AsyncProvider &provider, const Callback &cb) {
 	std::shared_ptr<ConnectShared> shared(new ConnectShared(cb, connectTimeout, ioTimeout));
 	connectAsyncCycle(provider,target,shared);
 }
 
-void TCPListen::createAsync(AsyncProviderImpl* provider, const Callback& cb) {
+void TCPListen::createAsync(const AsyncProvider &provider, const Callback &cb) {
 	cbrace = false;
 	RefCntPtr<TCPListen> me(this);
+	AsyncProvider p(provider);
 	for (int s: openSockets) {
 
-		auto fn = [me, s, provider, cb](AsyncState st){
+
+		auto fn = [me, s, p, cb](AsyncState st){
 			bool exp = false;
 			if (me->cbrace.compare_exchange_strong(exp, true)) {
 				if (st == asyncOK) {
 					try {
 						Stream sx = acceptConnect(s,me->ioTimeout);
-						if (sx == nullptr) me->createAsync(provider, cb);
-						cb(st, sx);
+						if (sx == nullptr) {
+							me->createAsync(p, cb);
+						} else {
+							sx.setAsyncProvider(p);
+							cb(st, sx);
+						}
+
 					} catch (...) {
 						cb(asyncError,nullptr);
 					}

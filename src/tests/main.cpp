@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
 	tst.test("Listener.async.receiveMsg","test message") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
-		AsyncProvider async = AsyncProvider::create();
+		AsyncProvider async = ThreadPoolAsync::create();
 		server(async, [&](AsyncState, Stream s){
 			if (s != nullptr) {
 				s.readASync([&](AsyncState, const BinaryView &data){

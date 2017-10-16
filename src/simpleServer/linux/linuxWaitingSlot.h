@@ -32,14 +32,14 @@ public:
 	virtual Task waitForEvent() override;
 
 
-	virtual void cancelWait() override;
-
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const override;
 	///clears all asynchronous tasks
 	virtual void clear() override;
 	///Move all asynchronous tasks to different listener (must be the same type)
 	virtual void moveTo(AbstractStreamEventDispatcher &target) override;
+
+	virtual void stop() override;
 
 
 protected:
@@ -48,11 +48,6 @@ protected:
 
 	typedef AsyncState WaitResult;
 
-
-	enum Command {
-		cmdExit,
-		cmdQueue
-	};
 
 
 
@@ -80,6 +75,7 @@ protected:
 	TaskMap taskMap;
 	TimePoint nextTimeout =  TimePoint::max();
 	int nextTimeoutPos = -1;
+	bool exitFlag;
 
 
 	void removeTask(int index, TaskMap::iterator &it);
@@ -97,7 +93,7 @@ protected:
 	std::queue<TaskAddRequest> queue;
 
 
-	void sendIntr(Command cmd);
+	void sendIntr();
 
 	template<typename Fn>
 	void addTaskToQueue(int fd, const Fn &fn, int timeout, int event);

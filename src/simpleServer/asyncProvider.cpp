@@ -5,38 +5,11 @@
 namespace simpleServer {
 
 
-AsyncProviderImpl::~AsyncProviderImpl() {
+ThreadPoolAsyncImpl::~ThreadPoolAsyncImpl() {
 	stop();
 }
 
-bool AsyncProviderImpl::serve() {
-	PEventListener lst = tQueue.pop();
-	if (lst == nullptr) {
-		tQueue.push(nullptr);
-		return false;
-	}
-	auto t = lst->waitForEvent();
-	tQueue.push(lst);
-	if (t != nullptr) {
-		t();
-		return true;
-	} else {
-		return false;
-	}
-
-}
-
-void AsyncProviderImpl::releaseThreads() {
-	tQueue.push(nullptr);
-	Sync _(lock);
-	while (!cQueue.empty()) {
-		auto l = cQueue.front();
-		cQueue.pop();
-		l->releaseThreads();
-	}
-}
-
-PEventListener AsyncProviderImpl::getListener() {
+PEventListener ThreadPoolAsyncImpl::getListener() {
 	Sync _(lock);
 	PEventListener lst;
 	while (cQueue.size() < reqListenerCount) {
@@ -45,7 +18,7 @@ PEventListener AsyncProviderImpl::getListener() {
 		tQueue.push(lst);
 	}
 	while (threadCount.getCounter() < reqThreadCount) {
-		RefCntPtr<AsyncProviderImpl> me (this);
+		RefCntPtr<ThreadPoolAsyncImpl> me (this);
 		std::thread thr([me]{me->worker();});
 		thr.detach();
 		threadCount.inc();
@@ -57,33 +30,42 @@ PEventListener AsyncProviderImpl::getListener() {
 }
 
 
-void AsyncProviderImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
+void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
 	auto lst = getListener();
 	lst->runAsync(resource,timeout, fn);
 
 }
 
 
-void AsyncProviderImpl::setCountOfListeners(unsigned int count) {
+void ThreadPoolAsyncImpl::setCountOfListeners(unsigned int count) {
 	Sync _(lock);
 	reqListenerCount = count;
 }
 
-void AsyncProviderImpl::setCountOfThreads(unsigned int count) {
+void ThreadPoolAsyncImpl::setCountOfThreads(unsigned int count) {
 	Sync _(lock);
 	reqThreadCount = count;
 }
 
-void AsyncProviderImpl::stop() {
-	releaseThreads();
+void ThreadPoolAsyncImpl::stop() {
+
+	tQueue.push(nullptr);
+	{
+		Sync _(lock);
+		while (!cQueue.empty()) {
+			auto l = cQueue.front();
+			cQueue.pop();
+			l->stop();
+		}
+	}
 	threadCount.zeroWait();
 
 }
 
-AsyncProviderImpl::AsyncProviderImpl() {
+ThreadPoolAsyncImpl::ThreadPoolAsyncImpl() {
 }
 
-void AsyncProviderImpl::worker() {
+void ThreadPoolAsyncImpl::worker() {
 	for(;;) {
 		PEventListener lst = tQueue.pop();
 		if (lst == nullptr) {
@@ -110,34 +92,37 @@ void AsyncProviderImpl::worker() {
 	}
 }
 
-AsyncProvider AsyncProvider::create(unsigned int numThreads, unsigned int numListeners) {
-	AsyncProvider provider (new AsyncProviderImpl);
+AsyncProvider ThreadPoolAsync::create(unsigned int numThreads, unsigned int numListeners) {
+	ThreadPoolAsync provider (new ThreadPoolAsyncImpl);
 	provider.setCountOfListeners(numListeners);
 	provider.setCountOfThreads(numThreads);
 	return provider;
 }
 
-void AsyncProvider::setCountOfListeners(unsigned int count) {
+void ThreadPoolAsync::setCountOfListeners(unsigned int count) {
 	ptr->setCountOfListeners(count);
 }
 
-void AsyncProvider::setCountOfThreads(unsigned int count) {
+void ThreadPoolAsync::setCountOfThreads(unsigned int count) {
 	ptr->setCountOfThreads(count);
 }
 
-void AsyncProvider::stop() {
+void ThreadPoolAsync::stop() {
 	ptr->stop();
 }
 
-AsyncProvider::~AsyncProvider() {
+ThreadPoolAsync::~ThreadPoolAsync() {
 	if (!ptr->isShared()) {
 		ptr->stop();
 	}
 }
 
-void AsyncProviderImpl::runAsync(const CompletionFn& completion) {
+void ThreadPoolAsyncImpl::runAsync(const CompletionFn& completion) {
 }
 
+ThreadPoolAsync::operator AsyncProvider() const {
+	return AsyncProvider(ptr);
+}
 
 }
 

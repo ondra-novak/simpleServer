@@ -39,136 +39,84 @@ void LinuxEventListener::addTaskToQueue(int s, const Fn &fn, int timeout, int ev
 	fd.fd = s;
 	fd.events = event;
 	fd.revents = 0;
+
+	bool sintr;
+
 	{
-	std::lock_guard<std::mutex> _(queueLock);
-	queue.push(TaskAddRequest(fd, nfo));
+		std::lock_guard<std::mutex> _(queueLock);
+		sintr = queue.empty();
+		queue.push(TaskAddRequest(fd, nfo));
 	}
-	sendIntr(cmdQueue);
+	if (sintr)
+		sendIntr();
 
 }
 
-/*
-void LinuxEventListener::receive(const AsyncResource& resource,
-		MutableBinaryView buffer, int timeout, Callback completion) {
 
-	int s = resource.socket;
-	auto fn = [=](WaitResult res){
-		try {
-			int r = ::recv(s, buffer.data, buffer.length, MSG_DONTWAIT);
-			if (r > 0) {
-				completion(asyncOK, BinaryView(buffer.data, r));
-			} else if (r == 0) {
-				completion(asyncEOF, BinaryView(0,0));
-			} else {
-				int e = errno;
-				if (e == EWOULDBLOCK || e == EAGAIN) {
-					receive(AsyncResource(s), buffer,timeout,completion);
-				} else {
-						throw SystemException(e, "Async recv error");
-				}
-			}
-		} catch (...) {
-			completion(asyncError, BinaryView(0,0));
-		}
-	};
-	addTaskToQueue(s, fn, timeout, POLLIN);
-
-}
-
-void LinuxEventListener::send(const AsyncResource& resource, BinaryView buffer,
-		int timeout, Callback completion) {
-
-	int s = resource.socket;
-	auto fn = [=](WaitResult res){
-		try {
-			int r = ::send(s, buffer.data, buffer.length, MSG_DONTWAIT);
-			if (r > 0) {
-				completion(asyncOK, buffer.substr(r));
-			} else {
-				int e = errno;
-				if (e == EWOULDBLOCK || e == EAGAIN) {
-					send(AsyncResource(s), buffer,timeout,completion);
-				} else {
-						throw SystemException(e, "Async send error");
-				}
-			}
-		} catch (...) {
-			completion(asyncError, BinaryView(0,0));
-		}
-	};
-	addTaskToQueue(s, fn, timeout, POLLOUT);
-}
-
-*/
 LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 
-
+	if (exitFlag) return nullptr;
 	Task ret = runQueue();
 	if (ret != nullptr) return ret;
 
-	do {
-		TimePoint n = std::chrono::steady_clock::now();
-		auto tme = taskMap.end();
+	TimePoint n = std::chrono::steady_clock::now();
+	auto tme = taskMap.end();
 
-		if (n > nextTimeout) {
-			nextTimeout = TimePoint::max();
-			for (auto &&x : taskMap)
-				if (x.second.timeout < nextTimeout) nextTimeout = x.second.timeout;
-		}
+	if (n > nextTimeout) {
+		nextTimeout = TimePoint::max();
+		for (auto &&x : taskMap)
+			if (x.second.timeout < nextTimeout) nextTimeout = x.second.timeout;
+	}
 
-		auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - n);
+	auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - n);
 
-		int r = poll(fdmap.data(),fdmap.size(),int_ms.count());
-		if (r < 0) {
-			int e = errno;
-			if (e != EINTR && e != EAGAIN)
-				throw SystemException(e, "Failed to call poll()");
-		} else if (r == 0) {
-			n = std::chrono::steady_clock::now();
-			for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; i++) {
-				auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
-				if (tmi != tme) {
-					Task t = std::bind(tme->second.taskFn,asyncTimeout);
-					removeTask(i,tmi);
-					return t;
-				}
+	int r = poll(fdmap.data(),fdmap.size(),int_ms.count());
+	if (r < 0) {
+		int e = errno;
+		if (e != EINTR && e != EAGAIN)
+			throw SystemException(e, "Failed to call poll()");
+	} else if (r == 0) {
+		n = std::chrono::steady_clock::now();
+		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; i++) {
+			auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
+			if (tmi != tme) {
+				Task t = std::bind(tme->second.taskFn,asyncTimeout);
+				removeTask(i,tmi);
+				return t;
 			}
-		} else {
-			for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; ++i) {
-				pollfd &fd = fdmap[i];
-				if (fd.revents) {
-					if (fd.fd == intrWaitHandle) {
-						fd.revents = 0;
-						unsigned char b;
-						int r = ::read(fd.fd,&b,1);
-						if (r==1) {
-							Command cmd = (Command)b;
-							switch (b) {
-								case cmdExit: return nullptr;
-								case cmdQueue:
-									ret = runQueue();
-									if (ret != nullptr) return ret;
-									break;
-							}
-						}
-					} else {
-						auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
-						if (tmi != tme) {
-							Task t (std::bind(tmi->second.taskFn,asyncOK));
-							removeTask(i,tmi);
-							return t;
-						}
+		}
+	} else {
+		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; ++i) {
+			pollfd &fd = fdmap[i];
+			if (fd.revents) {
+				if (fd.fd == intrWaitHandle) {
+					fd.revents = 0;
+					unsigned char b;
+					int r = ::read(fd.fd,&b,1);
+					if (r==1) {
+						if (exitFlag) return nullptr;
+						ret = runQueue();
+						if (ret == nullptr) return []{};
+						return ret;
+					}
+				} else {
+					auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
+					if (tmi != tme) {
+						Task t (std::bind(tmi->second.taskFn,asyncOK));
+						removeTask(i,tmi);
+						return t;
 					}
 				}
 			}
 		}
 	}
-	while (true);
 }
 
-void LinuxEventListener::cancelWait() {
-	sendIntr(cmdExit);
+
+void LinuxEventListener::stop() {
+	exitFlag = true;
+	sendIntr();
 }
 
 
@@ -202,6 +150,8 @@ void LinuxEventListener::clear() {
 	xfd.events = POLLIN;
 	xfd.revents = 0;
 	fdmap.push_back(xfd);
+
+	exitFlag = false;
 
 }
 
@@ -237,8 +187,10 @@ void LinuxEventListener::runAsync(const CompletionFn& completion) {
 	addTaskToQueue(-1, completion,0,0);
 }
 
-void LinuxEventListener::sendIntr(Command cmd) {
-	int r = ::write(intrHandle, &cmd, 1);
+
+void LinuxEventListener::sendIntr() {
+	unsigned char b = 1;
+	int r = ::write(intrHandle, &b, 1);
 	if (r < 0) {
 		throw SystemException(errno);
 	}
@@ -253,18 +205,20 @@ std::size_t LinuxEventListener::HashRKey::operator ()(const RKey& key) const {
 }
 
 LinuxEventListener::Task LinuxEventListener::runQueue() {
+
+	Task s;
 	std::lock_guard<std::mutex> _(queueLock);
-	while (!queue.empty()) {
+	while (!queue.empty() && s==nullptr) {
 		auto &&x = queue.front();
-		Task s = addTask(x);
+		 s = addTask(x);
 		if (x.second.timeout < nextTimeout) {
 			nextTimeout = x.second.timeout;
 		}
 		queue.pop();
-		if (s != nullptr) return s;
 	}
-	return nullptr;
+	return s;
 }
+
 
 } /* namespace simpleServer */
 
