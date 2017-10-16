@@ -16,14 +16,18 @@ BinaryView TCPStream::readBuffer(bool nonblock) {
 		int r = recv(sck,inputBuffer, inputBufferSize, MSG_DONTWAIT);
 		if (r < 0) {
 			int e = errno;
-			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN) ;
+			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN)
 				throw SystemException(e,__FUNCTION__);
 			if (nonblock) return BinaryView();
+			if (!waitForRead(iotimeout)) {
+				throw TimeoutException();
+			}
 		} else if (r == 0) {
 			return eofConst;
 		} else {
 			return BinaryView(inputBuffer, r);
 		}
+
 	} while (true);
 }
 
@@ -48,7 +52,8 @@ std::size_t TCPStream::writeBuffer(BinaryView buffer, WriteMode wrmode) {
 	case writeCanBlock: {
 		std::size_t sz = writeBuffer(buffer, writeNonBlock);
 		while (sz == 0) {
-			waitForWrite(iotimeout);
+			if (!waitForWrite(iotimeout))
+				throw TimeoutException();
 			sz = writeBuffer(buffer, writeNonBlock);
 		}
 		return sz;

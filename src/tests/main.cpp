@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <mutex>
 #include "../simpleServer/tcp.h"
+#include "../simpleServer/threadPoolAsync.h"
 
 using namespace simpleServer;
 
@@ -100,7 +101,7 @@ int main(int argc, char *argv[]) {
 				});
 			}
 		});
-		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		std::this_thread::sleep_for(std::chrono::seconds(3600));
 		Stream s = tcpConnect(srvAddr,30000);
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		StrViewA msg("test message");

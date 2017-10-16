@@ -131,14 +131,14 @@ Stream TCPConnect::create() {
 
 
 			if (r == 0) {
-				selectedSocket = s;
+				selectedSocket = s.detach();
 			} else if (r == -1) {
 				int e = errno;
 				if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN && e != EINPROGRESS) {
 					throw SystemException(e,"Error connecting socket");
 				}
 				pollfd fd;
-				fd.fd = s;
+				fd.fd = s.detach();
 				fd.events = POLLOUT;
 				fd.revents = 0;
 				sockets.push_back(fd);
@@ -481,27 +481,28 @@ void TCPListen::createAsync(const AsyncProvider &provider, const Callback &cb) {
 	cbrace = false;
 	RefCntPtr<TCPListen> me(this);
 	AsyncProvider p(provider);
+	Callback ccb(cb);
+
 	for (int s: openSockets) {
 
-
-		auto fn = [me, s, p, cb](AsyncState st){
+		auto fn = [me, s, p, ccb](AsyncState st){
 			bool exp = false;
 			if (me->cbrace.compare_exchange_strong(exp, true)) {
 				if (st == asyncOK) {
 					try {
 						Stream sx = acceptConnect(s,me->ioTimeout);
 						if (sx == nullptr) {
-							me->createAsync(p, cb);
+							me->createAsync(p, ccb);
 						} else {
 							sx.setAsyncProvider(p);
-							cb(st, sx);
+							ccb(st, sx);
 						}
 
 					} catch (...) {
-						cb(asyncError,nullptr);
+						ccb(asyncError,nullptr);
 					}
 				} else {
-					cb(st, nullptr);
+					ccb(st, nullptr);
 				}
 			}
 		};

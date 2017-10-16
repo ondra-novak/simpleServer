@@ -1,7 +1,5 @@
 #pragma once
 
-#include "linuxWaitingSlot.h"
-
 #include <poll.h>
 #include <chrono>
 #include <mutex>
@@ -95,8 +93,7 @@ protected:
 
 	void sendIntr();
 
-	template<typename Fn>
-	void addTaskToQueue(int fd, const Fn &fn, int timeout, int event);
+	void addTaskToQueue(int fd, const CompletionFn &fn, int timeout, int event);
 
 
 

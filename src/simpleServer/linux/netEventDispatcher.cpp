@@ -5,7 +5,6 @@
  *      Author: ondra
  */
 
-#include "linuxWaitingSlot.h"
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -13,6 +12,7 @@
 #include <unistd.h>
 
 #include "../exceptions.h"
+#include "netEventDispatcher.h"
 
 namespace simpleServer {
 
@@ -29,8 +29,7 @@ LinuxEventListener::~LinuxEventListener() {
 	close(intrWaitHandle);
 }
 
-template<typename Fn>
-void LinuxEventListener::addTaskToQueue(int s, const Fn &fn, int timeout, int event) {
+void LinuxEventListener::addTaskToQueue(int s, const CompletionFn &fn, int timeout, int event) {
 	TaskInfo nfo;
 	nfo.taskFn = fn;
 	nfo.timeout = timeout == -1?TimePoint::max():std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
@@ -173,7 +172,7 @@ LinuxEventListener::Task LinuxEventListener::addTask(const TaskAddRequest& req) 
 	} else {
 		RKey kk(req.first.fd, req.first.events);
 		auto itr = taskMap.find(kk);
-		if (itr == taskMap.end()) {
+		if (itr != taskMap.end()) {
 			itr->second = req.second;
 		} else {
 			fdmap.push_back(req.first);
