@@ -50,35 +50,6 @@ public:
 
 };
 
-class AbstractStreamEventDispatcher: public AbstractAsyncProvider {
-public:
-
-	typedef std::function<void()> Task;
-
-	virtual Task waitForEvent() = 0;
-
-	bool serve() {
-		Task task (waitForEvent());
-		if (task != nullptr) {
-			task();
-			return true;
-		} else {
-			return false;
-		}
-	}
-
-
-	///returns true, if the listener doesn't contain any asynchronous task
-	virtual bool empty() const = 0;
-	///clears all asynchronous tasks
-	virtual void clear() = 0;
-	///Move all asynchronous tasks to different listener (must be the same type)
-	virtual void moveTo(AbstractStreamEventDispatcher &target) = 0;
-
-	static RefCntPtr<AbstractStreamEventDispatcher> create();
-};
-
-typedef RefCntPtr<AbstractStreamEventDispatcher> PEventListener;
 
 class AsyncProvider: public RefCntPtr<AbstractAsyncProvider> {
 public:
@@ -102,6 +73,29 @@ public:
 
 };
 
+class AbstractStreamEventDispatcher: public AbstractAsyncProvider {
+public:
+
+	typedef std::function<void()> Task;
+
+	virtual Task waitForEvent() = 0;
+
+
+	///returns true, if the listener doesn't contain any asynchronous task
+	virtual bool empty() const = 0;
+	///Move all asynchronous tasks to different listener
+	/** @param target target provider
+	 *
+	 *  @note function also calls stop(). This is the only way how to destroy
+	 *  dispatcher without interrupting async. operation
+	 */
+	virtual void moveTo(AsyncProvider target) = 0;
+
+
+	static RefCntPtr<AbstractStreamEventDispatcher> create();
+};
+
+typedef RefCntPtr<AbstractStreamEventDispatcher> PEventListener;
 
 
 }

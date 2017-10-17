@@ -49,6 +49,17 @@ public:
 	}
 };
 
+class OutOfSpaceException: public Exception {
+public:
+	OutOfSpaceException() {}
+
+
+	std::string getMessage() const {
+		return "Out of space";
+	}
+};
+
+
 class NoAsyncProviderException: public Exception {
 public:
 	NoAsyncProviderException() {}

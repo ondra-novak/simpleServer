@@ -14,11 +14,32 @@
 #include <mutex>
 #include "../simpleServer/tcp.h"
 #include "../simpleServer/threadPoolAsync.h"
+#include "../simpleServer/common/mtcounter.h"
 
 using namespace simpleServer;
 
 
 void platformTests(TestSimple &tst);
+
+
+class AsyncReader {
+public:
+
+	AsyncReader(Stream sx, std::ostream &out, MTCounter &event):sx(sx),out(out),event(event) {}
+	void operator()(AsyncState, const BinaryView &data) const {
+		if (data.empty()) event.dec();
+		else {
+			out << StrViewA(data);
+			sx.readASync(*this);
+		}
+	}
+
+protected:
+	mutable Stream sx;
+	std::ostream &out;
+	MTCounter &event;
+
+};
 
 int main(int argc, char *argv[]) {
 
@@ -94,19 +115,21 @@ int main(int argc, char *argv[]) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
 		AsyncProvider async = ThreadPoolAsync::create();
+		MTCounter event(1);
+
 		server(async, [&](AsyncState, Stream s){
 			if (s != nullptr) {
-				s.readASync([&](AsyncState, const BinaryView &data){
-					out << StrViewA(data);
-				});
+				s.readASync(AsyncReader(s,out,event));
 			}
 		});
-		std::this_thread::sleep_for(std::chrono::seconds(3600));
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		Stream s = tcpConnect(srvAddr,30000);
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 		StrViewA msg("test message");
 		s.write(BinaryView(msg));
 		s.closeOutput();
+		event.zeroWait();
+		async.stop();
 	};
 
 	/*

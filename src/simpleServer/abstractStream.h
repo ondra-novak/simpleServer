@@ -327,19 +327,39 @@ public:
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider);
 
 
+	template<typename Fn>
+	class AsyncDirectCall {
+	public:
+
+		AsyncDirectCall(AsyncState state, const BinaryData &data, const Fn &fn):state(state),data(data),fn(fn) {}
+		void operator()() const {
+			fn(data.empty()?asyncEOF:asyncOK, data);
+		}
+
+	protected:
+		AsyncState state;
+		BinaryView data;
+		Fn(fn);
+
+	};
+
 	///Read asynchronously
 	/**
 	 * @param callbackFn function called when operation completes.
 	 *
-	 * @note function can be called immediately if there are data already available to
-	 * processing
+	 * @note Function always transfer execution to the asynchronous thread even if there
+	 * already data available to process immediately. This also means, that function is
+	 * always slower then synchronous alternative
+	 *
+	 *
 	 */
 	template<typename Fn>
 	void readAsync(const Fn &callbackFn) {
 
 		BinaryView data = read(true);
-		if (!data.empty() || isEof(data))
-			callbackFn(asyncOK, data);
+		bool eof = isEof(data);
+		if (!data.empty() || eof)
+			asyncProvider.runAsync(AsyncDirectCall<Fn>(eof?asyncEOF:asyncOK,data, callbackFn));
 		else
 			doReadAsync(callbackFn);
 	}
@@ -353,6 +373,11 @@ public:
 	 *
 	 * @param data data to write
 	 * @param callbackFn callback function called when operation completes
+	 *
+	 *  @note Function always transfer execution to the asynchronous thread even if there
+	 * already data available to process immediately. This also means, that function is
+	 * always slower then synchronous alternative
+	 *
 	 */
 	template<typename Fn>
 	void writeAsync(BinaryView data, const Fn &callbackFn) {
@@ -365,6 +390,8 @@ public:
 				BinaryView x = write(data, writeNonBlock);
 				callbackFn(x);
 			});
+		} else {
+			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn)));
 		}
 
 	}
@@ -557,7 +584,7 @@ public:
 	}
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {
-		ptr->setAsyncProvider(asyncProvider);
+		return ptr->setAsyncProvider(asyncProvider);
 	}
 
 

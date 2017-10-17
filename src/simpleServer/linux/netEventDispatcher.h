@@ -32,10 +32,8 @@ public:
 
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const override;
-	///clears all asynchronous tasks
-	virtual void clear() override;
 	///Move all asynchronous tasks to different listener (must be the same type)
-	virtual void moveTo(AbstractStreamEventDispatcher &target) override;
+	virtual void moveTo(AsyncProvider target) override;
 
 	virtual void stop() override;
 
@@ -72,7 +70,7 @@ protected:
 	FDMap fdmap;
 	TaskMap taskMap;
 	TimePoint nextTimeout =  TimePoint::max();
-	int nextTimeoutPos = -1;
+	AsyncProvider moveToProvider;;
 	bool exitFlag;
 
 
@@ -95,6 +93,9 @@ protected:
 
 	void addTaskToQueue(int fd, const CompletionFn &fn, int timeout, int event);
 
+
+	///clears all asynchronous tasks
+	void epilog();
 
 
 	Task runQueue();

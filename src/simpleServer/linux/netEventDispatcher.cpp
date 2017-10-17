@@ -21,7 +21,14 @@ LinuxEventListener::LinuxEventListener() {
 	pipe2(fds, O_CLOEXEC);
 	intrHandle = fds[1];
 	intrWaitHandle = fds[0];
-	clear();
+
+	pollfd xfd;
+	xfd.fd = intrWaitHandle;
+	xfd.events = POLLIN;
+	xfd.revents = 0;
+	fdmap.push_back(xfd);
+
+	exitFlag = false;
 }
 
 LinuxEventListener::~LinuxEventListener() {
@@ -55,7 +62,10 @@ void LinuxEventListener::addTaskToQueue(int s, const CompletionFn &fn, int timeo
 LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 
 
-	if (exitFlag) return nullptr;
+	if (exitFlag) {
+		epilog();
+		return nullptr;
+	}
 	Task ret = runQueue();
 	if (ret != nullptr) return ret;
 
@@ -94,7 +104,10 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 					unsigned char b;
 					int r = ::read(fd.fd,&b,1);
 					if (r==1) {
-						if (exitFlag) return nullptr;
+						if (exitFlag) {
+							epilog();
+							return nullptr;
+						}
 						ret = runQueue();
 						if (ret == nullptr) return []{};
 						return ret;
@@ -140,29 +153,28 @@ bool LinuxEventListener::empty() const {
 	return taskMap.empty();
 }
 
-void LinuxEventListener::clear() {
+void LinuxEventListener::epilog() {
+	std::lock_guard<std::mutex> _(queueLock);
+	if (moveToProvider) {
+
+		auto e = taskMap.end();
+		for (auto &&f: fdmap) {
+			auto itr = taskMap.find(RKey(f.fd,f.events));
+			if (itr != e) {
+				moveToProvider.runAsync(AsyncResource(f.fd, f.events), itr->second.org_timeout, itr->second.taskFn);
+			}
+		}
+		moveToProvider = nullptr;
+	}
+
 	taskMap.clear();
 	fdmap.clear();
-
-	pollfd xfd;
-	xfd.fd = intrWaitHandle;
-	xfd.events = POLLIN;
-	xfd.revents = 0;
-	fdmap.push_back(xfd);
-
-	exitFlag = false;
-
 }
 
-void LinuxEventListener::moveTo(AbstractStreamEventDispatcher& target) {
-	auto e = taskMap.end();
-	for (auto &&f: fdmap) {
-		auto itr = taskMap.find(RKey(f.fd,f.events));
-		if (itr != e) {
-			target.runAsync(AsyncResource(f.fd, f.events), itr->second.org_timeout, itr->second.taskFn);
-		}
-	}
-	clear();
+void LinuxEventListener::moveTo(AsyncProvider target) {
+	std::lock_guard<std::mutex> _(queueLock);
+	moveToProvider = target;
+	stop();
 }
 
 LinuxEventListener::Task LinuxEventListener::addTask(const TaskAddRequest& req) {

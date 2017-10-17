@@ -15,6 +15,9 @@
 class MTCounter {
 public:
 
+	MTCounter():counter(0) {}
+	MTCounter(unsigned int counter):counter(counter) {}
+
 	void inc() {
 		std::unique_lock<std::mutex> _(lock);
 		counter++;

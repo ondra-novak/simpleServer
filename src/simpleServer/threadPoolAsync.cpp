@@ -2,6 +2,8 @@
 
 #include <thread>
 
+#include "exceptions.h"
+
 namespace simpleServer {
 
 
@@ -31,9 +33,21 @@ PEventListener ThreadPoolAsyncImpl::getListener() {
 
 
 void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
-	auto lst = getListener();
-	lst->runAsync(resource,timeout, fn);
-
+	int tries = 0;
+	do {
+		try {
+			auto lst = getListener();
+			lst->runAsync(resource,timeout, fn);
+			return;
+		} catch (OutOfSpaceException) {
+			Sync _(lock);
+			tries++;
+			if (tries >= cQueue.size()) {
+				reqListenerCount++;
+				if (reqListenerCount>reqThreadCount) reqThreadCount++;
+			}
+		}
+	}while(true);
 }
 
 
@@ -67,6 +81,17 @@ ThreadPoolAsyncImpl::ThreadPoolAsyncImpl() {
 
 void ThreadPoolAsyncImpl::worker() {
 	for(;;) {
+
+		if (cQueue.size() > reqListenerCount) {
+			Sync _(lock);
+			if (cQueue.size() > reqListenerCount) {
+				PEventListener lst = cQueue.front();
+				cQueue.pop();
+				lst->moveTo(this);
+			}
+		}
+
+
 		PEventListener lst = tQueue.pop();
 		if (lst == nullptr) {
 			tQueue.push(nullptr);
@@ -118,6 +143,8 @@ ThreadPoolAsync::~ThreadPoolAsync() {
 }
 
 void ThreadPoolAsyncImpl::runAsync(const CompletionFn& completion) {
+	auto lst = getListener();
+	lst->runAsync(completion);
 }
 
 ThreadPoolAsync::operator AsyncProvider() const {
