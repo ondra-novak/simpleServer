@@ -326,12 +326,14 @@ public:
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider);
 
+	virtual bool canRunAsync() const;
+
 
 	template<typename Fn>
 	class AsyncDirectCall {
 	public:
 
-		AsyncDirectCall(AsyncState state, const BinaryData &data, const Fn &fn):state(state),data(data),fn(fn) {}
+		AsyncDirectCall(AsyncState state, const BinaryView &data, const Fn &fn):state(state),data(data),fn(fn) {}
 		void operator()() const {
 			fn(data.empty()?asyncEOF:asyncOK, data);
 		}
@@ -391,7 +393,7 @@ public:
 				callbackFn(x);
 			});
 		} else {
-			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn)));
+			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn));
 		}
 
 	}
@@ -586,6 +588,11 @@ public:
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {
 		return ptr->setAsyncProvider(asyncProvider);
 	}
+
+	bool canRunAsync() const {
+		return ptr->canRunAsync();
+	}
+
 
 
 };

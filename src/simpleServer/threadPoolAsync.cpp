@@ -11,10 +11,10 @@ ThreadPoolAsyncImpl::~ThreadPoolAsyncImpl() {
 	stop();
 }
 
-PEventListener ThreadPoolAsyncImpl::getListener() {
+PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 	Sync _(lock);
-	PEventListener lst;
-	while (cQueue.size() < reqListenerCount) {
+	PStreamEventDispatcher lst;
+	while (cQueue.size() < reqDispatcherCount) {
 		lst = AbstractStreamEventDispatcher::create();
 		cQueue.push(lst);
 		tQueue.push(lst);
@@ -34,26 +34,33 @@ PEventListener ThreadPoolAsyncImpl::getListener() {
 
 void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
 	int tries = 0;
+	auto retry = [&] {
+		Sync _(lock);
+		++tries;
+		if (tries >= cQueue.size())  {
+			reqDispatcherCount++;
+			if (reqDispatcherCount>reqThreadCount) reqThreadCount++;
+		}
+	};
 	do {
 		try {
 			auto lst = getListener();
-			lst->runAsync(resource,timeout, fn);
-			return;
-		} catch (OutOfSpaceException) {
-			Sync _(lock);
-			tries++;
-			if (tries >= cQueue.size()) {
-				reqListenerCount++;
-				if (reqListenerCount>reqThreadCount) reqThreadCount++;
+			if (lst->getPendingCount()>=taskLimit) {
+				retry();
+			} else {
+				lst->runAsync(resource,timeout, fn);
+				return;
 			}
+		} catch (OutOfSpaceException) {
+			retry();
 		}
 	}while(true);
 }
 
 
-void ThreadPoolAsyncImpl::setCountOfListeners(unsigned int count) {
+void ThreadPoolAsyncImpl::setCountOfDispatchers(unsigned int count) {
 	Sync _(lock);
-	reqListenerCount = count;
+	reqDispatcherCount = count;
 }
 
 void ThreadPoolAsyncImpl::setCountOfThreads(unsigned int count) {
@@ -76,23 +83,26 @@ void ThreadPoolAsyncImpl::stop() {
 
 }
 
-ThreadPoolAsyncImpl::ThreadPoolAsyncImpl() {
+void ThreadPoolAsyncImpl::setTasksPerDispLimit(unsigned int count) {
+	Sync _(lock);
+	taskLimit = count;
+
 }
 
 void ThreadPoolAsyncImpl::worker() {
 	for(;;) {
 
-		if (cQueue.size() > reqListenerCount) {
+		if (cQueue.size() > reqDispatcherCount) {
 			Sync _(lock);
-			if (cQueue.size() > reqListenerCount) {
-				PEventListener lst = cQueue.front();
+			if (cQueue.size() > reqDispatcherCount) {
+				PStreamEventDispatcher lst = cQueue.front();
 				cQueue.pop();
 				lst->moveTo(this);
 			}
 		}
 
 
-		PEventListener lst = tQueue.pop();
+		PStreamEventDispatcher lst = tQueue.pop();
 		if (lst == nullptr) {
 			tQueue.push(nullptr);
 			return;
@@ -117,15 +127,16 @@ void ThreadPoolAsyncImpl::worker() {
 	}
 }
 
-AsyncProvider ThreadPoolAsync::create(unsigned int numThreads, unsigned int numListeners) {
+AsyncProvider ThreadPoolAsync::create(unsigned int numThreads, unsigned int numListeners, unsigned int tasksPerDispLimit) {
 	ThreadPoolAsync provider (new ThreadPoolAsyncImpl);
-	provider.setCountOfListeners(numListeners);
+	provider.setCountOfDispatchers(numListeners);
 	provider.setCountOfThreads(numThreads);
+	provider.setTasksPerDispLimit(tasksPerDispLimit);
 	return provider;
 }
 
-void ThreadPoolAsync::setCountOfListeners(unsigned int count) {
-	ptr->setCountOfListeners(count);
+void ThreadPoolAsync::setCountOfDispatchers(unsigned int count) {
+	ptr->setCountOfDispatchers(count);
 }
 
 void ThreadPoolAsync::setCountOfThreads(unsigned int count) {
@@ -145,6 +156,10 @@ ThreadPoolAsync::~ThreadPoolAsync() {
 void ThreadPoolAsyncImpl::runAsync(const CompletionFn& completion) {
 	auto lst = getListener();
 	lst->runAsync(completion);
+}
+
+void ThreadPoolAsync::setTasksPerDispLimit(unsigned int count) {
+	ptr->setTasksPerDispLimit(count);
 }
 
 ThreadPoolAsync::operator AsyncProvider() const {

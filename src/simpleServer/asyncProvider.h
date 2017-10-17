@@ -91,11 +91,16 @@ public:
 	 */
 	virtual void moveTo(AsyncProvider target) = 0;
 
+	///Returns count of pending asynchronous tasks
+	/**
+	 * @return count of pending tasks
+	 */
+	virtual unsigned int getPendingCount() const = 0;
 
 	static RefCntPtr<AbstractStreamEventDispatcher> create();
 };
 
-typedef RefCntPtr<AbstractStreamEventDispatcher> PEventListener;
+typedef RefCntPtr<AbstractStreamEventDispatcher> PStreamEventDispatcher;
 
 
 }

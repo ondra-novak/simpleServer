@@ -39,6 +39,10 @@ BinaryView AbstractStream::write(const BinaryView &databuff, WriteMode wrmode ) 
 
 }
 
+bool AbstractStream::canRunAsync() const {
+	return asyncProvider != nullptr;
+}
+
 BinaryView AbstractStream::writeBuffered(const BinaryView &databuff, WriteMode wrmode ) {
 	//depend on write mode
 	switch (wrmode) {

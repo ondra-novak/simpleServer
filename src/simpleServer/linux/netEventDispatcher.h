@@ -17,10 +17,10 @@
 
 namespace simpleServer {
 
-class LinuxEventListener: public AbstractStreamEventDispatcher {
+class LinuxEventDispatcher: public AbstractStreamEventDispatcher {
 public:
-	LinuxEventListener();
-	virtual ~LinuxEventListener();
+	LinuxEventDispatcher();
+	virtual ~LinuxEventDispatcher();
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
@@ -37,6 +37,7 @@ public:
 
 	virtual void stop() override;
 
+	virtual unsigned int getPendingCount() const override;
 
 protected:
 
@@ -85,7 +86,7 @@ protected:
 	Task addTask(const TaskAddRequest &req);
 
 
-	std::mutex queueLock;
+	mutable std::mutex queueLock;
 	std::queue<TaskAddRequest> queue;
 
 

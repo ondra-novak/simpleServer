@@ -16,7 +16,7 @@
 
 namespace simpleServer {
 
-LinuxEventListener::LinuxEventListener() {
+LinuxEventDispatcher::LinuxEventDispatcher() {
 	int fds[2];
 	pipe2(fds, O_CLOEXEC);
 	intrHandle = fds[1];
@@ -31,12 +31,12 @@ LinuxEventListener::LinuxEventListener() {
 	exitFlag = false;
 }
 
-LinuxEventListener::~LinuxEventListener() {
+LinuxEventDispatcher::~LinuxEventDispatcher() {
 	close(intrHandle);
 	close(intrWaitHandle);
 }
 
-void LinuxEventListener::addTaskToQueue(int s, const CompletionFn &fn, int timeout, int event) {
+void LinuxEventDispatcher::addTaskToQueue(int s, const CompletionFn &fn, int timeout, int event) {
 	TaskInfo nfo;
 	nfo.taskFn = fn;
 	nfo.timeout = timeout == -1?TimePoint::max():std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
@@ -59,7 +59,7 @@ void LinuxEventListener::addTaskToQueue(int s, const CompletionFn &fn, int timeo
 }
 
 
-LinuxEventListener::Task LinuxEventListener::waitForEvent() {
+LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 
 
 	if (exitFlag) {
@@ -126,13 +126,13 @@ LinuxEventListener::Task LinuxEventListener::waitForEvent() {
 }
 
 
-void LinuxEventListener::stop() {
+void LinuxEventDispatcher::stop() {
 	exitFlag = true;
 	sendIntr();
 }
 
 
-void LinuxEventListener::removeTask(int index, TaskMap::iterator &iter) {
+void LinuxEventDispatcher::removeTask(int index, TaskMap::iterator &iter) {
 	std::size_t end = taskMap.size()-1;
 	if (index < taskMap.size()-1) {
 		std::swap(fdmap[index],fdmap[end]);
@@ -141,7 +141,7 @@ void LinuxEventListener::removeTask(int index, TaskMap::iterator &iter) {
 	taskMap.erase(iter);
 }
 
-void LinuxEventListener::runAsync(const AsyncResource& resource, int timeout,const CompletionFn &complfn) {
+void LinuxEventDispatcher::runAsync(const AsyncResource& resource, int timeout,const CompletionFn &complfn) {
 
 	int s = resource.socket;
 	int op = resource.op;
@@ -149,11 +149,17 @@ void LinuxEventListener::runAsync(const AsyncResource& resource, int timeout,con
 
 }
 
-bool LinuxEventListener::empty() const {
+bool LinuxEventDispatcher::empty() const {
 	return taskMap.empty();
 }
 
-void LinuxEventListener::epilog() {
+unsigned int LinuxEventDispatcher::getPendingCount() const {
+	std::lock_guard<std::mutex> _(queueLock);
+	return fdmap.size()-1;
+
+}
+
+void LinuxEventDispatcher::epilog() {
 	std::lock_guard<std::mutex> _(queueLock);
 	if (moveToProvider) {
 
@@ -171,13 +177,13 @@ void LinuxEventListener::epilog() {
 	fdmap.clear();
 }
 
-void LinuxEventListener::moveTo(AsyncProvider target) {
+void LinuxEventDispatcher::moveTo(AsyncProvider target) {
 	std::lock_guard<std::mutex> _(queueLock);
 	moveToProvider = target;
 	stop();
 }
 
-LinuxEventListener::Task LinuxEventListener::addTask(const TaskAddRequest& req) {
+LinuxEventDispatcher::Task LinuxEventDispatcher::addTask(const TaskAddRequest& req) {
 	if (req.first.fd == -1) {
 		CompletionFn fn(req.second.taskFn);
 		return [fn] {fn(asyncOK);};
@@ -194,12 +200,12 @@ LinuxEventListener::Task LinuxEventListener::addTask(const TaskAddRequest& req) 
 	}
 }
 
-void LinuxEventListener::runAsync(const CompletionFn& completion) {
+void LinuxEventDispatcher::runAsync(const CompletionFn& completion) {
 	addTaskToQueue(-1, completion,0,0);
 }
 
 
-void LinuxEventListener::sendIntr() {
+void LinuxEventDispatcher::sendIntr() {
 	unsigned char b = 1;
 	int r = ::write(intrHandle, &b, 1);
 	if (r < 0) {
@@ -207,15 +213,15 @@ void LinuxEventListener::sendIntr() {
 	}
 }
 
-PEventListener AbstractStreamEventDispatcher::create() {
-	return new LinuxEventListener;
+PStreamEventDispatcher AbstractStreamEventDispatcher::create() {
+	return new LinuxEventDispatcher;
 }
 
-std::size_t LinuxEventListener::HashRKey::operator ()(const RKey& key) const {
+std::size_t LinuxEventDispatcher::HashRKey::operator ()(const RKey& key) const {
 	return key.first*16+key.second;
 }
 
-LinuxEventListener::Task LinuxEventListener::runQueue() {
+LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 
 	Task s;
 	std::lock_guard<std::mutex> _(queueLock);
