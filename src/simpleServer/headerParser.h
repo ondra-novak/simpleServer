@@ -25,14 +25,14 @@ public:
 	void clear();
 	void add(const StrViewA key, const StrViewA value);
 
-	template<typename Fn>
+/*	template<typename Fn>
 	bool enumHeaders(Fn fn) {
 		for (auto &&x : hdrMap) {
 			if (!fn(HeaderKeyValue(x.first, x.second))) return false;
-		}
+1		}
 		return true;
 	}
-
+*/
 	std::string serialize();
 
 protected:

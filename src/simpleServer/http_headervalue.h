@@ -7,21 +7,12 @@ namespace simpleServer {
 /** The value can be either defined with a string as content, or undefined */
 class HeaderValue: public StrViewA {
 public:
-	///it is set to true, when value is defined
-	bool defined;
-	HeaderValue():defined(false) {}
-	HeaderValue(const StrViewA &str):defined(true),StrViewA(str) {}
-};
 
+	using StrViewA::StrViewA;
+	bool defined() const {return data != nullptr;}
 
-class HeaderKeyValue {
-public:
-
-	StrViewA key;
-	HeaderValue value;
-
-	HeaderKeyValue(StrViewA key,HeaderValue value):key(key),value(value) {}
-	HeaderKeyValue() {}
+	operator bool() const {return data != nullptr;}
+	bool operator!() const {return data == nullptr;}
 
 };
 }
