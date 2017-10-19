@@ -16,7 +16,7 @@ BinaryView AbstractStream::write(const BinaryView &databuff, WriteMode wrmode ) 
 
 	//attempt to write the buffer itself causes that directwrite is called
 	if (databuff.data == wrBuff.ptr) {
-		return writeBuffer(databuff, wrmode);
+		return databuff.substr(writeBuffer(databuff, wrmode));
 	}
 	const BinaryView *b = &databuff;
 	BinaryView tmp;

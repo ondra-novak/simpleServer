@@ -7,8 +7,12 @@ namespace simpleServer {
 	class LimitedStream: public AbstractStream {
 	public:
 
-		LimitedStream(Stream source, std::size_t readLimit, std::size_t writeLimit)
-			:source(source), readLimit(readLimit), writeLimit(writeLimit) {}
+		LimitedStream(Stream source, std::size_t readLimit, std::size_t writeLimit, unsigned char fillChar)
+			:source(source), readLimit(readLimit), writeLimit(writeLimit),fillChar(fillChar) {}
+		~LimitedStream() {
+			source.commitWriteBuffer(wrBuff.wrpos);
+			padding();
+		}
 
 
 		virtual int setIOTimeout(int timeoutms) {return source.setIOTimeout(timeoutms);}
@@ -29,14 +33,10 @@ namespace simpleServer {
 			return source.getWriteBuffer((size_t)-1);
 		}
 		virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) {
-			if (buffer.data == wrBuff.ptr) {
-				source.commitWriteBuffer(buffer.length);
-				flush(wrmode);
-			}
-			std::size_t sz  = source.write(buffer.substr(0,writeLimit),wrmode);
-			source.getWriteBuffer((size_t)-1);
-			writeLimit-=sz;
-			return sz;
+			BinaryView b = source.write(buffer.substr(0,writeLimit),wrmode);
+			std::size_t written = buffer.length - b.length;
+			writeLimit-=written;
+			return written;
 		}
 		virtual bool waitForRead(int timeoutms) {
 			return source.waitForInput(timeoutms);
@@ -51,22 +51,52 @@ namespace simpleServer {
 			source.putBackEof();
 		}
 		virtual void closeOutput() {
-			source.closeOutput();
+			padding();
 		}
 
 		virtual void flushOutput() {
 			source.flush(writeAndFlush);
 		}
 
-		static Stream create(Stream sourceStream, std::size_t limit) {
-			return new LimitedStream(sourceStream, limit);
+		static Stream create(Stream sourceStream, std::size_t readLimit, std::size_t writeLimit, unsigned char fillChar = 0) {
+			return new LimitedStream(sourceStream, readLimit, writeLimit, fillChar);
 		}
 
-		virtual void readAsyncBuffer(const Callback &cb) {
+		virtual bool canRunAsync() const {
+			return source.canRunAsync();
+		}
+
+		virtual void readAsyncBuffer(const Callback &cb) override {
+			RefCntPtr<LimitedStream> me(this);
+			Callback ccpy(cb);
+			source.readASync([me, ccpy](AsyncState st, const BinaryView &b){
+				if (b.length > me->readLimit) {
+					BinaryView newb = b.substr(0,me->readLimit);
+					me->source.putBack(b.substr(me->readLimit));
+					me->readLimit = 0;
+					ccpy(st, newb);
+				} else {
+					me->readLimit-=b.length;
+					ccpy(st, b);
+				}
+			});
 
 		}
-		virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) {
-
+		virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) override {
+			BinaryView ldata = data.substr(0,writeLimit);
+			std::size_t delta = ldata.length;
+			writeLimit -= delta;
+			Callback ccpy(cb);
+			RefCntPtr<LimitedStream> me(this);
+			source.writeAsync(ldata, [me,ccpy,delta](AsyncState st, const BinaryView &remain) {
+				if (st == asyncOK) {
+					me->writeLimit += remain.length;
+					ccpy(st,remain);
+				} else {
+					me->writeLimit += delta;
+					ccpy(st,remain);
+				}
+			});
 		}
 
 
@@ -74,7 +104,14 @@ namespace simpleServer {
 		Stream source;
 		std::size_t readLimit;
 		std::size_t writeLimit;
+		unsigned char fillChar;
 
+		void padding() {
+			while (writeLimit) {
+				source(fillChar);
+				writeLimit--;
+			}
+		}
 
 	};
 

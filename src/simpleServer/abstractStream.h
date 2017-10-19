@@ -2,6 +2,7 @@
 #include "refcnt.h"
 #include "stringview.h"
 #include "asyncProvider.h"
+#include "exceptions.h"
 
 namespace simpleServer {
 
@@ -27,6 +28,8 @@ class AsyncResource;
 ///Very abstract interface which descibes protocol to access data in the stream
 class IGeneralStream {
 public:
+
+	typedef std::function<void(AsyncState, BinaryView)> Callback;
 
 
 	///Describes outbut buffer
@@ -148,7 +151,6 @@ protected:
 	virtual void flushOutput() = 0;
 
 
-	typedef std::function<void(AsyncState, BinaryView)> Callback;
 
 
 
@@ -352,13 +354,15 @@ public:
 	virtual bool canRunAsync() const;
 
 
+	AsyncProvider getAsyncProvider() const {return asyncProvider;}
+
 	template<typename Fn>
 	class AsyncDirectCall {
 	public:
 
 		AsyncDirectCall(AsyncState state, const BinaryView &data, const Fn &fn):state(state),data(data),fn(fn) {}
 		void operator()() const {
-			fn(data.empty()?asyncEOF:asyncOK, data);
+			fn(state, data);
 		}
 
 	protected:
@@ -384,7 +388,7 @@ public:
 		BinaryView data = read(true);
 		bool eof = isEof(data);
 		if (!data.empty() || eof)
-			asyncProvider.runAsync(AsyncDirectCall<Fn>(eof?asyncEOF:asyncOK,data, callbackFn));
+			fakeAsync(eof?asyncEOF:asyncOK, data, callbackFn);
 		else
 			readAsyncBuffer(callbackFn);
 	}
@@ -407,11 +411,11 @@ public:
 	template<typename Fn>
 	void writeAsync(BinaryView data, const Fn &callbackFn) {
 
-		if (data.data == wrBuff.ptr)
-			writeAsyncBuffer(data, callbackFn);
+		if (isMyBuffer(data))
+			writeAsyncBuffer(callbackFn, data);
 		BinaryView remainData = write(data,writeNonBlock);
 		if (remainData == data) {
-			writeAsyncBuffer(wrBuff.getView(), [=](AsyncState status, BinaryView remain) {
+			writeAsyncBuffer([=](AsyncState status, BinaryView remain) {
 				if (status == asyncOK) {
 					wrBuff.wrpos = 0;
 					write(remain, writeNonBlock);
@@ -420,8 +424,9 @@ public:
 				} else {
 					callbackFn(status,remain);
 				}
-			});
+			},wrBuff.getView());
 		} else {
+			fakeAsync(asyncOK,remainData, callbackFn);
 			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn));
 		}
 
@@ -442,8 +447,16 @@ protected:
 
 
 	BinaryView writeBuffered(const BinaryView &buffer, WriteMode wrmode );
+	bool isMyBuffer(const BinaryView &buffer) const {
+		return buffer.data>=wrBuff.ptr && buffer.data < wrBuff.ptr+wrBuff.size;
+	}
 
-
+	///executes function through asyncProvider so it appears executed asynchronously
+	template<typename Fn>
+	void fakeAsync(AsyncState st, const BinaryView &data, const Fn &fn) {
+		if (asyncProvider == nullptr) throw NoAsyncProviderException();
+		asyncProvider.runAsync(AsyncDirectCall<Fn>(st,data, fn));
+	}
 
 };
 
@@ -616,6 +629,9 @@ public:
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {
 		return ptr->setAsyncProvider(asyncProvider);
+	}
+	AsyncProvider getAsyncProvider() const {
+		return ptr->getAsyncProvider();
 	}
 
 	bool canRunAsync() const {

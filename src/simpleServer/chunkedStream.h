@@ -7,7 +7,10 @@ namespace simpleServer {
 template<std::size_t chunkSize=4096>
 class ChunkedStream: public AbstractStream {
 public:
-	ChunkedStream(const Stream &source):source(source) {}
+	ChunkedStream(const Stream &source):source(source)
+	{
+		setAsyncProvider(source.getAsyncProvider());
+	}
 	~ChunkedStream() {
 		closeOutput();
 
@@ -238,6 +241,35 @@ void ChunkedStream<chunkSize>::closeOutput() {
 template<std::size_t chunkSize>
 void ChunkedStream<chunkSize>::flushOutput() {
 	source.flush(writeWholeBuffer);
+}
+
+template<std::size_t chunkSize>
+inline void ChunkedStream<chunkSize>::readAsyncBuffer(const Callback& cb) {
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	BinaryView rd = source.read(true);
+	if (isEof(rd)) {
+		fakeAsync(asyncEOF, eofConst, cb);
+	} else if (rd.empty()) {
+		Callback ccb = cb;
+		RefCntPtr<ChunkedStream> me(this);
+		source.readASync([=](AsyncState st, const BinaryView &data){
+			if (st == asyncOK) {
+				putBack(data);
+				BinaryView rd = source.read(true);
+				if (isEof(rd)) ccb(asyncEOF, BinaryView(0,0));
+				else if (rd.empty()) me->readAsyncBuffer(ccb);
+				else ccb(asyncOK, rd);
+			} else {
+				ccb(st,data);
+			}
+		});
+	} else {
+		fakeAsync(asyncOK, rd, cb);
+	}
+}
+
+template<std::size_t chunkSize>
+inline void ChunkedStream<chunkSize>::writeAsyncBuffer(const Callback& cb, BinaryView data) {
 }
 
 template<std::size_t chunkSize>

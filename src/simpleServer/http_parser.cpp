@@ -156,7 +156,7 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 				length = std::strtol(te.data,0,10);
 			}
 		}
-		return LimitedStream::create(stream, length);
+		return LimitedStream::create(stream, length,0);
 	}
 }
 
