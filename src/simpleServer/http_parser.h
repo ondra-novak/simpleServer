@@ -1,10 +1,12 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <unordered_map>
 
 
 #include "abstractStream.h"
+#include "common/stringpool.h"
 #include "http_headervalue.h"
 
 #include "refcnt.h"
@@ -14,11 +16,37 @@ namespace simpleServer {
 
 class HTTPRequest;
 class HTTPRequestData;
+
 typedef RefCntPtr<HTTPRequestData> PHTTPRequestData;
 
 
-typedef std::function<void(Stream, HTTPRequest)> HTTPHandler;
+typedef std::function<void(HTTPRequest)> HTTPHandler;
 
+
+class HTTPResponse {
+public:
+
+	HTTPResponse(int code);
+	HTTPResponse(int code, StrViewA response);
+
+	HTTPResponse &header(const StrViewA key, const StrViewA value);
+	HTTPResponse &contentLength(std::size_t sz);
+
+	void clear();
+
+
+protected:
+
+	typedef StringPool<char> Pool;
+	typedef std::map<Pool::String, Pool::String> HdrMap;
+
+
+
+	Pool pool;
+
+
+
+};
 
 
 class HTTPRequestData: public RefCntObj {
@@ -33,6 +61,7 @@ public:
 	HdrMap::const_iterator begin() const;
 	///End of the headers
 	HdrMap::const_iterator end() const;
+
 
 
 
@@ -68,6 +97,99 @@ public:
 	 */
 	std::string getURI(bool secure=true) const;
 
+
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body);
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body, int statusCode);
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 * @param statusMessage sends with specified status message. (i.e. "Not found")
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body, int statusCode, StrViewA statusMessage);
+	///Generates error page
+	/**
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 *
+	 */
+	void sendErrorPage(int statusCode);
+	///Generates error page
+	/**
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 * @param statusMessage sends with specified status message. (i.e. "Not found")
+	 */
+	void sendErrorPage(int statusCode, StrViewA statusMessage);
+
+
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType);
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @param statusCode allows to set status code
+	 * @param statusMessage allows to set status message
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType, int statusCode);
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @param statusCode allows to set status code
+	 * @param statusMessage allows to set status message
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType, int statusCode, StrViewA statusMessage);
+
+
+	///Generates response using HTTPResponse object
+	/**
+	 * @param resp object contains headers
+	 * @param content content
+	 */
+	void sendResponse(const HTTPResponse &resp, StrViewA body);
+	///Generates response using HTTPResponse object
+	/**
+	 * @param resp object contains headers
+	 * @return stream
+	 */
+	Stream sendResponse(const HTTPResponse &resp);
+
+
+	void redirect(StrViewA url);
+
+
+
 protected:
 
 	std::vector<char> requestHdrLineBuffer;
@@ -79,6 +201,8 @@ protected:
 	StrViewA version;
 	bool keepAlive;
 
+	Stream originStream;
+	Stream reqStream;
 
 	///accepts line while it parses headers
 	/**
@@ -111,6 +235,9 @@ public:
 	using PHTTPRequestData::RefCntPtr;
 
 
+	///Parses stream for http request and calls handler with informations about this request
+	/** Function will run asynchronously if there is AsyncProvider assigned to the stream */
+	void parseHttp(Stream stream, HTTPHandler handler);
 
 
 
@@ -120,9 +247,6 @@ public:
 
 
 
-///Parses stream for http request and calls handler with informations about this request
-/** Function will run asynchronously if there is AsyncProvider assigned to the stream */
-void parseHttp(Stream stream, HTTPHandler handler);
 
 
 

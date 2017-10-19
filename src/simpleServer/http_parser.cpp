@@ -49,8 +49,8 @@ bool HTTPRequestData::parseHeaders(StrViewA hdr) {
 
 void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handler) {
 	try {
-		Stream stream2 = prepareRequest(stream);
-		handler(stream2, HTTPRequest(this));
+		reqStream= prepareRequest(stream);
+		handler(HTTPRequest(this));
 	} catch (const HTTPStatusException &e) {
 		(void)e;
 		//TODO handle exception
@@ -62,6 +62,8 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 }
 
 void HTTPRequestData::parseHttp(Stream stream, HTTPHandler handler) {
+
+	originStream=stream;
 
 	RefCntPtr<HTTPRequestData> me(this);
 	if (stream.canRunAsync()) {
