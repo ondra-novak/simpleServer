@@ -27,11 +27,11 @@ public:
 	virtual void closeOutput();
 	virtual void flushOutput();
 
-	virtual void doReadAsync(const Callback &cb) override;
-	virtual void doWriteAsync(const Callback &cb, BinaryView data) override;
+	virtual void readAsyncBuffer(const Callback &cb) override;
+	virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) override;
 
 
-	Stream create(const Stream &source) {
+	static Stream create(const Stream &source) {
 		return new ChunkedStream(source);
 	}
 

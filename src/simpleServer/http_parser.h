@@ -77,6 +77,8 @@ protected:
 	StrViewA method;
 	StrViewA path;
 	StrViewA version;
+	bool keepAlive;
+
 
 	///accepts line while it parses headers
 	/**
@@ -97,6 +99,8 @@ protected:
 
 	bool parseHeaders(StrViewA hdr);
 	void runHandler(const Stream& stream, const HTTPHandler& handler);
+	void parseReqLine(StrViewA line);
+	Stream prepareStream(const Stream &stream);
 };
 
 

@@ -7,10 +7,11 @@ namespace simpleServer {
 	class LimitedStream: public AbstractStream {
 	public:
 
-		LimitedStream(Stream source, std::size_t readLimit):source(source), readLimit(readLimit) {}
+		LimitedStream(Stream source, std::size_t readLimit, std::size_t writeLimit)
+			:source(source), readLimit(readLimit), writeLimit(writeLimit) {}
 
 
-		virtual int setIOTimeout(int timeoutms) {return source.setIOTimeout();}
+		virtual int setIOTimeout(int timeoutms) {return source.setIOTimeout(timeoutms);}
 		virtual BinaryView readBuffer(bool nonblock) {
 			BinaryView b = source.read(nonblock);
 			if (b.length > readLimit) {
@@ -25,16 +26,23 @@ namespace simpleServer {
 			}
 		}
 		virtual MutableBinaryView createOutputBuffer() {
-			return noOutputMode();
+			return source.getWriteBuffer((size_t)-1);
 		}
 		virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) {
-			noOutputMode();throw;
+			if (buffer.data == wrBuff.ptr) {
+				source.commitWriteBuffer(buffer.length);
+				flush(wrmode);
+			}
+			std::size_t sz  = source.write(buffer.substr(0,writeLimit),wrmode);
+			source.getWriteBuffer((size_t)-1);
+			writeLimit-=sz;
+			return sz;
 		}
 		virtual bool waitForRead(int timeoutms) {
 			return source.waitForInput(timeoutms);
 		}
 		virtual bool waitForWrite(int timeoutms) {
-			noOutputMode();throw;
+			source.waitForOutput(timeoutms);
 		}
 
 		virtual void closeInput() {
@@ -43,21 +51,29 @@ namespace simpleServer {
 			source.putBackEof();
 		}
 		virtual void closeOutput() {
-			noOutputMode();throw;
+			source.closeOutput();
 		}
-
 
 		virtual void flushOutput() {
-			noOutputMode();
+			source.flush(writeAndFlush);
 		}
 
-		Stream create(Stream sourceStream, std::size_t limit) {
+		static Stream create(Stream sourceStream, std::size_t limit) {
 			return new LimitedStream(sourceStream, limit);
 		}
+
+		virtual void readAsyncBuffer(const Callback &cb) {
+
+		}
+		virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) {
+
+		}
+
 
 	protected:
 		Stream source;
 		std::size_t readLimit;
+		std::size_t writeLimit;
 
 
 	};

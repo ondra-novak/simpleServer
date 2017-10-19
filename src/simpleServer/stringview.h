@@ -133,6 +133,13 @@ namespace simpleServer {
 			operator StringViewBase() const {
 				return source.substr(startPos);
 			}
+
+			operator bool() const {
+				return startPos < source.length;
+			}
+			bool operator !() const {
+				return startPos >= source.length;
+			}
 		protected:
 			StringViewBase source;
 			StringViewBase separator;

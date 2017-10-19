@@ -124,7 +124,7 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 	return ret;
 }
 
-void TCPStream::doReadAsync(const Callback& cb) {
+void TCPStream::readAsyncBuffer(const Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	RefCntPtr<TCPStream> me(this);
 
@@ -136,7 +136,7 @@ void TCPStream::doReadAsync(const Callback& cb) {
 			if (isEof(r)) {
 				cbc(asyncEOF,r);
 			} else if (r.empty()) {
-				me->doReadAsync(cbc);
+				me->readAsyncBuffer(cbc);
 			}else {
 				cbc(state, r);
 			}
@@ -149,7 +149,7 @@ void TCPStream::doReadAsync(const Callback& cb) {
 	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
 }
 
-void TCPStream::doWriteAsync(const Callback& cb,BinaryView data) {
+void TCPStream::writeAsyncBuffer(const Callback& cb,BinaryView data) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	RefCntPtr<TCPStream> me(this);
 
@@ -159,7 +159,7 @@ void TCPStream::doWriteAsync(const Callback& cb,BinaryView data) {
 		if (state == asyncOK) {
 			size_t sz = me->writeBuffer(data, writeNonBlock);
 			if (sz == 0) {
-				me->doWriteAsync(cbc, data);
+				me->writeAsyncBuffer(cbc, data);
 			}else {
 				cbc(state, data.substr(sz));
 			}

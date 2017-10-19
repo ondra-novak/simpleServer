@@ -77,7 +77,6 @@ public:
 	 */
 	virtual int setIOTimeout(int timeoutms) = 0;
 
-
 protected:
 
 	///Read buffer
@@ -87,8 +86,24 @@ protected:
 	 * can be empty buffer, if the operation would block. Setting to false causes, that operation
 	 * can block while it waiting for the first byte. Function should not block while there is
 	 * at least one byte available to read by non-blocking way.
+	 *
+	 * @note function doesn't support putBack() operation declared on AbstractStream. It is
+	 * supposed to be used when buffering is handled externally
 	 */
 	virtual BinaryView readBuffer(bool nonblock) = 0;
+
+	///Write buffer to the stream
+	/** @param buffer Writes buffer to the output stream
+	 * @param wrmode specify one of writing mode
+	 *
+	 * @return count of bytes written
+	 *
+	 * @note this function doesn't provide buffering. It is supposed to be used when buffering is
+	 * handled externally
+	 *
+	 */
+	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) = 0;
+
 	///Request to create output buffer.
 	/** To start writing, caller requires buffer to write bytes. This function is called
 	 * before very first writing. Function should supply a buffer with optimal size for
@@ -100,15 +115,18 @@ protected:
 	 */
 	virtual MutableBinaryView createOutputBuffer() = 0;
 
-
-	///Write buffer to the stream
-	/** @param buffer Writes buffer to the output stream
-	 * @param wrmode specify one of writing mode
+	///Read to buffer asynchronoysly
+	/**
+	 * @param cb callback function
 	 *
-	 * @return count of bytes written
-	 *
+	 * @note doesn't support putBack() function. Use only if you need direct access to the stream
 	 */
-	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) = 0;
+	virtual void readAsyncBuffer(const Callback &cb) = 0;
+	///
+	virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) = 0;
+
+
+
 	///Request to block thread until there is data available for read
 	/**
 	 * @param timeout specifies timeout in miliseconds. A negative value is interpreted as
@@ -133,8 +151,6 @@ protected:
 	typedef std::function<void(AsyncState, BinaryView)> Callback;
 
 
-	virtual void doReadAsync(const Callback &cb) = 0;
-	virtual void doWriteAsync(const Callback &cb, BinaryView data) = 0;
 
 	virtual ~IGeneralStream() {}
 protected:
@@ -326,6 +342,13 @@ public:
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider);
 
+	///Returns true, if asynchronous operations are available
+	/**
+	 * @retval false asynchronous operations cannot be used. Try to call setAsyncProvider, however
+	 * some streams doesn't support asynchronous operations at all
+	 *
+	 * @retval true asynchronous operations are available
+	 */
 	virtual bool canRunAsync() const;
 
 
@@ -363,7 +386,7 @@ public:
 		if (!data.empty() || eof)
 			asyncProvider.runAsync(AsyncDirectCall<Fn>(eof?asyncEOF:asyncOK,data, callbackFn));
 		else
-			doReadAsync(callbackFn);
+			readAsyncBuffer(callbackFn);
 	}
 
 	///Write synchronously
@@ -384,13 +407,19 @@ public:
 	template<typename Fn>
 	void writeAsync(BinaryView data, const Fn &callbackFn) {
 
+		if (data.data == wrBuff.ptr)
+			writeAsyncBuffer(data, callbackFn);
 		BinaryView remainData = write(data,writeNonBlock);
 		if (remainData == data) {
-			doWriteAsync(wrBuff.getView(), [=](AsyncState status, BinaryView remain) {
-				wrBuff.wrpos = 0;
-				write(remain, writeNonBlock);
-				BinaryView x = write(data, writeNonBlock);
-				callbackFn(x);
+			writeAsyncBuffer(wrBuff.getView(), [=](AsyncState status, BinaryView remain) {
+				if (status == asyncOK) {
+					wrBuff.wrpos = 0;
+					write(remain, writeNonBlock);
+					BinaryView x = write(data, writeNonBlock);
+					callbackFn(status,x);
+				} else {
+					callbackFn(status,remain);
+				}
 			});
 		} else {
 			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn));

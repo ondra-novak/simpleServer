@@ -1,5 +1,13 @@
 #include "http_parser.h"
 
+#include <cstdlib>
+
+
+#include "chunkedStream.h"
+#include "exceptions.h"
+
+#include "limitedStream.h"
+
 namespace simpleServer {
 
 
@@ -33,7 +41,7 @@ bool HTTPRequestData::parseHeaders(StrViewA hdr) {
 		StrViewA line = splt();
 		auto kvsp = line.split(":");
 		StrViewA key = trim(splt());
-		StrViewA value = trim(splt);
+		StrViewA value = trim(StrViewA(splt));
 		hdrMap.insert(std::make_pair(key, value));
 	}
 	return version == "HTTP/1.0" || version == "HTTP/1.1";
@@ -43,7 +51,10 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 	try {
 		Stream stream2 = prepareRequest(stream);
 		handler(stream2, HTTPRequest(this));
-	} catch (std::exception &e) {
+	} catch (const HTTPStatusException &e) {
+		(void)e;
+		//TODO handle exception
+	} catch (const std::exception &e) {
 		(void)e;
 		//TODO handle exception
 	}
@@ -100,8 +111,7 @@ Stream HTTPRequestData::prepareRequest(const Stream& stream) {
 		auto p = hdr.indexOf("\r\n\t");
 		if (p == hdr.npos) {
 			parseHeaders(hdr);
-			//todo scan some headers
-			return stream;
+			return  prepareStream(stream);
 		} else {
 			auto beg = requestHdrLineBuffer.begin() + p;
 			auto end = beg + 3;
@@ -117,7 +127,38 @@ std::size_t simpleServer::HTTPRequestData::Hash::operator ()(
 	std::_Hash_impl::hash(text.data, text.length);
 }
 
+void HTTPRequestData::parseReqLine(StrViewA line) {
+	auto splt = line.split(" ");
+	method = splt();
+	path = splt();
+	version = splt();
+}
 
+Stream HTTPRequestData::prepareStream(const Stream& stream) {
+	HeaderValue cc = operator[]("Connection");
+	if (cc == "keep-alive") {
+		keepAlive = true;
+	}else if (cc == "close") {
+		keepAlive = false;
+	} else {
+		keepAlive = version == "HTTP/1.1";
+	}
+
+	HeaderValue te = operator[]("Transfer-Encoding");
+	if (te == "chunked") {
+		return ChunkedStream<>::create(stream);
+	} else {
+		HeaderValue cl = operator[]("Content-Length");
+		bool hasLength = false;
+		long length;
+		if (cl.defined()) {
+			if (isdigit(cl[0])) {
+				length = std::strtol(te.data,0,10);
+			}
+		}
+		return LimitedStream::create(stream, length);
+	}
+}
 
 }
 

@@ -76,7 +76,20 @@ public:
 	std::string getMessage() const {
 		return "Unexpected end of stream";
 	}
+};
 
+class HTTPStatusException: public Exception {
+public:
+	HTTPStatusException(int code, const std::string &message):code(code),message(message) {}
+	HTTPStatusException(int code, std::string &&message):code(code),message(std::move(message)) {}
+
+	std::string getMessage() const;
+
+	int getStatusCode() const {return code;}
+	const std::string &getStatusMessage() const {return message;}
+public:
+	int code;
+	std::string message;
 };
 
 
