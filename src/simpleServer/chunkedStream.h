@@ -12,7 +12,8 @@ public:
 		setAsyncProvider(source.getAsyncProvider());
 	}
 	~ChunkedStream() {
-		closeOutput();
+		if (wrBuff.size)
+			closeOutput();
 
 	}
 
@@ -154,7 +155,7 @@ std::size_t ChunkedStream<chunkSize>::writeBuffer(BinaryView buffer, WriteMode w
 	//so we need to split function into two cases
 	//the argument is chunkBuffer = this means that AbstractStream is trying to free some space in the buffer
 	//the argument is other buffer = this means that we must put data to the chunkBuffer
-	if (buffer.data == chunkBuffer+chunkBufferDataStart) {
+	if (isMyBuffer(buffer)) {
 		//write own buffer
 
 		//chunk cannot be written in non-blocking mode (it will be writen during wait)
@@ -232,6 +233,7 @@ void ChunkedStream<chunkSize>::closeInput() {
 template<std::size_t chunkSize>
 void ChunkedStream<chunkSize>::closeOutput() {
 	if (!outputClosed) {
+		flush(writeWholeBuffer);
 		BinaryView endChunk(StrViewA("0\r\n\r\n"));
 		source.write(endChunk,writeWholeBuffer);
 		outputClosed = true;

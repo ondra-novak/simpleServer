@@ -133,8 +133,8 @@ void LinuxEventDispatcher::stop() {
 
 
 void LinuxEventDispatcher::removeTask(int index, TaskMap::iterator &iter) {
-	std::size_t end = taskMap.size()-1;
-	if (index < taskMap.size()-1) {
+	std::size_t end = fdmap.size()-1;
+	if (index < fdmap.size()-1) {
 		std::swap(fdmap[index],fdmap[end]);
 	}
 	fdmap.resize(end);

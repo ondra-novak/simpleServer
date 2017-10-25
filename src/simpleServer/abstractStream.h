@@ -291,7 +291,7 @@ public:
 	void flush(WriteMode wrmode = writeAndFlush) {
 		if (wrBuff.size) {
 			BinaryView b = wrBuff.getView();
-			auto r = writeBuffer(b,writeAndFlush);
+			auto r = writeBuffer(b,wrmode);
 			if (r == 0) return;
 			wrBuff.wrpos = 0;
 			if (r != b.length) {
@@ -637,6 +637,30 @@ public:
 	bool canRunAsync() const {
 		return ptr->canRunAsync();
 	}
+
+	Stream &operator << (StrViewA text) {
+		write(BinaryView(text));
+		return *this;
+	}
+
+	Stream &operator << (std::intptr_t x) {
+		if (x < 0) {
+			operator()('-');
+			x = -x;
+		}
+		char buffer[100];
+		if (x == 0) operator()('0');
+		char *p = buffer+sizeof(buffer);
+		char *b = p;
+		while (x) {
+			p--;
+			*p=(x%10) + '0';
+			x/=10;
+		}
+		write(BinaryView(StrViewA(p,b-p)));
+		return *this;
+	}
+
 
 
 

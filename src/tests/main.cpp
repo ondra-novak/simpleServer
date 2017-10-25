@@ -15,6 +15,7 @@
 #include "../simpleServer/tcp.h"
 #include "../simpleServer/threadPoolAsync.h"
 #include "../simpleServer/common/mtcounter.h"
+#include "../simpleServer/http_parser.h"
 
 using namespace simpleServer;
 
@@ -41,9 +42,34 @@ protected:
 
 };
 
+void runServerTest() {
+
+	StreamFactory server = TCPListen::create(false,8787);
+	AsyncProvider async = ThreadPoolAsync::create(2,1);
+	MTCounter  wait(1);
+	server->runServerAsync(async, [=](AsyncState st, Stream s) {
+		if (st == asyncOK) {
+			HTTPRequest::parseHttp(s, [=](HTTPRequest req){
+
+				Stream out = req->sendResponse("text/plain");
+				out.write(BinaryView(StrViewA("Hello world!")));
+
+			},true);
+		}
+
+
+	});
+	wait.zeroWait();
+
+
+}
+
 int main(int argc, char *argv[]) {
 
 	TestSimple tst;
+
+	runServerTest();
+
 
 	tst.test("queue.removeAt","98,56,54,44,30,23,22,21,20,20,11,10,1 - 98,54,44,30,22,21,20,20,11,10") >> [](std::ostream &out) {
 
@@ -132,6 +158,17 @@ int main(int argc, char *argv[]) {
 		async.stop();
 	};
 
+/*
+	tst.test("Http.server1","") >> [](std::ostream &out) {
+		StreamFactory server = TCPListen::create(true, 8901);
+		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
+		AsyncProvider async = ThreadPoolAsync::create();
+
+
+
+
+	}
+*/
 	/*
 	tst.test("Listener.async.receiveMsg","test message") >> [](std::ostream &out) {
 		unsigned int port = 0;

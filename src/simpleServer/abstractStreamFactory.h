@@ -67,6 +67,19 @@ public:
 		Iterator end() {return Iterator(this, nullptr);}
 
 
+
+		void runServerAsync(const AsyncProvider &provider, const Callback &cb) {
+			AsyncProvider p(provider);
+			Callback ccb(cb);
+			RefCntPtr<AbstractStreamFactory> me(this);
+			createAsync(p, [=](AsyncState st, Stream s) {
+				if (st == asyncOK) {
+					me->runServerAsync(p, ccb);
+				}
+				ccb(st,s);
+			});
+
+		}
 };
 
 

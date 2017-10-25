@@ -35,6 +35,18 @@ public:
 	void clear();
 
 
+	int getCode() const;
+	StrViewA getStatusMessage() const;
+
+	template<typename Fn>
+	void forEach(const Fn &fn) const {
+		for (auto &&x : hdrMap) {
+			fn(x.first.getView(), x.second.getView());
+		}
+	}
+
+
+
 protected:
 
 	typedef StringPool<char> Pool;
@@ -43,16 +55,20 @@ protected:
 
 
 	Pool pool;
-
-
-
+	HdrMap hdrMap;
 };
+
+
+
 
 
 class HTTPRequestData: public RefCntObj {
 	struct Hash {
 		std::size_t operator()(StrViewA text) const;
 	};
+
+	void parseHttpAsync(Stream stream, HTTPHandler handler);
+
 public:
 
 	typedef std::unordered_map<StrViewA, HeaderValue, Hash> HdrMap;
@@ -63,9 +79,10 @@ public:
 	HdrMap::const_iterator end() const;
 
 
+	typedef std::function<void()> Callback;
 
 
-	void parseHttp(Stream stream, HTTPHandler handler);
+	void parseHttp(Stream stream, HTTPHandler handler, bool keepAlive);
 
 
 	///Retrieves header value
@@ -107,6 +124,7 @@ public:
 	 *
 	 */
 	void sendResponse(StrViewA contentType, BinaryView body);
+	void sendResponse(StrViewA contentType, StrViewA body);
 	///Send response
 	/**
 	 * Allows to send simple response to the client
@@ -117,6 +135,7 @@ public:
 	 *
 	 */
 	void sendResponse(StrViewA contentType, BinaryView body, int statusCode);
+	void sendResponse(StrViewA contentType, StrViewA body, int statusCode);
 	///Send response
 	/**
 	 * Allows to send simple response to the client
@@ -128,6 +147,7 @@ public:
 	 *
 	 */
 	void sendResponse(StrViewA contentType, BinaryView body, int statusCode, StrViewA statusMessage);
+	void sendResponse(StrViewA contentType, StrViewA body, int statusCode, StrViewA statusMessage);
 	///Generates error page
 	/**
 	 * @param statusCode sends with specified status code. (i.e. 404)
@@ -139,7 +159,7 @@ public:
 	 * @param statusCode sends with specified status code. (i.e. 404)
 	 * @param statusMessage sends with specified status message. (i.e. "Not found")
 	 */
-	void sendErrorPage(int statusCode, StrViewA statusMessage);
+	void sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc = StrViewA());
 
 
 	///Generates response, returns stream
@@ -189,7 +209,6 @@ public:
 	void redirect(StrViewA url);
 
 
-
 protected:
 
 	std::vector<char> requestHdrLineBuffer;
@@ -199,10 +218,13 @@ protected:
 	StrViewA method;
 	StrViewA path;
 	StrViewA version;
-	bool keepAlive;
 
 	Stream originStream;
 	Stream reqStream;
+	bool responseSent;
+
+	///in case that keepalive is enabled, contains handler to call for second and othe requests
+	HTTPHandler keepAliveHandler;
 
 	///accepts line while it parses headers
 	/**
@@ -225,6 +247,14 @@ protected:
 	void runHandler(const Stream& stream, const HTTPHandler& handler);
 	void parseReqLine(StrViewA line);
 	Stream prepareStream(const Stream &stream);
+
+
+	void sendResponseLine(int statusCode, StrViewA statusMessage);
+	Stream sendHeaders(const HTTPResponse *resp, const StrViewA *contentType,const size_t *contentLength);
+
+	class KeepAliveFn;
+
+	void handleKeepAlive();
 };
 
 
@@ -236,8 +266,20 @@ public:
 
 
 	///Parses stream for http request and calls handler with informations about this request
-	/** Function will run asynchronously if there is AsyncProvider assigned to the stream */
-	void parseHttp(Stream stream, HTTPHandler handler);
+	/** Function will run asynchronously if there is AsyncProvider assigned to the stream
+	 *
+	 * @param stream source stream
+	 * @param handler function called when request arrives
+	 * @param keepAlive if argument is true, then handler can be called multiple
+	 * times for keep-alive connections. Settings this argument false causes that
+	 * handler will be called just once. Note that argument is supported only
+	 * for connections with asynchronous support. Otherwise handler is called once
+	 * and then funcion exits.
+	 *
+	 *
+	 *
+	 * */
+	static void parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true);
 
 
 

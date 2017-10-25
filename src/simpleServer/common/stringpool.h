@@ -12,21 +12,21 @@ template<typename T>
 class StringPoolTraits {
 public:
 	static inline void putEnd(std::vector<T> &buffer) {}
-	static inline T *empty(std::vector<T> &buffer) {return nullptr;}
+	static inline const T *empty(std::vector<T> &buffer) {return nullptr;}
 };
 
 template<>
 class StringPoolTraits<char> {
 public:
-	static inline void putEnd(std::vector<char> &buffer) {buffer.putBack((char)0);}
+	static inline void putEnd(std::vector<char> &buffer) {buffer.push_back((char)0);}
 	static inline const char *empty() {return "";}
 };
 
 template<>
 class StringPoolTraits<wchar_t> {
 public:
-	static inline void putEnd(std::vector<wchar_t> &buffer) {buffer.putBack((wchar_t)0);}
-	static inline const wchar_t *empty() {return "";}
+	static inline void putEnd(std::vector<wchar_t> &buffer) {buffer.push_back((wchar_t)0);}
+	static inline const wchar_t *empty() {return L"";}
 };
 
 
@@ -51,12 +51,12 @@ public:
 			else return StringView<T>(ptr, length);
 		}
 
-		bool operator==(const LocalStr &other) const {return StringView<T>(*this) == StringView<T>(other);}
-		bool operator!=(const LocalStr &other) const {return StringView<T>(*this) != StringView<T>(other);}
-		bool operator>(const LocalStr &other) const {return StringView<T>(*this) > StringView<T>(other);}
-		bool operator<(const LocalStr &other) const {return StringView<T>(*this) < StringView<T>(other);}
-		bool operator>=(const LocalStr &other) const {return StringView<T>(*this)>= StringView<T>(other);}
-		bool operator<=(const LocalStr &other) const {return StringView<T>(*this)<= StringView<T>(other);}
+		bool operator==(const String &other) const {return getView() == other.getView();}
+		bool operator!=(const String &other) const {return getView() != other.getView();}
+		bool operator>(const String &other) const {return getView() > other.getView();}
+		bool operator<(const String &other) const {return getView() < other.getView();}
+		bool operator>=(const String &other) const {return getView()>= other.getView();}
+		bool operator<=(const String &other) const {return getView()<= other.getView();}
 	protected:
 		const std::vector<T> *buffer;
 		union {

@@ -202,6 +202,26 @@ static int listenSocket(const NetAddr &addr) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
 	int s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+	if (s < 0) {
+		int e = errno;
+		throw SystemException(e,"failed to create socket");
+	}
+	int enable = 1;
+	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+	{
+		int e = errno;
+		close(s);
+		throw SystemException(e,"setsockopt(SO_REUSEADDR) failed");
+	}
+	if (sa->sa_family == AF_INET6) {
+		if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(int)) < 0)
+		{
+			int e = errno;
+			close(s);
+			throw SystemException(e,"setsockopt(IPV6_V6ONLY) failed");
+		}
+	}
+
 	if (s == -1) throw SystemException(errno,"socket() failure");
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
 	if (::bind(s, sa, b.length) == -1) {
@@ -347,12 +367,6 @@ TCPListen::~TCPListen() {
 }
 
 
-void TCPListen::stop() {
-	TCPStreamFactory::stop();
-	for (auto &&f: openSockets) {
-		shutdown(f, SHUT_RD);
-	}
-}
 
 struct ConnectShared {
 	IStreamFactory::Callback cb;
@@ -477,37 +491,107 @@ void TCPConnect::createAsync(const AsyncProvider &provider, const Callback &cb) 
 	connectAsyncCycle(provider,target,shared);
 }
 
+
+class TCPListen::AsyncData: public RefCntObj {
+public:
+	AsyncData(TCPListen &owner):owner(owner),idleSockets(owner.openSockets) {
+	}
+
+
+	void onSignal(int socket, AsyncState state) {
+		Callback cb;
+		AsyncProvider p;
+		int iot, lst;
+		bool stpd;
+		{
+			std::lock_guard<std::mutex> _(lock);
+			std::swap(cb,curCallback);
+			std::swap(p,curProvider);
+			iot = iotimeout;
+			lst = listenTimeout;
+			stpd = stopped;
+			idleSockets.push_back(socket);
+		}
+		if (cb!=nullptr) {
+			if (state == asyncOK) {
+				try {
+					Stream sx = acceptConnect(socket, iot);
+					if (sx == nullptr) {
+						charge(p,cb,lst,iot);
+					} else {
+						cb(state,sx);
+					}
+				} catch (SystemException &e) {
+					if (stpd || e.getErrNo() == EINVAL)
+						cb(asyncEOF,nullptr);
+					else
+						cb(asyncError, nullptr);
+				} catch (...) {
+					cb(stpd?asyncEOF:asyncError, nullptr);
+				}
+			} else {
+				cb(state, nullptr);
+			}
+		}
+	}
+
+
+	void charge(const AsyncProvider &p, const Callback &cb, int listenTimeout, int iotimeout) {
+		std::lock_guard<std::mutex> _(lock);
+
+		RefCntPtr<AsyncData> me(this);
+		curCallback = cb;
+
+		for (int s: idleSockets) {
+
+			auto fn = [me, s](AsyncState state){
+				me->onSignal(s, state);
+			};
+
+			p.runAsync(AsyncResource(s, POLLIN), listenTimeout, fn);
+		}
+		idleSockets.clear();
+		this->iotimeout = iotimeout;
+		this->listenTimeout = listenTimeout;
+	}
+
+	void setStopped() {
+		bool stopped = true;
+	}
+
+protected:
+	TCPListen &owner;
+	std::vector<int> idleSockets;
+	Callback curCallback;
+	AsyncProvider curProvider;
+	int iotimeout;
+	int listenTimeout;
+	bool stopped = false;
+	std::mutex lock;
+
+};
+
 void TCPListen::createAsync(const AsyncProvider &provider, const Callback &cb) {
-	cbrace = false;
 	RefCntPtr<TCPListen> me(this);
 	AsyncProvider p(provider);
 	Callback ccb(cb);
 
-	for (int s: openSockets) {
+	if (asyncData == nullptr) {
+		asyncData = new AsyncData(*this);
+	}
 
-		auto fn = [me, s, p, ccb](AsyncState st){
-			bool exp = false;
-			if (me->cbrace.compare_exchange_strong(exp, true)) {
-				if (st == asyncOK) {
-					try {
-						Stream sx = acceptConnect(s,me->ioTimeout);
-						if (sx == nullptr) {
-							me->createAsync(p, ccb);
-						} else {
-							sx.setAsyncProvider(p);
-							ccb(st, sx);
-						}
+	asyncData->charge(provider, cb, listenTimeout,ioTimeout);
 
-					} catch (...) {
-						ccb(asyncError,nullptr);
-					}
-				} else {
-					ccb(st, nullptr);
-				}
-			}
-		};
+}
 
-		provider->runAsync(AsyncResource(s, POLLIN), listenTimeout, fn);
+void TCPListen::stop() {
+	TCPStreamFactory::stop();
+	if (asyncData!= nullptr) {
+		asyncData->setStopped();
+		asyncData = nullptr;
+	}
+	for (auto &&f: openSockets) {
+		shutdown(f, SHUT_RD);
 	}
 }
 

@@ -92,6 +92,10 @@ protected:
 	int listenTimeout;
 	std::vector<int> openSockets;
 	std::atomic<bool> cbrace;
+
+	class AsyncData;
+	class CreateStreamCb;
+	RefCntPtr<AsyncData> asyncData;
 };
 
 

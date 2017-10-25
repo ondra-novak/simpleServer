@@ -57,17 +57,17 @@ public:
 	using RefCntPtr<AbstractAsyncProvider>::RefCntPtr;
 
 	template<typename Fn>
-	void runAsync(const AsyncResource &resource, int timeout, const Fn &completion) {
+	void runAsync(const AsyncResource &resource, int timeout, const Fn &completion) const {
 		ptr->runAsync(resource, timeout,completion);
 	}
 
 	template<typename Fn>
-	void runAsync(const Fn &completion) {
+	void runAsync(const Fn &completion) const {
 		Fn ccpy(completion);
 		ptr->runAsync([ccpy](AsyncState){ccpy();});
 	}
 
-	void stop() {
+	void stop() const {
 		ptr->stop();
 	}
 

@@ -14,6 +14,9 @@ namespace simpleServer {
  */
 BinaryView AbstractStream::write(const BinaryView &databuff, WriteMode wrmode ) {
 
+	if (wrBuff.size == 0) {
+		wrBuff = createOutputBuffer();
+	}
 	//attempt to write the buffer itself causes that directwrite is called
 	if (databuff.data == wrBuff.ptr) {
 		return databuff.substr(writeBuffer(databuff, wrmode));
@@ -80,6 +83,8 @@ BinaryView AbstractStream::writeBuffered(const BinaryView &databuff, WriteMode w
 			std::size_t sz = std::min(databuff.length, wrBuff.remain());
 			//put data to the buffer
 			std::memcpy(wrBuff.ptr+wrBuff.wrpos, start, sz);
+
+			wrBuff.wrpos+=sz;
 			//return unused part of databuff
 			return databuff.substr(sz);
 		}
