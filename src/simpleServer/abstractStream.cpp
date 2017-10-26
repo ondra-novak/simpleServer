@@ -4,7 +4,7 @@
 
 
 namespace simpleServer {
-
+#if 0
 ///Writes block of bytes
 /**
  * @param buffer buffer to write
@@ -94,7 +94,7 @@ BinaryView AbstractStream::writeBuffered(const BinaryView &databuff, WriteMode w
 
 }
 
-
+#endif
 
 MutableBinaryView simpleServer::AbstractStream::noOutputMode() {
 	throw std::runtime_error("Stream is read only (no writes are possible)");
@@ -109,6 +109,14 @@ bool simpleServer::IGeneralStream::isEof(const BinaryView& buffer) {
 AsyncProvider simpleServer::AbstractStream::setAsyncProvider( AsyncProvider asyncProvider) {
 	std::swap(this->asyncProvider, asyncProvider);
 	return asyncProvider;
+}
+
+bool AbstractStream::canRunAsync() const {
+	return asyncProvider != nullptr;
+}
+
+void AbstractStream::copydata(unsigned char *target, const unsigned char *source, std::size_t count){
+	std::memmove(target,source,count);
 }
 
 

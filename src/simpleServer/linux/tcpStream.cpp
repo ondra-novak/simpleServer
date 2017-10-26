@@ -10,66 +10,32 @@
 
 namespace simpleServer {
 
-BinaryView TCPStream::readBuffer(bool nonblock) {
+BinaryView TCPStream::implRead(bool nonblock) {
 
+	MutableBinaryView b(inputBuffer, inputBufferSize);
+	return implRead(b,nonblock);
+
+}
+
+BinaryView TCPStream::implWrite(BinaryView buffer, bool nonblock) {
 	do {
-		int r = recv(sck,inputBuffer, inputBufferSize, MSG_DONTWAIT);
+		int r = send(sck, buffer.data, buffer.length, MSG_DONTWAIT);
 		if (r < 0) {
 			int e = errno;
 			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN)
 				throw SystemException(e,__FUNCTION__);
-			if (nonblock) return BinaryView();
-			if (!waitForRead(iotimeout)) {
+			if (nonblock) return buffer;
+			if (!implWaitForWrite(iotimeout)) {
 				throw TimeoutException();
 			}
 		} else if (r == 0) {
 			return eofConst;
 		} else {
-			return BinaryView(inputBuffer, r);
+			return buffer.substr(r);
 		}
-
 	} while (true);
 }
 
-MutableBinaryView TCPStream::createOutputBuffer() {
-
-	return MutableBinaryView(reinterpret_cast<unsigned char *>(outputBuffer), outputBufferSize);
-
-}
-
-std::size_t TCPStream::writeBuffer(BinaryView buffer, WriteMode wrmode) {
-	switch (wrmode) {
-	case writeAndFlush:
-	case writeWholeBuffer: {
-		std::size_t wrt = 0;
-		do {
-			std::size_t sz = writeBuffer(buffer, writeCanBlock);
-			wrt+=sz;
-			buffer = buffer.substr(sz);
-		} while (!buffer.empty());
-		return wrt;
-	}
-	case writeCanBlock: {
-		std::size_t sz = writeBuffer(buffer, writeNonBlock);
-		while (sz == 0) {
-			if (!waitForWrite(iotimeout))
-				throw TimeoutException();
-			sz = writeBuffer(buffer, writeNonBlock);
-		}
-		return sz;
-	}
-	case writeNonBlock: {
-		int r = send(sck, buffer.data,buffer.length,MSG_DONTWAIT);
-		if (r < 0) {
-			int e = errno;
-			if (e == EWOULDBLOCK || e == EINTR || e == EAGAIN) return 0;
-			else throw SystemException(e,__FUNCTION__);
-		} else {
-			return r;
-		}
-	}
-	}
-}
 
 static bool doPoll(int sock, int events, int timeoutms) {
 	struct pollfd pfd;
@@ -89,19 +55,19 @@ static bool doPoll(int sock, int events, int timeoutms) {
 
 }
 
-bool TCPStream::waitForRead(int timeoutms) {
+bool TCPStream::implWaitForRead(int timeoutms) {
 	return doPoll(sck,POLLIN|POLLRDHUP, timeoutms);
 }
 
-bool TCPStream::waitForWrite(int timeoutms) {
+bool TCPStream::implWaitForWrite(int timeoutms) {
 	return doPoll(sck,POLLOUT, timeoutms);
 }
 
-void TCPStream::closeInput() {
+void TCPStream::implCloseInput() {
 	shutdown(sck, SHUT_RD);
 }
 
-void TCPStream::closeOutput() {
+void TCPStream::implCloseOutput() {
 	shutdown(sck, SHUT_WR);
 }
 
@@ -110,7 +76,94 @@ TCPStream::TCPStream(int sck, int iotimeout, const NetAddr& peer)
 {
 }
 
-void TCPStream::flushOutput() {
+BinaryView TCPStream::implRead(MutableBinaryView buffer, bool nonblock) {
+	do {
+		int r = recv(sck,buffer.data, buffer.length, MSG_DONTWAIT);
+		if (r < 0) {
+			int e = errno;
+			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN)
+				throw SystemException(e,__FUNCTION__);
+			if (nonblock) return BinaryView();
+			if (!implWaitForRead(iotimeout)) {
+				throw TimeoutException();
+			}
+		} else if (r == 0) {
+			return eofConst;
+		} else {
+			return BinaryView(buffer.data, r);
+		}
+
+	} while (true);
+}
+
+
+void TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
+ if (curBuffer.wrpos == 0) {
+	 curBuffer = WrBuffer(outputBuffer,outputBufferSize,0);
+ } else {
+	 BinaryView v = curBuffer.getView();
+	 BinaryView w = implWrite(v, nonblock);
+	 if (w.empty()) {
+		 curBuffer = WrBuffer(outputBuffer,outputBufferSize,0);
+	 } else if (curBuffer.remain()>16) {
+		 curBuffer = WrBuffer(curBuffer.ptr+w.length, 0, curBuffer.size-w.length);
+	 } else if (w.length != v.length){
+		 copydata(curBuffer.ptr, w.data, w.length);
+		 curBuffer.wrpos = w.length;
+	 }
+ }
+}
+
+void TCPStream::implReadAsync(const MutableBinaryView& buffer, const Callback& cb) {
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	RefCntPtr<TCPStream> me(this);
+
+	Callback cbc(cb);
+	MutableBinaryView b(buffer);
+
+	auto fn = [me,cbc,b](AsyncState state) {
+		if (state == asyncOK) {
+			BinaryView r = me->implRead(b,true);
+			if (isEof(r)) {
+				cbc(asyncEOF,r);
+			} else if (r.empty()) {
+				me->implReadAsync(b,cbc);
+			}else {
+				cbc(state, r);
+			}
+		} else {
+			cbc(state, BinaryView(0,0));
+		}
+
+	};
+
+	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
+}
+
+void TCPStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
+	if (asyncProvider == nullptr) throw NoAsyncProviderException();
+	RefCntPtr<TCPStream> me(this);
+
+	Callback cbc( cb);
+	BinaryView b(data);
+
+	auto fn = [me,cbc, b](AsyncState state) {
+		if (state == asyncOK) {
+			BinaryView r = me->implWrite(b, true);
+			if (r.length == b.length) {
+				me->implWriteAsync(b, cbc);
+			}else {
+				cbc(state, r);
+			}
+		} else {
+			cbc(state, BinaryView(0,0));
+		}
+	};
+
+	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
+}
+
+void TCPStream::implFlush() {
 	//not implemented
 }
 
@@ -124,54 +177,11 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 	return ret;
 }
 
-void TCPStream::readAsyncBuffer(const Callback& cb) {
-	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	RefCntPtr<TCPStream> me(this);
-
-	Callback cbc = cb;
-
-	auto fn = [me,cbc](AsyncState state) {
-		if (state == asyncOK) {
-			BinaryView r = me->readBuffer(true);
-			if (isEof(r)) {
-				cbc(asyncEOF,r);
-			} else if (r.empty()) {
-				me->readAsyncBuffer(cbc);
-			}else {
-				cbc(state, r);
-			}
-		} else {
-			cbc(state, BinaryView(0,0));
-		}
-
-	};
-
-	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
+void TCPStream::implReadAsync(const Callback& cb) {
+	MutableBinaryView b(inputBuffer, inputBufferSize);
+	implReadAsync(b,cb);
+}
 }
 
-void TCPStream::writeAsyncBuffer(const Callback& cb,BinaryView data) {
-	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	RefCntPtr<TCPStream> me(this);
 
-	Callback cbc = cb;
-
-	auto fn = [me,cbc, data](AsyncState state) {
-		if (state == asyncOK) {
-			size_t sz = me->writeBuffer(data, writeNonBlock);
-			if (sz == 0) {
-				me->writeAsyncBuffer(cbc, data);
-			}else {
-				cbc(state, data.substr(sz));
-			}
-		} else {
-			cbc(state, BinaryView(0,0));
-		}
-	};
-
-
-	if (asyncProvider == nullptr) throw NoAsyncProviderException();
-	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
-}
-
-}
 

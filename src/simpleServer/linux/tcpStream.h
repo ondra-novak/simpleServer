@@ -16,20 +16,19 @@ public:
 protected:
 
 
-	virtual BinaryView readBuffer(bool nonblock) ;
-	virtual MutableBinaryView createOutputBuffer() ;
-	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) ;
-	virtual bool waitForRead(int timeoutms) ;
-	virtual bool waitForWrite(int timeoutms);
-	virtual void closeInput() ;
-	virtual void closeOutput();
-	virtual void flushOutput();
-	virtual int setIOTimeout(int iotimeoutms) override;
-
-
-	virtual void readAsyncBuffer(const Callback &cb);
-	virtual void writeAsyncBuffer(const Callback &cb, BinaryView data);
-
+	virtual int setIOTimeout(int timeoutms) override;
+	virtual BinaryView implRead(bool nonblock) override;
+	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
+	virtual BinaryView implWrite(BinaryView buffer, bool nonblock);
+	virtual void implWrite(WrBuffer &curBuffer, bool nonblock);
+	virtual void implReadAsync(const Callback &cb);
+	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb)  override;
+	virtual void implWriteAsync(const BinaryView &data, const Callback &cb)  override;
+	virtual bool implWaitForRead(int timeoutms)  override;
+	virtual bool implWaitForWrite(int timeoutms)  override;
+	virtual void implCloseInput()  override;
+	virtual void implCloseOutput()  override;
+	virtual void implFlush()  override;
 
 protected:
 

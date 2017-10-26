@@ -24,6 +24,7 @@ enum WriteMode {
 
 
 class AsyncResource;
+class AbstractStream;
 
 ///Very abstract interface which descibes protocol to access data in the stream
 class IGeneralStream {
@@ -46,7 +47,11 @@ public:
 		BinaryView getView() const {return BinaryView(ptr,wrpos);}
 
 		WrBuffer() {}
-		WrBuffer(const MutableBinaryView &b):ptr(b.data),size(b.length),wrpos(0) {}
+		WrBuffer(const MutableBinaryView &b, std::size_t wrpos = 0):ptr(b.data),size(b.length),wrpos(wrpos) {}
+		WrBuffer(unsigned char *ptr, std::size_t bufferSize, std::size_t wrpos = 0)
+			:ptr(ptr)
+			,size(size)
+			,wrpos(wrpos) {}
 	};
 
 
@@ -81,7 +86,6 @@ public:
 	virtual int setIOTimeout(int timeoutms) = 0;
 
 protected:
-
 	///Read buffer
 	/** Function reads to internal buffer, optimal count of bytes and returns it as BinaryView
 	 *
@@ -93,40 +97,81 @@ protected:
 	 * @note function doesn't support putBack() operation declared on AbstractStream. It is
 	 * supposed to be used when buffering is handled externally
 	 */
-	virtual BinaryView readBuffer(bool nonblock) = 0;
+	virtual BinaryView implRead(bool nonblock) = 0;
+
+	///Read to buffer
+	/** Function reads to an external buffer
+	 *
+	 * @param buffer buffer should contain at least one byte
+	 * @param nonblock set true to perform nonblocking operation
+	 * @return view of read data
+	 *
+	 *
+	 * @note this function can be faster in some cases, because it transfers data directly
+	 * from the stream to the buffer. Streams with internal buffer can be slower. Use this
+	 * function if you need just only transfer data from the stream to existing buffer
+	 */
+	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) = 0;
 
 	///Write buffer to the stream
 	/** @param buffer Writes buffer to the output stream
-	 * @param wrmode specify one of writing mode
+	 * @param nonblock specify true and function can return immediately if nonblocking operation
+	 * cannot be performed. Otherwise function can block to write at-least one byte from the
+	 * buffer
 	 *
-	 * @return count of bytes written
+	 *
+	 * @return A view to part of buffer written. Buffer is always filled from the beginning
+	 * (you can use .length property to determine count of bytes). However if EOF
+	 * is reached, an empty buffer is returned and you need to pass the result to function
+	 * isEof() to determine whether EOF has been actually reached.
 	 *
 	 * @note this function doesn't provide buffering. It is supposed to be used when buffering is
 	 * handled externally
 	 *
 	 */
-	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) = 0;
+	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) = 0;
 
-	///Request to create output buffer.
-	/** To start writing, caller requires buffer to write bytes. This function is called
-	 * before very first writing. Function should supply a buffer with optimal size for
-	 * the stream. In most of cases, the buffer is located in the instance of the stream and
-	 * this function just prepares that buffer .
-	 *
-	 *
+
+
+	///Writes part of internal output buffer
+	/**
+	 * @param curBuffer informations about buffer. Structure should contain some
+	 *   informations about already stored data
+	 * @param writeMode choose one of write mode. Function updates this structure
 	 *
 	 */
-	virtual MutableBinaryView createOutputBuffer() = 0;
+	virtual void implWrite(WrBuffer &curBuffer, bool nonblock) = 0;
 
-	///Read to buffer asynchronoysly
+	///Read to the buffer asynchronoysly
 	/**
 	 * @param cb callback function
 	 *
+	 * @note function uses internal buffer.
+	 *
 	 * @note doesn't support putBack() function. Use only if you need direct access to the stream
 	 */
-	virtual void readAsyncBuffer(const Callback &cb) = 0;
-	///
-	virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) = 0;
+	virtual void implReadAsync(const Callback &cb) = 0;
+
+	///Read to the buffer asynchronously
+	/**
+	 * @param buffer reference to a buffer. Please ensure, that buffer is not destroyed while
+	 * operation is in progress
+	 *
+	 * @param cb callback function called upon completion
+	 */
+	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb) = 0;
+
+
+	///Write buffer asynchronously
+	/**
+	 * @param data buffer to write. Please ensure, that buffer is not destroyed while
+	 * operation is in progress
+	 *
+	 * @param cb callback function called upon completion
+	 *
+	 * @note function doesn't support caching
+	 */
+	virtual void implWriteAsync(const BinaryView &data, const Callback &cb) = 0;
 
 
 
@@ -135,26 +180,51 @@ protected:
 	 * @param timeout specifies timeout in miliseconds. A negative value is interpreted as
 	 *  infinite wait. Operation can be interruped by closing the input
 	 */
-	virtual bool waitForRead(int timeoutms) = 0;
+	virtual bool implWaitForRead(int timeoutms) = 0;
 	///Request to block thread while there is no space in the output buffer
 	/**
 	 * 	 @param timeout specifies timeout in miliseconds. A negative value is interpreted as
 	 *  infinite wait.
 	 */
 
-	virtual bool waitForWrite(int timeoutms) = 0;
+	virtual bool implWaitForWrite(int timeoutms) = 0;
 
-	virtual void closeInput() = 0;
-	virtual void closeOutput() = 0;
-
-
-	virtual void flushOutput() = 0;
+	virtual void implCloseInput() = 0;
+	virtual void implCloseOutput() = 0;
 
 
-
+	virtual void implFlush() = 0;
 
 
 	virtual ~IGeneralStream() {}
+
+
+	///DirectWrite interface is prepared for stream proxies to bypass buffering
+	/** there is only write interface, because reading uses buffer limited to
+	 * putBack() feature and
+	 */
+	class DirectWrite {
+	protected:
+		DirectWrite(IGeneralStream &owner):owner(owner) {}
+		IGeneralStream &owner;
+	public:
+		void write(WrBuffer &curBuffer, bool nonblock) {
+			owner.implWrite(curBuffer, nonblock);
+		}
+		BinaryView write(BinaryView buffer, bool nonblock) {
+			return owner.implWrite(buffer,nonblock);
+		}
+		void writeAsync(const BinaryView &data, const Callback &cb) {
+			return owner.implWriteAsync(data,cb);
+		}
+		void flush() {
+			owner.implFlush();
+		}
+
+
+		friend class AbstractStream;
+	};
+
 protected:
 
 	///Constant which should be returned by readBuffer() when reading reaches to EOF
@@ -170,13 +240,25 @@ class AbstractStream: public RefCntObj, public IGeneralStream {
 public:
 
 
+
 	BinaryView read(bool nonblock = false) {
 		if (rdBuff.empty()) {
-			return readBuffer(nonblock);
+			return implRead(nonblock);
 		} else {
 			BinaryView t = rdBuff;
 			rdBuff = BinaryView();
 			return t;
+		}
+	}
+
+	BinaryView read(const MutableBinaryView &buffer, bool nonblock = false) {
+		if (rdBuff.empty()) {
+			return  implRead(buffer, nonblock);
+		} else {
+			BinaryView t = rdBuff.substr(buffer.length);
+			copydata(buffer.data, t.data, t.length);
+			rdBuff = rdBuff.substr(t.length);
+			return BinaryView(buffer.data, t.length);
 		}
 	}
 
@@ -195,7 +277,7 @@ public:
 	 */
 	int readByte() {
 		if (rdBuff.empty()) {
-			rdBuff = readBuffer(false);
+			rdBuff = implRead(false);
 			if (isEof(rdBuff)) return -1;
 		}
 		int r = rdBuff[0];
@@ -210,7 +292,7 @@ public:
 	 */
 	int peekByte() {
 		if (rdBuff.empty()) {
-			rdBuff = readBuffer(false);
+			rdBuff = implRead(false);
 			if (isEof(rdBuff)) return -1;
 		}
 		int r = rdBuff[0];
@@ -232,10 +314,39 @@ public:
 	/**
 	 * @param buffer buffer to write
 	 * @param wrmode specify write mode
+	 * @return part of buffer not written
 	 *
 	 * Function uses buffer to collect small writes into single brust write.
 	 */
-	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer);
+	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) {
+		if (buffer.empty()) return buffer;
+		if (buffer.data == wrBuff.ptr+wrBuff.wrpos) {
+			wrBuff.wrpos+=buffer.length;
+			return BinaryView(0,0);
+		}
+
+		if (wrBuff.remain() == 0) {
+			implWrite(wrBuff,wrmode == writeNonBlock);
+			if (wrBuff.remain() == 0)
+				return buffer;
+		}
+		BinaryView wrb;
+		bool rep = (wrmode == writeWholeBuffer || wrmode == writeAndFlush);
+		if (wrBuff.wrpos == 0 && buffer.length > wrBuff.size) {
+			 wrb = implWrite(buffer, wrmode == writeNonBlock);
+		} else {
+			auto remain = wrBuff.remain();
+			BinaryView p1 = buffer.substr(0,remain);
+			wrb = buffer.substr(remain);
+			copydata(wrBuff.ptr+wrBuff.wrpos, buffer.data, remain);
+		}
+		while (!wrb.empty() && rep) {
+			wrb = write(wrb, writeCanBlock);
+		}
+		if (wrmode == writeAndFlush) {
+			flush(writeAndFlush);
+		}
+	}
 
 
 	///write one byte to the output stream.
@@ -244,61 +355,27 @@ public:
 	 * to force to send everything in the stream.
 	 */
 	void writeByte(unsigned char b) {
-		if (wrBuff.size == wrBuff.wrpos) {
-			if (wrBuff.size == 0) wrBuff = createOutputBuffer();
-			else flush(writeCanBlock);
+		if (wrBuff.remain() == 0) {
+			implWrite(wrBuff, false);
 		}
 		wrBuff.ptr[wrBuff.wrpos] = b;
 		wrBuff.wrpos++;
 	}
 
 
-	///Contains minimum required size of buffer which must be supported by all the streams
-	static const size_t minimumRequiredBufferSize = 256;
-
-	///Asks the stream to prepare a write buffer for the direct access
-	/**
-	 * @param reqSize requested size. The stream should prepare specified count of bytes. However
-	 * the value can be limited to minimumRequiredBufferSize. Specifiying smaller value allows
-	 * to effectively use of the buffer.
-	 *
-	 * @return returns WrBuffer structure containing informations about the buffer
-	 *
-	 * If you finished writting to the buffer, you need to call commitWriteBuffer()
-	 *
-	 * @note there is one buffer only. You should avoid to call getWriteBuffer() twice or more
-	 * without calling the comitWriteBuffer()
-	 */
-	MutableBinaryView getWriteBuffer(std::size_t reqSize = minimumRequiredBufferSize) {
-		if (reqSize > wrBuff.size) reqSize = wrBuff.size;
-		while (wrBuff.remain() < reqSize) {
-			flush(writeCanBlock);
-		}
-
-		return MutableBinaryView(wrBuff.ptr + wrBuff.wrpos, wrBuff.remain());
-	}
-
-	///commits writtes to the buffer
-	/** @param commitSize count of bytes written to the buffer. The number must be less or equal
-	 * to size of the buffer returned by getWriteBuffer()
-	 */
-	void commitWriteBuffer(std::size_t commitSize) {
-			wrBuff.wrpos += commitSize;
-	}
-
 
 	///Flush output buffer to the stream
 	void flush(WriteMode wrmode = writeAndFlush) {
 		if (wrBuff.size) {
-			BinaryView b = wrBuff.getView();
-			auto r = writeBuffer(b,wrmode);
-			if (r == 0) return;
-			wrBuff.wrpos = 0;
-			if (r != b.length) {
-				write(b.substr(r),writeNonBlock);
+			bool rep = (wrmode == writeWholeBuffer || wrmode == writeAndFlush);
+			do {
+				implWrite(wrBuff, wrmode == writeNonBlock);
+			} while (wrBuff.wrpos != 0 && rep);
+			if (wrmode == writeAndFlush) {
+				implFlush();
 			}
 		} else if (wrmode == writeAndFlush) {
-			flushOutput();
+			implFlush();
 		}
 	}
 
@@ -311,7 +388,7 @@ public:
 	 */
 	void writeEof() {
 		flush(writeWholeBuffer);
-		closeOutput();
+		implCloseOutput();
 	}
 
 
@@ -325,19 +402,19 @@ public:
 	 */
 	void putBackEof() {
 		rdBuff = eofConst;
-		closeInput();
+		implCloseInput();
 	}
 
 	static MutableBinaryView noOutputMode();
 
 
 	bool waitForInput(int timeout) {
-		if (rdBuff.empty()) return waitForRead(timeout);
+		if (rdBuff.empty()) return implWaitForRead(timeout);
 		else return true;
 	}
 
 	bool waitForOutput(int timeout) {
-		if (wrBuff.remain()) return waitForWrite(timeout);
+		if (wrBuff.remain()) return implWaitForWrite(timeout);
 		else return true;
 	}
 
@@ -387,12 +464,24 @@ public:
 
 		BinaryView data = read(true);
 		bool eof = isEof(data);
-		if (!data.empty() || eof)
-			fakeAsync(eof?asyncEOF:asyncOK, data, callbackFn);
-		else
-			readAsyncBuffer(callbackFn);
+		if (!eof && data.empty()) {
+			implReadAsync(callbackFn);
+		} else {
+			return callbackFn(eof?asyncEOF:asyncOK,data);
+		}
 	}
 
+	template<typename Fn>
+	void readAsync(const MutableBinaryView &b, const Fn &callbackFn) {
+
+		BinaryView data = read(b,true);
+		bool eof = isEof(data);
+		if (!eof && data.empty()) {
+			implReadAsync(b, callbackFn);
+		} else {
+			return callbackFn(eof?asyncEOF:asyncOK,data);
+		}
+	}
 	///Write synchronously
 	/**
 	 * Performs nonblocking write. If write is unsuccessful, it asynchronously flushes
@@ -409,29 +498,35 @@ public:
 	 *
 	 */
 	template<typename Fn>
-	void writeAsync(BinaryView data, const Fn &callbackFn) {
+	void writeAsync(BinaryView data, Fn callbackFn, bool all= false) {
 
-		if (isMyBuffer(data))
-			writeAsyncBuffer(callbackFn, data);
 		BinaryView remainData = write(data,writeNonBlock);
 		if (remainData == data) {
-			writeAsyncBuffer([=](AsyncState status, BinaryView remain) {
+			implWriteAsync(wrBuff.getView(),[=](AsyncState status, BinaryView remain) {
 				if (status == asyncOK) {
 					wrBuff.wrpos = 0;
 					write(remain, writeNonBlock);
 					BinaryView x = write(data, writeNonBlock);
-					callbackFn(status,x);
+					if (all && !x.empty()) {
+						writeAsync(x, callbackFn, all);
+					} else {
+						callbackFn(status,x);
+					}
 				} else {
 					callbackFn(status,remain);
 				}
-			},wrBuff.getView());
+			});
 		} else {
-			fakeAsync(asyncOK,remainData, callbackFn);
-			asyncProvider.runAsync(AsyncDirectCall<Fn>(asyncOK,remainData, callbackFn));
+			return callbackFn(asyncOK,remainData);
 		}
 
 	}
 
+
+	DirectWrite getDirectWrite() {
+		flush(writeWholeBuffer);
+		return DirectWrite(*this);
+	}
 
 
 protected:
@@ -446,17 +541,14 @@ protected:
 
 
 
-	BinaryView writeBuffered(const BinaryView &buffer, WriteMode wrmode );
-	bool isMyBuffer(const BinaryView &buffer) const {
-		return buffer.data>=wrBuff.ptr && buffer.data < wrBuff.ptr+wrBuff.size;
-	}
-
 	///executes function through asyncProvider so it appears executed asynchronously
 	template<typename Fn>
 	void fakeAsync(AsyncState st, const BinaryView &data, const Fn &fn) {
 		if (asyncProvider == nullptr) throw NoAsyncProviderException();
 		asyncProvider.runAsync(AsyncDirectCall<Fn>(st,data, fn));
 	}
+
+	void copydata(unsigned char *target, const unsigned char *source, std::size_t count);
 
 };
 
@@ -518,6 +610,10 @@ public:
 	 */
 	BinaryView read(bool nonblock=false) {
 		return ptr->read(nonblock);
+	}
+
+	BinaryView read(const MutableBinaryView &buffer, bool nonblock=false){
+		return ptr->read(buffer, nonblock);
 	}
 
 	///Puts back the part of the buffer, so next read will read it back
@@ -598,12 +694,6 @@ public:
 	void flush(WriteMode wr = writeAndFlush) {
 		ptr->flush(wr);
 	}
-	MutableBinaryView getWriteBuffer(std::size_t reqSize = AbstractStream::minimumRequiredBufferSize) {
-		return ptr->getWriteBuffer(reqSize);
-	}
-	void commitWriteBuffer(std::size_t commitSize) {
-		return ptr->commitWriteBuffer(commitSize);
-	}
 	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) {
 		return ptr->write(buffer, wrmode);
 	}
@@ -623,8 +713,12 @@ public:
 		return ptr->readAsync(completion);
 	}
 	template<typename Fn>
-	void writeAsync(const BinaryView &data, const Fn &completion) {
-		return ptr->writeAsync(data, completion);
+	void readASync(const MutableBinaryView &buffer, const Fn &completion) {
+		return ptr->readAsync(buffer,completion);
+	}
+	template<typename Fn>
+	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) {
+		return ptr->writeAsync(data, completion, alldata);
 	}
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {

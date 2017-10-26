@@ -13,7 +13,7 @@ public:
 	}
 	~ChunkedStream() {
 		if (wrBuff.size)
-			closeOutput();
+			implCloseOutput();
 
 	}
 
@@ -22,17 +22,20 @@ public:
 		return source.setIOTimeout(timeoutms);
 	}
 
-	virtual BinaryView readBuffer(bool nonblock);
-	virtual MutableBinaryView createOutputBuffer();
-	virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode);
-	virtual bool waitForRead(int timeoutms);
-	virtual bool waitForWrite(int timeoutms);
-	virtual void closeInput();
-	virtual void closeOutput();
-	virtual void flushOutput();
+	virtual BinaryView implRead(bool nonblock) override;
+	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
+	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
+	virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override;
 
-	virtual void readAsyncBuffer(const Callback &cb) override;
-	virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) override;
+	virtual void implReadAsync(const Callback &cb) override;
+	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb) override ;
+	virtual void implWriteAsync(const BinaryView &data, const Callback &cb) override;
+
+	virtual bool implWaitForRead(int timeoutms) override;
+	virtual bool implWaitForWrite(int timeoutms) override;
+	virtual void implCloseInput() override;
+	virtual void implCloseOutput() override;
+	virtual void implFlush() override;
 
 
 	static Stream create(const Stream &source) {
@@ -60,20 +63,35 @@ protected:
 
 	void invalidChunk();
 
-	//writePart
-
-	static const std::size_t chunkBufferSize = chunkSize;
-	static const std::size_t chunkBufferDataStart = 10;
 
 
-	unsigned char chunkBuffer[chunkBufferSize+2+10]; //2 bytes for CRLF //10 bytes for first line
+
+	unsigned char hdrBuffer[50];
+	unsigned char chunkBuffer[chunkSize]; //2 bytes for CRLF //10 bytes for first line
 	bool outputClosed = false;
 
+	static unsigned char *writeHex(std::size_t sz, unsigned char *x) {
+		if (sz) {
+			unsigned char *k = writeHex(sz>>4,x);
+			static unsigned char digits[]="0123456789abcdef";
+			*k = digits[sz & 0xf];
+			return k+1;
+		} else {
+			return x;
+		}
+	}
+
+	BinaryView makeHdr(std::size_t sz) {
+		unsigned char *e = writeHex(sz, hdrBuffer);
+		e[0] = '\r';
+		e[1] = '\n';
+		return BinaryView(hdrBuffer, (e-hdrBuffer)+2);
+	}
 
 };
 
 template<std::size_t chunkSize>
-BinaryView ChunkedStream<chunkSize>::readBuffer(bool nonblock) {
+BinaryView ChunkedStream<chunkSize>::implRead(bool nonblock) {
 
 	if (curState == chunkEof) return eofConst;
 	BinaryView d = source.read(nonblock);
@@ -138,80 +156,12 @@ BinaryView ChunkedStream<chunkSize>::readBuffer(bool nonblock) {
 }
 
 template<std::size_t chunkSize>
-MutableBinaryView ChunkedStream<chunkSize>::createOutputBuffer() {
-	return MutableBinaryView(chunkBuffer+chunkBufferDataStart, chunkBufferSize);
-}
-
-
-template<std::size_t chunkSize>
-std::size_t ChunkedStream<chunkSize>::writeBuffer(BinaryView buffer, WriteMode wrmode) {
-
-	static unsigned char hexChar[]="0123456789abcdef";
-
-
-	//we will not accept empty buffer
-	if (buffer.empty()) return 0;
-	//this function can be called with any buffer, only chunkBuffer can be used here
-	//so we need to split function into two cases
-	//the argument is chunkBuffer = this means that AbstractStream is trying to free some space in the buffer
-	//the argument is other buffer = this means that we must put data to the chunkBuffer
-	if (isMyBuffer(buffer)) {
-		//write own buffer
-
-		//chunk cannot be written in non-blocking mode (it will be writen during wait)
-		if (wrmode == writeNonBlock) return 0;
-
-		int wrpos = chunkBufferDataStart;
-		//write \r\n before the payload
-		chunkBuffer[--wrpos] = '\n';
-		chunkBuffer[--wrpos] = '\r';
-		//write the length before payload
-		std::size_t sz = buffer.length;
-		//fortunately we can write number from back to front
-		while (sz != 0) {
-			auto mod = sz & 0xF;
-			sz >>= 4;
-			chunkBuffer[--wrpos] = hexChar[mod];
-		}
-		//put '\r' after payload
-		//put '\n' after payload
-		chunkBuffer[buffer.length+chunkBufferDataStart] = '\r';
-		chunkBuffer[buffer.length+chunkBufferDataStart+1] = '\n';
-		//create transfer state
-		BinaryView chunk(chunkBuffer+wrpos, chunkBufferDataStart-wrpos+buffer.length+2);
-		//try to write buffer in current mode
-		source.write(chunk, wrmode==writeAndFlush?wrmode:writeWholeBuffer);
-
-		return buffer.length;
-
-	} else {
-
-		switch (wrmode) {
-		case writeNonBlock:
-		case writeCanBlock:
-			return buffer.length - write(buffer.substr(0,chunkBufferSize), wrmode).length;
-			break;
-		case writeWholeBuffer:
-		case writeAndFlush:
-			while (!buffer.empty()) {
-				BinaryView x = write(buffer.substr(0,chunkBufferSize), writeCanBlock);
-				buffer = buffer.substr(chunkBufferSize-x.length);
-			}
-			if (wrmode == writeAndFlush) {
-				flush(wrmode);
-			}
-			return buffer.length;
-		}
-	}
-}
-
-template<std::size_t chunkSize>
-bool ChunkedStream<chunkSize>::waitForRead(int timeoutms) {
+bool ChunkedStream<chunkSize>::implWaitForRead(int timeoutms) {
 	return source.waitForInput(timeoutms);
 }
 
 template<std::size_t chunkSize>
-bool ChunkedStream<chunkSize>::waitForWrite(int timeoutms) {
+bool ChunkedStream<chunkSize>::implWaitForWrite(int timeoutms) {
 	bool r = source.waitForOutput(timeoutms);
 	//we are ready to write and there is full buffer,
 	if (r && wrBuff.remain() == 0) {
@@ -225,13 +175,13 @@ bool ChunkedStream<chunkSize>::waitForWrite(int timeoutms) {
 }
 
 template<std::size_t chunkSize>
-void ChunkedStream<chunkSize>::closeInput() {
+void ChunkedStream<chunkSize>::implCloseInput() {
 	curState = chunkEof;
 	source.putBackEof();
 }
 
 template<std::size_t chunkSize>
-void ChunkedStream<chunkSize>::closeOutput() {
+void ChunkedStream<chunkSize>::implCloseOutput() {
 	if (!outputClosed) {
 		flush(writeWholeBuffer);
 		BinaryView endChunk(StrViewA("0\r\n\r\n"));
@@ -241,12 +191,12 @@ void ChunkedStream<chunkSize>::closeOutput() {
 }
 
 template<std::size_t chunkSize>
-void ChunkedStream<chunkSize>::flushOutput() {
+void ChunkedStream<chunkSize>::implFlush() {
 	source.flush(writeWholeBuffer);
 }
 
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::readAsyncBuffer(const Callback& cb) {
+inline void ChunkedStream<chunkSize>::implReadAsync(const Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	BinaryView rd = source.read(true);
 	if (isEof(rd)) {
@@ -259,7 +209,7 @@ inline void ChunkedStream<chunkSize>::readAsyncBuffer(const Callback& cb) {
 				putBack(data);
 				BinaryView rd = source.read(true);
 				if (isEof(rd)) ccb(asyncEOF, BinaryView(0,0));
-				else if (rd.empty()) me->readAsyncBuffer(ccb);
+				else if (rd.empty()) me->implReadAsync(ccb);
 				else ccb(asyncOK, rd);
 			} else {
 				ccb(st,data);
@@ -271,8 +221,79 @@ inline void ChunkedStream<chunkSize>::readAsyncBuffer(const Callback& cb) {
 }
 
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::writeAsyncBuffer(const Callback& cb, BinaryView data) {
+inline BinaryView ChunkedStream<chunkSize>::implRead(MutableBinaryView buffer,bool nonblock) {
+
+	BinaryView k = implRead(nonblock);
+	if (k.empty()) return k;
+	BinaryView rm = k.substr(buffer.length);
+	k = k.substr(0,buffer.length);
+	copydata(buffer.data, k.data, k.length);
+	putBack(rm);
+	return BinaryView(buffer.data, k.length);
+
 }
+
+template<std::size_t chunkSize>
+inline BinaryView ChunkedStream<chunkSize>::implWrite(BinaryView buffer, bool nonblock) {
+	source.write(makeHdr(buffer.length),writeWholeBuffer);
+	source.write(buffer,writeWholeBuffer);
+	source.write(BinaryView(StrViewA("\r\n")),writeWholeBuffer);
+	return BinaryView(0,0);
+}
+template<std::size_t chunkSize>
+inline void ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool nonblock) {
+	if (curBuffer.size == 0) {
+		curBuffer = WrBuffer(chunkBuffer,chunkSize);
+	} else {
+		//we know, that function is always write whole buffer
+		implWrite(curBuffer.getView(), false);
+		curBuffer.wrpos = 0;
+	}
+}
+
+template<std::size_t chunkSize>
+inline void ChunkedStream<chunkSize>::implWriteAsync(const BinaryView &data, const Callback& cb) {
+	RefCntPtr<ChunkedStream> me(this);
+	Callback ccb(cb);
+
+	source.writeAsync(makeHdr(data.length),[=](AsyncState st, const BinaryView &r){
+		if (st == asyncOK) {
+			me->source.writeAsync(data,[=](AsyncState st, const BinaryView &r){
+				if (st == asyncOK) {
+					me->source.writeAsync(BinaryView(StrViewA("\r\n")),ccb);
+				} else{
+					ccb(st,r);
+				}
+			},true);
+		} else {
+			ccb(st,r);
+		}
+	},true);
+}
+
+
+
+
+template<std::size_t chunkSize>
+inline void ChunkedStream<chunkSize>::implReadAsync(const MutableBinaryView& buffer,const Callback& cb) {
+	Callback ccb(cb);
+	RefCntPtr<ChunkedStream> me(this);
+	MutableBinaryView b(buffer);
+	readAsync([=](AsyncState st, const BinaryView &data) {
+		if (st == asyncOK) {
+
+			BinaryView p = data.substr(0,b.length);
+			copydata(buffer.data, p.data, p.length);
+			me->putBack(data.substr(b.length));
+			ccb(st,b);
+		}
+		else {
+			ccb(st,data);
+		}
+	});
+
+}
+
 
 template<std::size_t chunkSize>
 void ChunkedStream<chunkSize>::invalidChunk() {

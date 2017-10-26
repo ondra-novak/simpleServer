@@ -10,94 +10,102 @@ namespace simpleServer {
 		LimitedStream(Stream source, std::size_t readLimit, std::size_t writeLimit, unsigned char fillChar)
 			:source(source), readLimit(readLimit), writeLimit(writeLimit),fillChar(fillChar) {}
 		~LimitedStream() {
-			source.commitWriteBuffer(wrBuff.wrpos);
 			padding();
 		}
 
+		virtual int setIOTimeout(int timeoutms) {
+			return source.setIOTimeout(timeoutms);
+		}
 
-		virtual int setIOTimeout(int timeoutms) {return source.setIOTimeout(timeoutms);}
-		virtual BinaryView readBuffer(bool nonblock) {
+		virtual BinaryView implRead(bool nonblock) override {
+			if (readLimit == 0) return eofConst;
 			BinaryView b = source.read(nonblock);
-			if (b.length > readLimit) {
-				BinaryView r = b.substr(0, readLimit);
-				BinaryView pb = b.substr(readLimit);
-				readLimit = 0;
-				source.putBack(pb);
-				return r;
-			} else {
-				readLimit -= b.length;
-				return b;
-			}
-		}
-		virtual MutableBinaryView createOutputBuffer() {
-			return source.getWriteBuffer((size_t)-1);
-		}
-		virtual std::size_t writeBuffer(BinaryView buffer, WriteMode wrmode) {
-			BinaryView b = source.write(buffer.substr(0,writeLimit),wrmode);
-			std::size_t written = buffer.length - b.length;
-			writeLimit-=written;
-			return written;
-		}
-		virtual bool waitForRead(int timeoutms) {
-			return source.waitForInput(timeoutms);
-		}
-		virtual bool waitForWrite(int timeoutms) {
-			source.waitForOutput(timeoutms);
+			BinaryView r = b.substr(readLimit);
+			source.putBack(b.substr(r.length));
+			readLimit -= r.length;
+			return r;
 		}
 
-		virtual void closeInput() {
-			readLimit = 0;
-			rdBuff = BinaryView(0,0);
+
+		virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override {
+			if (readLimit == 0) return eofConst;
+			MutableBinaryView x = buffer.substr(0,readLimit);
+			BinaryView r = source.read(x, nonblock);
+			readLimit-=r.length;
+			return r;
+		}
+		virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override {
+			if (writeLimit == 0) return BinaryView(0,0);
+			BinaryView b = buffer.substr(0,writeLimit);
+			BinaryView r = source->getDirectWrite().write(b,nonblock);
+			writeLimit-=b.length - r.length;
+		}
+		virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override {
+			if (writeLimit < curBuffer.wrpos)
+				curBuffer.wrpos = writeLimit;
+			writeLimit -= curBuffer.wrpos;
+			source->getDirectWrite().write(curBuffer,nonblock);
+			writeLimit += curBuffer.wrpos;
+		}
+		virtual void implReadAsync(const Callback &cb)  override {
+			if (readLimit == 0) {
+				cb(asyncEOF, eofConst);
+				return;
+			}
+			RefCntPtr<LimitedStream> me(this);
+			Callback ccb(cb);
+			source.readASync([=](AsyncState st, const BinaryView &b) {
+				BinaryView x = b.substr(me->readLimit);
+				source.putBack(b.substr(x.length));
+				me->readLimit-=x.length;
+				ccb(st, x);
+			});
+		}
+		virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb)  override {
+			if (readLimit == 0) {
+				cb(asyncEOF, eofConst);
+				return;
+			}
+			MutableBinaryView b = buffer.substr(0,readLimit);
+			RefCntPtr<LimitedStream> me(this);
+			Callback ccb(cb);
+			source.readASync(b,[=](AsyncState st, const BinaryView &b) {
+				me->readLimit-=b.length;
+				ccb(st,b);
+			});
+		}
+		virtual void implWriteAsync(const BinaryView &data, const Callback &cb)  override {
+			if (writeLimit == 0) return;
+
+			BinaryView b = data.substr(0,writeLimit);
+			RefCntPtr<LimitedStream> me(this);
+			Callback ccb(cb);
+			writeLimit-= b.length;
+
+			source->getDirectWrite().writeAsync(b, [=](AsyncState st, const BinaryView &data){
+				me->writeLimit+=data.length;
+				ccb(st, data);
+			});
+		}
+		virtual bool implWaitForRead(int timeoutms)  override {
+			if (readLimit == 0) return true;
+			else return source.waitForInput(timeoutms);
+		}
+		virtual bool implWaitForWrite(int timeoutms)  override {
+			if (writeLimit == 0) return true;
+			else return source.waitForOutput(timeoutms);
+
+		}
+		virtual void implCloseInput()  override {
 			source.putBackEof();
 		}
-		virtual void closeOutput() {
-			padding();
+		virtual void implCloseOutput()  override {
+			source.writeEof();
+		}
+		virtual void implFlush()  override {
+			source->getDirectWrite().flush();
 		}
 
-		virtual void flushOutput() {
-			source.flush(writeAndFlush);
-		}
-
-		static Stream create(Stream sourceStream, std::size_t readLimit, std::size_t writeLimit, unsigned char fillChar = 0) {
-			return new LimitedStream(sourceStream, readLimit, writeLimit, fillChar);
-		}
-
-		virtual bool canRunAsync() const {
-			return source.canRunAsync();
-		}
-
-		virtual void readAsyncBuffer(const Callback &cb) override {
-			RefCntPtr<LimitedStream> me(this);
-			Callback ccpy(cb);
-			source.readASync([me, ccpy](AsyncState st, const BinaryView &b){
-				if (b.length > me->readLimit) {
-					BinaryView newb = b.substr(0,me->readLimit);
-					me->source.putBack(b.substr(me->readLimit));
-					me->readLimit = 0;
-					ccpy(st, newb);
-				} else {
-					me->readLimit-=b.length;
-					ccpy(st, b);
-				}
-			});
-
-		}
-		virtual void writeAsyncBuffer(const Callback &cb, BinaryView data) override {
-			BinaryView ldata = data.substr(0,writeLimit);
-			std::size_t delta = ldata.length;
-			writeLimit -= delta;
-			Callback ccpy(cb);
-			RefCntPtr<LimitedStream> me(this);
-			source.writeAsync(ldata, [me,ccpy,delta](AsyncState st, const BinaryView &remain) {
-				if (st == asyncOK) {
-					me->writeLimit += remain.length;
-					ccpy(st,remain);
-				} else {
-					me->writeLimit += delta;
-					ccpy(st,remain);
-				}
-			});
-		}
 
 
 	protected:

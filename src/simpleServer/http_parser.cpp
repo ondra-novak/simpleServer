@@ -103,7 +103,7 @@ public:
 	ChunkedStreamWrap(const Fn &fn, const Stream &source):ChunkedStream(source),fn(fn) {}
 	~ChunkedStreamWrap() {
 		try {
-			closeOutput();
+			writeEof();
 			source.flush(writeAndFlush);
 			fn();
 		} catch (...) {}
@@ -118,7 +118,7 @@ public:
 
 	LimitedStreamWrap(const Fn &fn, const Stream &source,std::size_t writeLimit):LimitedStream(source,0,writeLimit,0),fn(fn) {}
 	~LimitedStreamWrap() {
-		closeOutput();
+		writeEof();
 		source.flush(writeAndFlush);
 		fn();
 	}
@@ -416,7 +416,7 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 				length = std::strtol(te.data,0,10);
 			}
 		}
-		return LimitedStream::create(stream, length,0);
+		return new LimitedStream(stream, length,0,0);
 	}
 }
 
