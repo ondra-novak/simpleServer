@@ -21,6 +21,7 @@ public:
 	virtual int setIOTimeout(int timeoutms) {
 		return source.setIOTimeout(timeoutms);
 	}
+protected:
 
 	virtual BinaryView implRead(bool nonblock) override;
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
@@ -38,9 +39,6 @@ public:
 	virtual void implFlush() override;
 
 
-	static Stream create(const Stream &source) {
-		return new ChunkedStream(source);
-	}
 
 protected:
 	Stream source;

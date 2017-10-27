@@ -20,13 +20,14 @@ class HTTPRequestData;
 typedef RefCntPtr<HTTPRequestData> PHTTPRequestData;
 
 
+
 typedef std::function<void(HTTPRequest)> HTTPHandler;
 
 
 class HTTPResponse {
 public:
 
-	HTTPResponse(int code);
+	explicit HTTPResponse(int code);
 	HTTPResponse(int code, StrViewA response);
 
 	HTTPResponse &header(const StrViewA key, const StrViewA value);
@@ -280,6 +281,7 @@ public:
 	 *
 	 * */
 	static void parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true);
+
 
 
 

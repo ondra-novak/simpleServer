@@ -90,11 +90,14 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; i++) {
 			auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
 			if (tmi != tme) {
-				Task t = std::bind(tme->second.taskFn,asyncTimeout);
-				removeTask(i,tmi);
-				return t;
+				if (n >= tmi->second.timeout) {
+					Task t = std::bind(tmi->second.taskFn,asyncTimeout);
+					removeTask(i,tmi);
+					return t;
+				}
 			}
 		}
+		return []{};
 	} else {
 		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; ++i) {
 			pollfd &fd = fdmap[i];

@@ -97,7 +97,7 @@ std::string Rfc1123_DateTimeNow()
 
 
 template<typename Fn>
-class ChunkedStreamWrap: public ChunkedStream<> {
+class ChunkedStreamWrap: public ChunkedStream<16384> {
 public:
 
 	ChunkedStreamWrap(const Fn &fn, const Stream &source):ChunkedStream(source),fn(fn) {}
@@ -186,8 +186,8 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 		if (!responseSent) {
 			sendErrorPage(e.getStatusCode(), e.getStatusMessage());
 		}
-	} catch (const std::exception &) {
-		sendErrorPage(500);
+	} catch (const std::exception &e) {
+		sendErrorPage(500, StrViewA("InternalError"), e.what());
 	}
 
 }
@@ -248,8 +248,9 @@ bool HTTPRequestData::acceptLine(Stream stream, BinaryView data) {
 	auto pos = hdrline.indexOf("\r\n\r\n",searchPos);
 	if (pos != hdrline.npos) {
 		BinaryView remain(hdrline.substr(pos+4));
-		auto ofs = data.indexOf(remain,0);
+		auto ofs = data.length - remain.length;
 		stream.putBack(data.substr(ofs));
+		requestHdrLineBuffer.resize(pos+4);
 		return false;
 	} else {
 		return true;
@@ -346,27 +347,32 @@ void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
 
 	s.write(BinaryView(body));
 
+	s.flush();
+	handleKeepAlive();
+
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode) {
-	sendResponse(statusCode, getStatuCodeMsg(statusCode));
+	sendErrorPage(statusCode, getStatuCodeMsg(statusCode), StrViewA());
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc) {
 	std::ostringstream body;
 	body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-			"<!DOCTYPE html>"
-			"<html>"
+			"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
+			"<html xmlns=\"http://www.w3.org/1999/xhtml\">"
 			"<head>"
 			"<title>" << statusCode << " " << statusMessage <<"</title>"
 			"</head>"
 			"<body>"
 			"<h1>"  << statusCode << " " << statusMessage <<"</h1>"
 			"<p><![CDATA[" << desc << "]]></p>"
+			"<hr />"
+			"<small><em>Powered by Bredy's simpleServer - C++x11 mini-http-server - <a href=\"https://github.com/ondra-novak/simpleServer\">sources available under MIT licence</a></em></small>"
 			"</body>"
 			"</html>";
 
-	sendResponse(StrViewA("application/xhtml+xml;charset=UTF-8"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
+	sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType) {
@@ -390,6 +396,8 @@ void HTTPRequestData::sendResponse(const HTTPResponse& resp, StrViewA body) {
 	sendResponseLine(resp.getCode(), resp.getStatusMessage());
 	Stream s = sendHeaders(&resp, nullptr, &body.length);
 	s.write(BinaryView(body));
+	s.flush();
+	handleKeepAlive();
 
 }
 
@@ -406,7 +414,7 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 
 	HeaderValue te = operator[](TRANSFER_ENCODING);
 	if (te == "chunked") {
-		return ChunkedStream<>::create(stream);
+		return new ChunkedStream<16>(stream);
 	} else {
 		HeaderValue cl = operator[](CONTENT_LENGTH);
 		bool hasLength = false;

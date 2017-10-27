@@ -16,6 +16,7 @@
 #include "../simpleServer/threadPoolAsync.h"
 #include "../simpleServer/common/mtcounter.h"
 #include "../simpleServer/http_parser.h"
+#include "../simpleServer/http_server.h"
 
 using namespace simpleServer;
 
@@ -44,21 +45,24 @@ protected:
 
 void runServerTest() {
 
-	StreamFactory server = TCPListen::create(false,8787);
-	AsyncProvider async = ThreadPoolAsync::create(2,1);
-	MTCounter  wait(1);
-	server->runServerAsync(async, [=](AsyncState st, Stream s) {
-		if (st == asyncOK) {
-			HTTPRequest::parseHttp(s, [=](HTTPRequest req){
 
-				Stream out = req->sendResponse("text/plain");
-				out.write(BinaryView(StrViewA("Hello world!")));
+	MTCounter wait;
+	wait.inc();
+	MiniHttpServer mserver(NetAddr::create("",8787),0,0);
+	mserver >> [](HTTPRequest req) {
 
-			},true);
+		if (req->getPath() == "/") {
+			Stream out = req->sendResponse("text/plain");
+			for (int i = 0; i < 10000; i++)
+				out << "Hello world! ";
+			out << "... Konec";
+		} else {
+			req->sendErrorPage(404);
 		}
 
 
-	});
+	};
+
 	wait.zeroWait();
 
 

@@ -519,6 +519,7 @@ public:
 					if (sx == nullptr) {
 						charge(p,cb,lst,iot);
 					} else {
+						sx.setAsyncProvider(p);
 						cb(state,sx);
 					}
 				} catch (SystemException &e) {
@@ -541,6 +542,7 @@ public:
 
 		RefCntPtr<AsyncData> me(this);
 		curCallback = cb;
+		curProvider = p;
 
 		for (int s: idleSockets) {
 

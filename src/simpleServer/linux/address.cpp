@@ -155,32 +155,38 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 
 	if (addr.empty()) {
 		req.ai_flags |=  AI_PASSIVE;
-	} else if (addr[0] == '[') {
-		std::size_t sep = addr.lastIndexOf("]:");
-		if (sep == addr.npos) {
-			if (addr[addr.length-1] == ']') {
-				prepNode = addr.substr(1, addr.length-2);
-			} else {
-				sep = addr.lastIndexOf(":");
-				if (sep == addr.npos) {
-					prepNode = addr;
+		node = nullptr;
+	} else {
+		if (addr[0] == '[') {
+
+			std::size_t sep = addr.lastIndexOf("]:");
+			if (sep == addr.npos) {
+				if (addr[addr.length-1] == ']') {
+					prepNode = addr.substr(1, addr.length-2);
 				} else {
-					prepNode = addr.substr(0,sep);
-					prepPort = addr.substr(sep+1);
+					sep = addr.lastIndexOf(":");
+					if (sep == addr.npos) {
+						prepNode = addr;
+					} else {
+						prepNode = addr.substr(0,sep);
+						prepPort = addr.substr(sep+1);
+					}
 				}
+			} else {
+				prepNode = addr.substr(0,sep);
+				prepPort = addr.substr(sep+2);
 			}
 		} else {
-			prepNode = addr.substr(0,sep);
-			prepPort = addr.substr(sep+2);
+			std::size_t sep = addr.lastIndexOf(":");
+			if (sep == addr.npos) {
+				prepNode = addr;
+			} else {
+				prepNode = addr.substr(0,sep);
+				prepPort = addr.substr(sep+1);
+			}
 		}
-	} else {
-		std::size_t sep = addr.lastIndexOf(":");
-		if (sep == addr.npos) {
-			prepNode = addr;
-		} else {
-			prepNode = addr.substr(0,sep);
-			prepPort = addr.substr(sep+1);
-		}
+		node = copyString(alloca(prepNode.length+1),prepNode);
+
 	}
 
 	if (prepPort.empty()) {
@@ -188,7 +194,6 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 	} else {
 		svc = copyString(alloca(prepPort.length+1), prepPort);
 	}
-	node = copyString(alloca(prepNode.length+1),prepNode);
 
 	int e = getaddrinfo(node,svc, &req, &result);
 	if (e) {

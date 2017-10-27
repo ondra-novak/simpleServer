@@ -50,7 +50,7 @@ public:
 		WrBuffer(const MutableBinaryView &b, std::size_t wrpos = 0):ptr(b.data),size(b.length),wrpos(wrpos) {}
 		WrBuffer(unsigned char *ptr, std::size_t bufferSize, std::size_t wrpos = 0)
 			:ptr(ptr)
-			,size(size)
+			,size(bufferSize)
 			,wrpos(wrpos) {}
 	};
 
@@ -337,8 +337,9 @@ public:
 		} else {
 			auto remain = wrBuff.remain();
 			BinaryView p1 = buffer.substr(0,remain);
-			wrb = buffer.substr(remain);
-			copydata(wrBuff.ptr+wrBuff.wrpos, buffer.data, remain);
+			wrb = buffer.substr(p1.length);
+			copydata(wrBuff.ptr+wrBuff.wrpos, buffer.data, p1.length);
+			wrBuff.wrpos+= p1.length;
 		}
 		while (!wrb.empty() && rep) {
 			wrb = write(wrb, writeCanBlock);
@@ -346,6 +347,7 @@ public:
 		if (wrmode == writeAndFlush) {
 			flush(writeAndFlush);
 		}
+		return wrb;
 	}
 
 
@@ -366,7 +368,7 @@ public:
 
 	///Flush output buffer to the stream
 	void flush(WriteMode wrmode = writeAndFlush) {
-		if (wrBuff.size) {
+		if (wrBuff.wrpos) {
 			bool rep = (wrmode == writeWholeBuffer || wrmode == writeAndFlush);
 			do {
 				implWrite(wrBuff, wrmode == writeNonBlock);
