@@ -25,6 +25,7 @@ enum WriteMode {
 
 class AsyncResource;
 class AbstractStream;
+class Stream;
 
 ///Very abstract interface which descibes protocol to access data in the stream
 class IGeneralStream {
@@ -225,6 +226,8 @@ protected:
 		friend class AbstractStream;
 	};
 
+
+
 protected:
 
 	///Constant which should be returned by readBuffer() when reading reaches to EOF
@@ -236,9 +239,11 @@ protected:
 ///AbstractStream brings some additional function which halps to work with streams and buffers.
 /** Streams should extend this class, not IGenerlStream. The class also allows to ref-counted
  * references to the stream and expects that streams will be allocated by operator new  */
-class AbstractStream: public RefCntObj, public IGeneralStream {
+class AbstractStream: public RefCntObjEx<IGeneralStream> {
 public:
 
+
+	~AbstractStream() noexcept {}
 
 
 	BinaryView read(bool nonblock = false) {
@@ -531,6 +536,8 @@ public:
 	}
 
 
+
+
 protected:
 
 
@@ -552,6 +559,12 @@ protected:
 
 	void copydata(unsigned char *target, const unsigned char *source, std::size_t count);
 
+	template<typename T> friend class RefCntPtr;
+
+	void onRelease() override {
+		asyncProvider = nullptr;
+	}
+
 };
 
 
@@ -570,7 +583,7 @@ public:
 	 *
 	 * */
 
-	int operator()() {
+	int operator()() const {
 		ptr->readByte();
 	}
 
@@ -579,7 +592,7 @@ public:
 	 * @param b byte to write. Note that value can be in range 0-255, writting the value
 	 *  outside of this range is not defined (probably it will write only lowest 8 bits)
 	 */
-	void operator()(int b) {
+	void operator()(int b) const {
 		ptr->writeByte((unsigned char)b);
 	}
 
@@ -610,11 +623,11 @@ public:
 	 * distinguish between EOF and empty buffer, you need to call isEof() function
 	 * with the returned view.
 	 */
-	BinaryView read(bool nonblock=false) {
+	BinaryView read(bool nonblock=false) const {
 		return ptr->read(nonblock);
 	}
 
-	BinaryView read(const MutableBinaryView &buffer, bool nonblock=false){
+	BinaryView read(const MutableBinaryView &buffer, bool nonblock=false) const {
 		return ptr->read(buffer, nonblock);
 	}
 
@@ -642,7 +655,7 @@ public:
 	 * is not MT safe, so calling it during pending reading can result to unpredictable
 	 * behaviour
 	 */
-	void putBack(const BinaryView &data) {
+	void putBack(const BinaryView &data) const {
 		return ptr->putBack(data);
 	}
 
@@ -651,14 +664,14 @@ public:
 	 * can be called only after calling the function to read bytes, only once and
 	 * only if there weren't EOF, otherwise it can cause inpredictable result
 	 */
-	void putBackByte() {
+	void putBackByte() const {
 		return ptr->putBackByte();
 	}
 	///Puts back EOF, so it will appear that stream is ending
 	/** This function causes, that next read will return EOF. However it is possible to
 	 * complete any blocking operation. Function is MT safe.
 	 */
-	void putBackEof() {
+	void putBackEof() const {
 		return ptr->putBackEof();
 	}
 	///Closes the output part of the stream by writing EOF
@@ -668,7 +681,7 @@ public:
 	 * explicitly is not necesery
 	 *
 	 *  */
-	void  closeOutput() {
+	void  closeOutput() const {
 		ptr->writeEof();
 	}
 	///Closes the output part of the stream by writing EOF
@@ -678,7 +691,7 @@ public:
 	 * explicitly is not necesery
 	 *
 	 *  */
-	void writeEof() {
+	void writeEof() const {
 		ptr->writeEof();
 	}
 
@@ -693,37 +706,37 @@ public:
 	 * any transparent buffers on the way, request the sync with filesystem and doesn't
 	 * return until operation completes
 	 */
-	void flush(WriteMode wr = writeAndFlush) {
+	void flush(WriteMode wr = writeAndFlush) const {
 		ptr->flush(wr);
 	}
-	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) {
+	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) const {
 		return ptr->write(buffer, wrmode);
 	}
-	int setIOTimeout(int timeoutms) {
+	int setIOTimeout(int timeoutms) const {
 		return ptr->setIOTimeout(timeoutms);
 	}
 
-	bool waitForInput(int timeout) {
+	bool waitForInput(int timeout) const {
 		return ptr->waitForInput(timeout);
 	}
 
-	bool waitForOutput(int timeout) {
+	bool waitForOutput(int timeout) const {
 		return ptr->waitForOutput(timeout);
 	}
 	template<typename Fn>
-	void readASync(const Fn &completion) {
+	void readASync(const Fn &completion) const {
 		return ptr->readAsync(completion);
 	}
 	template<typename Fn>
-	void readASync(const MutableBinaryView &buffer, const Fn &completion) {
+	void readASync(const MutableBinaryView &buffer, const Fn &completion) const {
 		return ptr->readAsync(buffer,completion);
 	}
 	template<typename Fn>
-	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) {
+	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) const {
 		return ptr->writeAsync(data, completion, alldata);
 	}
 
-	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) {
+	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) const {
 		return ptr->setAsyncProvider(asyncProvider);
 	}
 	AsyncProvider getAsyncProvider() const {
@@ -734,12 +747,12 @@ public:
 		return ptr->canRunAsync();
 	}
 
-	Stream &operator << (StrViewA text) {
+	const Stream &operator << (StrViewA text) const {
 		write(BinaryView(text));
 		return *this;
 	}
 
-	Stream &operator << (std::intptr_t x) {
+	const Stream &operator << (std::intptr_t x) const {
 		if (x < 0) {
 			operator()('-');
 			x = -x;
@@ -756,9 +769,6 @@ public:
 		write(BinaryView(StrViewA(p,b-p)));
 		return *this;
 	}
-
-
-
 
 };
 

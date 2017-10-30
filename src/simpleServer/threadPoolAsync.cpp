@@ -2,6 +2,8 @@
 
 #include <thread>
 
+#include "../simpleServer/mt.h"
+
 #include "exceptions.h"
 
 namespace simpleServer {
@@ -21,8 +23,7 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 	}
 	while (threadCount.getCounter() < reqThreadCount) {
 		RefCntPtr<ThreadPoolAsyncImpl> me (this);
-		std::thread thr([me]{me->worker();});
-		thr.detach();
+		runThread([me]{me->worker();});
 		threadCount.inc();
 	}
 	lst = cQueue.front();

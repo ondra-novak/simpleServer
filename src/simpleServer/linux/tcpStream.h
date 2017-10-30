@@ -11,12 +11,13 @@ public:
 	virtual NetAddr getPeerAddr() const {return peer;}
 
 	TCPStream(int sck, int iotimeout, const NetAddr &peer);
-	~TCPStream();
+	virtual ~TCPStream() noexcept;
+
+	virtual int setIOTimeout(int timeoutms) override;
 
 protected:
 
 
-	virtual int setIOTimeout(int timeoutms) override;
 	virtual BinaryView implRead(bool nonblock) override;
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
 	virtual BinaryView implWrite(BinaryView buffer, bool nonblock);
@@ -30,7 +31,12 @@ protected:
 	virtual void implCloseOutput()  override;
 	virtual void implFlush()  override;
 
+	template<typename T> friend class RefCntPtr;
+
+	virtual void onRelease() override;
+
 protected:
+
 
 	static const int inputBufferSize = 4096;
 	static const int outputBufferSize = 4096;

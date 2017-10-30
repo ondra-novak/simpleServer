@@ -101,10 +101,13 @@ class ChunkedStreamWrap: public ChunkedStream<16384> {
 public:
 
 	ChunkedStreamWrap(const Fn &fn, const Stream &source):ChunkedStream(source),fn(fn) {}
-	~ChunkedStreamWrap() {
+	~ChunkedStreamWrap() noexcept {}
+
+	void onRelease() {
 		try {
 			writeEof();
-			source.flush(writeAndFlush);
+			implFlush();
+			ChunkedStream<16384>::onRelease();
 			fn();
 		} catch (...) {}
 	}
@@ -117,10 +120,14 @@ class LimitedStreamWrap: public LimitedStream {
 public:
 
 	LimitedStreamWrap(const Fn &fn, const Stream &source,std::size_t writeLimit):LimitedStream(source,0,writeLimit,0),fn(fn) {}
-	~LimitedStreamWrap() {
-		writeEof();
-		source.flush(writeAndFlush);
-		fn();
+	~LimitedStreamWrap() noexcept {}
+
+	void onRelease() {
+		try {
+			writeEof();
+			LimitedStream::onRelease();
+			fn();
+		} catch (...) {}
 	}
 public:
 	Fn fn;
@@ -148,39 +155,32 @@ static StrViewA getStatuCodeMsg(int code) {
 }
 
 
-void HTTPRequest::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) {
+bool HTTPRequest::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) {
 
 
 	RefCntPtr<HTTPRequestData> req(new HTTPRequestData);
 
-	req->parseHttp(stream, handler, keepAlive);
+	return req->parseHttp(stream, handler, keepAlive);
 
 }
 
-static StrViewA trim(StrViewA src) {
-	while (!src.empty() && isspace(src[0])) src = src.substr(1);
-	while (!src.empty() && isspace(src[src.length-1])) src = src.substr(0,src.length-1);
-	return src;
-}
-
-bool HTTPRequestData::parseHeaders(StrViewA hdr) {
-	hdrMap.clear();
-	auto splt = hdr.split(CRLF);
-	reqLine = splt();
-	parseReqLine(reqLine);
-	while (splt) {
-		StrViewA line = splt();
-		auto kvsp = line.split(":");
-		StrViewA key = trim(kvsp());
-		StrViewA value = trim(StrViewA(kvsp));
-		hdrMap.insert(std::make_pair(key, value));
-	}
-	return version == "HTTP/1.0" || version == "HTTP/1.1";
-}
 
 void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handler) {
+
+	if (versionStr == "HTTP/0.9") {
+		version = http09;
+	} else if (versionStr == "HTTP/1.0") {
+		version = http10;
+	} else if (versionStr == "HTTP/1.1") {
+		version = http11;
+	} else {
+		sendErrorPage(505);
+		return;
+	}
+	keepAlive = version == http11;
+
 	try {
-		reqStream= prepareRequest(stream);
+		reqStream= prepareStream(stream);
 		handler(HTTPRequest(this));
 	} catch (const HTTPStatusException &e) {
 		if (!responseSent) {
@@ -192,116 +192,58 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 
 }
 
-void HTTPRequestData::parseHttpAsync(Stream stream, HTTPHandler handler) {
-	//async
-	RefCntPtr<HTTPRequestData> me(this);
-	stream.readASync(
-			[me, handler, stream](AsyncState st, const BinaryView& data) {
-				if (st == asyncOK) {
-					if (me->acceptLine(stream, data))
-					me->parseHttpAsync(stream, handler);
-					else {
-						me->runHandler(stream, handler);
-					}
-				}
-			});
-}
 
-void HTTPRequestData::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) {
+bool HTTPRequestData::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) {
 
 	originStream=stream;
 	responseSent=false;
-	hdrMap.clear();
-	requestHdrLineBuffer.clear();
+	hdrs.clear();
 	keepAliveHandler = handler;
 
 	if (stream.canRunAsync()) {
-		//async
-		parseHttpAsync(stream, handler);
-	} else {
-		BinaryView b = stream.read();
-		while (!b.empty() && acceptLine(stream,b)) {
-			b = stream.read();
-		}
-		if (!b.empty())
-			runHandler(stream, handler);
-	}
 
-}
+		RefCntPtr<HTTPRequestData> me(this);
+		hdrs.parseAsync(stream,[=](AsyncState st){
 
-bool HTTPRequestData::acceptLine(Stream stream, BinaryView data) {
+			if (st == asyncOK) {
+				me->parseReqLine(me->hdrs.getFirstLine());
+				me->runHandler(stream, handler);
+			}
 
-	while (!data.empty() && requestHdrLineBuffer.empty() && isspace(data[0])) {
-		data = data.substr(1);
-	}
-
-	std::size_t searchPos = requestHdrLineBuffer.size();
-	if (searchPos>=3) {
-		searchPos-=3;
-	} else {
-		searchPos = 0;
-	}
-
-
-	requestHdrLineBuffer.insert(requestHdrLineBuffer.end(),data.begin(),data.end());
-	StrViewA hdrline(requestHdrLineBuffer.data(), requestHdrLineBuffer.size());
-	auto pos = hdrline.indexOf("\r\n\r\n",searchPos);
-	if (pos != hdrline.npos) {
-		BinaryView remain(hdrline.substr(pos+4));
-		auto ofs = data.length - remain.length;
-		stream.putBack(data.substr(ofs));
-		requestHdrLineBuffer.resize(pos+4);
+		});
 		return false;
+
 	} else {
-		return true;
-	}
-}
-
-Stream HTTPRequestData::prepareRequest(const Stream& stream) {
-	do {
-		StrViewA hdr(requestHdrLineBuffer.data(), requestHdrLineBuffer.size());
-		auto p = hdr.indexOf("\r\n\t");
-		if (p == hdr.npos) {
-			parseHeaders(hdr);
-			return  prepareStream(stream);
+		if (hdrs.parse(stream)) {
+			parseReqLine(hdrs.getFirstLine());
+			runHandler(stream, handler);
+			return keepAlive;
 		} else {
-			auto beg = requestHdrLineBuffer.begin() + p;
-			auto end = beg + 3;
-			requestHdrLineBuffer.erase(beg,end);
+			return false;
 		}
-	} while (true);
-	return stream;
+	}
+
 }
 
 
-std::size_t HTTPRequestData::Hash::operator ()(
-		StrViewA text) const {
-	std::_Hash_impl::hash(text.data, text.length);
-}
 
 void HTTPRequestData::parseReqLine(StrViewA line) {
 	auto splt = line.split(" ");
 	method = splt();
 	path = splt();
-	version = splt();
+	versionStr = splt();
 }
 
 HTTPRequestData::HdrMap::const_iterator HTTPRequestData::begin() const {
-	return hdrMap.begin();
+	return hdrs.begin();
 }
 
 HTTPRequestData::HdrMap::const_iterator HTTPRequestData::end() const {
-	return hdrMap.end();
+	return hdrs.end();
 }
 
 HeaderValue HTTPRequestData::operator [](StrViewA key) const {
-	auto x = hdrMap.find(key);
-	if (x == hdrMap.end()) {
-		return HeaderValue();
-	} else {
-		return HeaderValue(x->second);
-	}
-
+	return  hdrs[key];
 }
 
 StrViewA HTTPRequestData::getMethod() const {
@@ -312,12 +254,12 @@ StrViewA HTTPRequestData::getPath() const {
 	return path;
 }
 
-StrViewA HTTPRequestData::getVersion() const {
+HttpVersion HTTPRequestData::getVersion() const {
 	return version;
 }
 
 StrViewA HTTPRequestData::getRequestLine() const {
-	return reqLine;
+	return hdrs.getFirstLine();
 }
 
 std::string HTTPRequestData::getURI(bool secure) const {
@@ -412,6 +354,10 @@ void HTTPRequestData::redirect(StrViewA url) {
 
 Stream HTTPRequestData::prepareStream(const Stream& stream) {
 
+	HeaderValue con = operator[](CONNECTION);
+	if (con == "keep-alive") keepAlive = true;
+	else if (con == "close") keepAlive = false;
+
 	HeaderValue te = operator[](TRANSFER_ENCODING);
 	if (te == "chunked") {
 		return new ChunkedStream<16>(stream);
@@ -421,7 +367,7 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 		long length;
 		if (cl.defined()) {
 			if (isdigit(cl[0])) {
-				length = std::strtol(te.data,0,10);
+				length = std::strtol(cl.data,0,10);
 			}
 		}
 		return new LimitedStream(stream, length,0,0);
@@ -429,24 +375,35 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 }
 
 
-HTTPResponse::HTTPResponse(int code)
+HTTPResponse::HTTPResponse(int code):code(code), message(pool.add(getStatuCodeMsg(code)))
 {
 }
 
-HTTPResponse::HTTPResponse(int code, StrViewA response) {
+HTTPResponse::HTTPResponse(int code, StrViewA response):code(code),message(pool.add(message)) {
 }
 
-HTTPResponse& HTTPResponse::header(const StrViewA key,
-		const StrViewA value) {
-}
 
 HTTPResponse& HTTPResponse::contentLength(std::size_t sz) {
+	SendHeaders::contentLength(sz);
+	return *this;
 }
 
 void HTTPResponse::clear() {
+	SendHeaders::clear();
+	message = Pool::String();
 }
 
 int HTTPResponse::getCode() const {
+}
+
+HTTPResponse& HTTPResponse::operator ()(const StrViewA key,
+		const StrViewA value) {
+}
+
+HTTPResponse& HTTPResponse::contentType(std::size_t sz) {
+}
+
+HTTPResponse::HTTPResponse(const HTTPResponse& other) {
 }
 
 StrViewA HTTPResponse::getStatusMessage() const {
@@ -458,7 +415,7 @@ void HTTPRequestData::sendResponseLine(int statusCode, StrViewA statusMessage) {
 		throw std::runtime_error("HTTP server: Response already sent (or started)");
 	}
 	responseSent = true;
-	originStream << version << " " << statusCode << " " << statusMessage
+	originStream << versionStr << " " << statusCode << " " << statusMessage
 			<< CRLF;
 
 }
@@ -477,29 +434,16 @@ protected:
 Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
 		const StrViewA* contentType, const size_t* contentLength) {
 
-
 	struct Flags {
 		bool hasCtt = false;
 		bool hasCtl = false;
 		bool hasTE = false;
-//		bool hasDate = false;
-		bool closeConn = false;
+		bool hasClose = false;
 	};
 
 	Flags flags;
 	std::size_t bodyLimit = -1;
 	bool usechunked = false;
-	bool oldver = version == "HTTP/1.0";
-
-
-	HeaderValue cc = operator[](CONNECTION);
-	if (cc == "keep-alive") {
-		flags.closeConn = false;
-	}else if (cc == "close") {
-		flags.closeConn  = true;
-	} else {
-		flags.closeConn  = version == "HTTP/1.0";
-	}
 
 
 	if (contentType) {
@@ -527,15 +471,13 @@ Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
 			else if (key == TRANSFER_ENCODING) {
 				if (flags.hasTE) return true;
 				flags.hasTE = true;
-/*			} else if (key == "Server") {
-				flags.hasServer = true;*/
-	/*		} else if (key == "Date") {
-				flags.hasDate = true;*/
 			} else if (key == CONNECTION) {
 				if (value == "close") {
-					flags.closeConn = true;
+					keepAlive = false;
+					flags.hasClose = true;
 				} else if (value == "keep-alive") {
-					flags.closeConn = false;
+					keepAlive = true;
+					flags.hasClose = true;
 				}
 			}
 
@@ -544,21 +486,30 @@ Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
 		});
 
 	}
+
+
+	if (!flags.hasClose) {
+		if (!flags.hasCtl && version != http11) {
+			keepAlive = false;
+		}
+
+		if (keepAlive) {
+			if (version != http11) {
+				originStream << CONNECTION << ": " << "keep-alive" << CRLF;
+				flags.hasClose = true;
+			}
+		} else {
+			originStream << CONNECTION << ": " << "close" << CRLF;
+		}
+	}
+
 	if (!flags.hasCtt) {
 		originStream << CONTENT_TYPE << ": text/plain\r\n";
 	}
-	if (!flags.hasCtl && !flags.hasTE && !flags.closeConn) {
+	if (!flags.hasCtl && !flags.hasTE && keepAlive) {
 		originStream << TRANSFER_ENCODING << ": chunked\r\n";
 		usechunked = true;
 	}
-	if (flags.closeConn) {
-		originStream << CONNECTION << ": close\r\n";
-	} else if (oldver && flags.hasCtl) {
-		originStream << CONNECTION << ": keep-alive\r\n";
-	}
-/*	if (!flags.hasDate) {
-		originStream << "Date" <<": " << Rfc1123_DateTimeNow() << "\r\n";
-	}*/
 
 	originStream << CRLF;
 
@@ -587,13 +538,49 @@ void HTTPRequestData::sendResponse(StrViewA contentType, StrViewA body,int statu
 	sendResponse(contentType, BinaryView(body),  statusCode, statusMessage);
 }
 
+void HTTPRequestData::readBodyAsync(std::size_t maxSize, HTTPHandler completion) {
+	userBuffer.clear();
+	readBodyAsync_cont1(maxSize, completion);
+}
+
+
+void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler completion) {
+	PHTTPRequestData me(this);
+		std::size_t end = userBuffer.size();
+		std::size_t remain = maxSize - end;
+		if (remain > 4096) remain = 4096;
+		if (remain == 0) {
+
+			keepAlive = false;
+			sendErrorPage(413);
+			return;
+
+		} else {
+
+			userBuffer.resize(end+4096);
+			reqStream.readASync(MutableBinaryView(&userBuffer[end],remain),
+				[me, maxSize,completion](AsyncState st, const BinaryView data) {
+
+				me->userBuffer.resize(me->userBuffer.size()-4096+data.length);
+				if (data.empty()) {
+					completion(HTTPRequest(me));
+				} else {
+					me->readBodyAsync_cont1(maxSize, completion);
+				}
+
+			});
+		}
+}
+
+
 void HTTPRequestData::handleKeepAlive() {
 	reqStream = nullptr;
 
-	if (keepAliveHandler != nullptr) {
+	if (keepAliveHandler != nullptr && keepAlive) {
 		parseHttp(originStream, keepAliveHandler,true);
 	}
 }
 
 
 }
+

@@ -2,9 +2,21 @@
 
 #include <thread>
 #include <vector>
+#include <future>
+#include <functional>
 
 namespace simpleServer {
 
+template<typename Fn>
+void runThread(const Fn &fn) {
+
+	std::function<void()> f(fn);
+	std::thread t(f);
+	t.detach();
+}
+
+
+#if 0
 template<typename Fn, class ...Args>
 void runNoExcept(Fn fn, Args... x) noexcept(true) {
 	fn(x...);
@@ -41,5 +53,5 @@ void forkThread(const Fn1 &child, const Fn2 &parent) {
 	thr.join();
 }
 
-
+#endif
 }

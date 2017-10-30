@@ -7,6 +7,7 @@
 
 #include "abstractStream.h"
 #include "common/stringpool.h"
+#include "http_headers.h"
 #include "http_headervalue.h"
 
 #include "refcnt.h"
@@ -23,40 +24,40 @@ typedef RefCntPtr<HTTPRequestData> PHTTPRequestData;
 
 typedef std::function<void(HTTPRequest)> HTTPHandler;
 
+enum HttpVersion {
+	http09,
+	http10,
+	http11
+};
 
-class HTTPResponse {
+
+
+
+class HTTPResponse: public SendHeaders {
 public:
 
 	explicit HTTPResponse(int code);
 	HTTPResponse(int code, StrViewA response);
+	HTTPResponse(const HTTPResponse &other);
 
-	HTTPResponse &header(const StrViewA key, const StrViewA value);
+
+	HTTPResponse &operator()(const StrViewA key, const StrViewA value);
 	HTTPResponse &contentLength(std::size_t sz);
+	HTTPResponse &contentType(std::size_t sz);
 
 	void clear();
-
 
 	int getCode() const;
 	StrViewA getStatusMessage() const;
 
-	template<typename Fn>
-	void forEach(const Fn &fn) const {
-		for (auto &&x : hdrMap) {
-			fn(x.first.getView(), x.second.getView());
-		}
-	}
 
 
 
 protected:
 
-	typedef StringPool<char> Pool;
-	typedef std::map<Pool::String, Pool::String> HdrMap;
+	int code;
+	Pool::String message;
 
-
-
-	Pool pool;
-	HdrMap hdrMap;
 };
 
 
@@ -64,30 +65,25 @@ protected:
 
 
 class HTTPRequestData: public RefCntObj {
-	struct Hash {
-		std::size_t operator()(StrViewA text) const;
-	};
 
-	void parseHttpAsync(Stream stream, HTTPHandler handler);
 
 public:
 
-	typedef std::unordered_map<StrViewA, HeaderValue, Hash> HdrMap;
+	HTTPRequestData() {}
+
+	typedef ReceivedHeaders::HdrMap HdrMap;
 
 	///Begin of the headers
 	HdrMap::const_iterator begin() const;
 	///End of the headers
 	HdrMap::const_iterator end() const;
-
-
-	typedef std::function<void()> Callback;
-
-
-	void parseHttp(Stream stream, HTTPHandler handler, bool keepAlive);
-
-
 	///Retrieves header value
 	HeaderValue operator[](StrViewA key) const;
+
+
+
+	bool parseHttp(Stream stream, HTTPHandler handler, bool keepAlive);
+
 
 	///Retrieves method
 	/**
@@ -103,7 +99,7 @@ public:
 	/**
 	 * @return string contains HTTP version: HTTP/1.0 or HTTP/1.1
 	 */
-	StrViewA getVersion() const;
+	HttpVersion getVersion() const;
 	///Retrieves whole request line
 	StrViewA getRequestLine() const;
 	///Forges full uri
@@ -210,15 +206,38 @@ public:
 	void redirect(StrViewA url);
 
 
+
+	///A buffer which can be used to any purpose.
+	/** The function readBodyAsync uses the buffer to put content of body there
+	 *
+	 */
+	std::vector<unsigned char> userBuffer;
+
+
+
+	///Reads body of the request asynchronously.
+	/**
+	 * The content of the body is put into userBuffer. The buffer is cleared before
+	 * the reading starts. Reading is made asynchronously. Once the reading is complete,
+	 * the completion callback is called
+	 *
+	 * @param maxSize allows to limit size of the body. If the body is larger, error status
+	 * is generated
+	 * @param completion function called when reading is complette.
+	 *
+	 */
+	void readBodyAsync(std::size_t maxSize, HTTPHandler completion);
+
 protected:
 
-	std::vector<char> requestHdrLineBuffer;
-	HdrMap hdrMap;
+	ReceivedHeaders hdrs;
 
-	StrViewA reqLine;
+
 	StrViewA method;
 	StrViewA path;
-	StrViewA version;
+	StrViewA versionStr;
+	HttpVersion version;
+	bool keepAlive;
 
 	Stream originStream;
 	Stream reqStream;
@@ -227,24 +246,7 @@ protected:
 	///in case that keepalive is enabled, contains handler to call for second and othe requests
 	HTTPHandler keepAliveHandler;
 
-	///accepts line while it parses headers
-	/**
-	 * @param stream source stream (need to allow putBack)
-	 * @param data data read from the stream
-	 * @retval true line accepted, but more data are need
-	 * @retval false line accepted, this was last line
-	 */
-	bool acceptLine(Stream stream, BinaryView data);
-	///Prepares request - parses headers and convert the stream
-	/**
-	 * @param stream source stream
-	 * @return converted stream
-	 */
-	Stream prepareRequest(const Stream &stream);
 
-
-
-	bool parseHeaders(StrViewA hdr);
 	void runHandler(const Stream& stream, const HTTPHandler& handler);
 	void parseReqLine(StrViewA line);
 	Stream prepareStream(const Stream &stream);
@@ -256,6 +258,9 @@ protected:
 	class KeepAliveFn;
 
 	void handleKeepAlive();
+
+	void readBodyAsync_cont1(std::size_t maxSize, HTTPHandler completion);
+
 };
 
 
@@ -280,7 +285,7 @@ public:
 	 *
 	 *
 	 * */
-	static void parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true);
+	static bool parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true);
 
 
 

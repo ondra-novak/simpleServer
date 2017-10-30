@@ -31,7 +31,7 @@ LinuxEventDispatcher::LinuxEventDispatcher() {
 	exitFlag = false;
 }
 
-LinuxEventDispatcher::~LinuxEventDispatcher() {
+LinuxEventDispatcher::~LinuxEventDispatcher() noexcept {
 	close(intrHandle);
 	close(intrWaitHandle);
 }

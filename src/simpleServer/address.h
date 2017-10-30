@@ -6,7 +6,7 @@
 
 namespace simpleServer {
 
-class INetworkAddress: public RefCntObj {
+class INetworkAddress: public RefCntObjEx<void> {
 public:
 
 	virtual std::string toString(bool resolve = false) const = 0;

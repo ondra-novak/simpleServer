@@ -20,7 +20,7 @@ namespace simpleServer {
 class LinuxEventDispatcher: public AbstractStreamEventDispatcher {
 public:
 	LinuxEventDispatcher();
-	virtual ~LinuxEventDispatcher();
+	virtual ~LinuxEventDispatcher() noexcept;
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
@@ -101,6 +101,12 @@ protected:
 
 	Task runQueue();
 
+	virtual void onRelease() override {
+		taskMap.clear();
+		moveToProvider = nullptr;
+		AbstractStreamEventDispatcher::onRelease();
+
+	}
 
 };
 

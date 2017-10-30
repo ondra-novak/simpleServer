@@ -32,10 +32,18 @@ public:
 	AddressAddrInfoSlave(struct addrinfo *addr, RefCntPtr<AddressAddrInfo> master)
 		:AddressAddrInfo(addr),master(master) {}
 
-	~AddressAddrInfoSlave() {
+	~AddressAddrInfoSlave() noexcept {
 		addr = nullptr;
 	}
 protected:
+	template<typename T> friend class RefCntPtr;
+
+
+	virtual void onRelease() override {
+		master = nullptr;
+		AddressAddrInfo::onRelease();
+	}
+
 	RefCntPtr<AddressAddrInfo> master;
 
 };
@@ -252,9 +260,21 @@ public:
 		}
 	};
 
+	~ChainedNetworkAddr() noexcept {}
+
 
 protected:
 	NetAddr master, slave, next;
+
+	template<typename T> friend class RefCntPtr;
+
+
+	virtual void onRelease() override {
+		master = NetAddr(nullptr);
+		slave = NetAddr(nullptr);
+		next = NetAddr(nullptr);
+		INetworkAddress::onRelease();
+	}
 
 };
 

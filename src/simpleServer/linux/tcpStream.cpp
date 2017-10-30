@@ -167,9 +167,14 @@ void TCPStream::implFlush() {
 	//not implemented
 }
 
-TCPStream::~TCPStream() {
-	if (sck) close(sck);
+TCPStream::~TCPStream() noexcept {
 }
+
+void TCPStream::onRelease() {
+	if (sck) close(sck);
+	peer = NetAddr(nullptr);
+}
+
 
 int TCPStream::setIOTimeout(int iotimeoutms) {
 	int ret = iotimeout;
@@ -182,6 +187,4 @@ void TCPStream::implReadAsync(const Callback& cb) {
 	implReadAsync(b,cb);
 }
 }
-
-
 

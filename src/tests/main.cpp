@@ -51,15 +51,25 @@ void runServerTest() {
 	MiniHttpServer mserver(NetAddr::create("",8787),0,0);
 	mserver >> [](HTTPRequest req) {
 
-		if (req->getPath() == "/") {
-			Stream out = req->sendResponse("text/plain");
-			for (int i = 0; i < 10000; i++)
-				out << "Hello world! ";
-			out << "... Konec";
-		} else {
-			req->sendErrorPage(404);
-		}
+		if (req->getMethod() == "POST") {
 
+			req->readBodyAsync(1024*1024,[](HTTPRequest req){
+
+				Stream out = req->sendResponse("text/plain");
+				out->write(BinaryView(req->userBuffer));
+
+			});
+		} else {
+
+			if (req->getPath() == "/") {
+				Stream out = req->sendResponse("text/plain");
+				for (int i = 0; i < 10000; i++)
+					out << "Hello world! ";
+				out << "... Konec";
+			} else {
+				req->sendErrorPage(404);
+			}
+		}
 
 	};
 
@@ -115,7 +125,7 @@ int main(int argc, char *argv[]) {
 	tst.test("Listener.acceptConn","ok") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
-		runThreads(1,[srvAddr] {
+		runThread([srvAddr] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(400));
 			Stream con = tcpConnect(srvAddr,30000);
 		});
@@ -126,7 +136,7 @@ int main(int argc, char *argv[]) {
 	tst.test("Listener.receiveMsg","test message") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
 		NetAddr srvAddr = TCPStreamFactory::getLocalAddress(server);
-		runThreads(1,[srvAddr] {
+		runThread([srvAddr] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(400));
 			Stream con = tcpConnect(srvAddr,30000);
 			StrViewA msg("test message");

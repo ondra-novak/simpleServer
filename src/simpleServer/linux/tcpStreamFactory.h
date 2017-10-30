@@ -33,7 +33,13 @@ public:
 
 	TCPStreamFactory(NetAddr target,int ioTimeout)
 		:target(target),ioTimeout(ioTimeout),stopped(false) {}
+	~TCPStreamFactory() noexcept {}
 protected:
+
+	template<typename T> friend class RefCntPtr;
+
+	virtual void onRelease() override;
+
 
 	NetAddr target;
 	int ioTimeout;
@@ -77,7 +83,7 @@ public:
 	static StreamFactory create(bool localhost = true, unsigned int port=0,
 			 int listenTimeout = -1, int ioTimeout=-1);
 
-	~TCPListen();
+	~TCPListen() noexcept;
 
 protected:
 
@@ -86,6 +92,10 @@ protected:
 	virtual Stream create() override;
 	virtual void stop() override;
 	virtual void createAsync(const AsyncProvider &provider, const Callback &cb) override;
+
+	template<typename T> friend class RefCntPtr;
+
+	virtual void onRelease() override;
 
 protected:
 

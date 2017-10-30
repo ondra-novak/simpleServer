@@ -11,17 +11,24 @@ public:
 	{
 		setAsyncProvider(source.getAsyncProvider());
 	}
-	~ChunkedStream() {
-		if (wrBuff.size)
-			implCloseOutput();
 
-	}
+	~ChunkedStream() noexcept {}
 
 
 	virtual int setIOTimeout(int timeoutms) {
 		return source.setIOTimeout(timeoutms);
 	}
 protected:
+
+	template<typename T> friend class RefCntPtr;
+
+	virtual void onRelease() {
+		if (wrBuff.size)
+			implCloseOutput();
+		source = nullptr;
+		AbstractStream::onRelease();
+	}
+
 
 	virtual BinaryView implRead(bool nonblock) override;
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
@@ -185,6 +192,8 @@ void ChunkedStream<chunkSize>::implCloseOutput() {
 		BinaryView endChunk(StrViewA("0\r\n\r\n"));
 		source.write(endChunk,writeWholeBuffer);
 		outputClosed = true;
+		wrBuff.size = 0;
+		wrBuff.wrpos = 0;
 	}
 }
 

@@ -9,13 +9,22 @@ namespace simpleServer {
 
 		LimitedStream(Stream source, std::size_t readLimit, std::size_t writeLimit, unsigned char fillChar)
 			:source(source), readLimit(readLimit), writeLimit(writeLimit),fillChar(fillChar) {}
-		~LimitedStream() {
-			padding();
-		}
+
+		~LimitedStream() noexcept {}
+
 
 		virtual int setIOTimeout(int timeoutms) {
 			return source.setIOTimeout(timeoutms);
 		}
+protected:
+		template<typename T> friend class RefCntPtr;
+
+		virtual void onRelease() {
+			padding();
+			source = nullptr;
+			AbstractStream::onRelease();
+		}
+
 
 		virtual BinaryView implRead(bool nonblock) override {
 			if (readLimit == 0) return eofConst;
