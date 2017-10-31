@@ -136,7 +136,7 @@ BinaryView ChunkedStream<chunkSize>::implRead(bool nonblock) {
 			} else {
 				BinaryView data = d.substr(0, curChunkSize);
 				BinaryView pb = d.substr(curChunkSize);
-				putBack(pb);
+				source.putBack(pb);
 				curChunkSize -= data.length;
 				return data;
 			}
@@ -213,8 +213,8 @@ inline void ChunkedStream<chunkSize>::implReadAsync(const Callback& cb) {
 		RefCntPtr<ChunkedStream> me(this);
 		source.readASync([=](AsyncState st, const BinaryView &data){
 			if (st == asyncOK) {
-				putBack(data);
-				BinaryView rd = source.read(true);
+				me->source.putBack(data);
+				BinaryView rd = me->read(true);
 				if (isEof(rd)) ccb(asyncEOF, BinaryView(0,0));
 				else if (rd.empty()) me->implReadAsync(ccb);
 				else ccb(asyncOK, rd);
@@ -291,8 +291,8 @@ inline void ChunkedStream<chunkSize>::implReadAsync(const MutableBinaryView& buf
 
 			BinaryView p = data.substr(0,b.length);
 			copydata(buffer.data, p.data, p.length);
-			me->putBack(data.substr(b.length));
-			ccb(st,b);
+			me->putBack(data.substr(p.length));
+			ccb(st,p);
 		}
 		else {
 			ccb(st,data);

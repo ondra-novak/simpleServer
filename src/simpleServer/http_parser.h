@@ -41,9 +41,15 @@ public:
 	HTTPResponse(const HTTPResponse &other);
 
 
-	HTTPResponse &operator()(const StrViewA key, const StrViewA value);
-	HTTPResponse &contentLength(std::size_t sz);
-	HTTPResponse &contentType(std::size_t sz);
+	HTTPResponse &operator()(const StrViewA key, const StrViewA value) {
+		SendHeaders::operator ()(key, value);return *this;
+	}
+	HTTPResponse &contentLength(std::size_t sz) {
+		SendHeaders::contentLength(sz);return *this;
+	}
+	HTTPResponse &contentType(StrViewA ctx) {
+		SendHeaders::contentType(ctx);return *this;
+	}
 
 	void clear();
 

@@ -171,7 +171,10 @@ TCPStream::~TCPStream() noexcept {
 }
 
 void TCPStream::onRelease() {
-	if (sck) close(sck);
+	if (sck) {
+		flush(writeWholeBuffer);
+		close(sck);
+	}
 	peer = NetAddr(nullptr);
 }
 

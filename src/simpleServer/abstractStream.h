@@ -260,7 +260,7 @@ public:
 		if (rdBuff.empty()) {
 			return  implRead(buffer, nonblock);
 		} else {
-			BinaryView t = rdBuff.substr(buffer.length);
+			BinaryView t = rdBuff.substr(0,buffer.length);
 			copydata(buffer.data, t.data, t.length);
 			rdBuff = rdBuff.substr(t.length);
 			return BinaryView(buffer.data, t.length);

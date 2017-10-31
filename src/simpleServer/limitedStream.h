@@ -109,7 +109,7 @@ protected:
 			source.putBackEof();
 		}
 		virtual void implCloseOutput()  override {
-			source.writeEof();
+			padding();
 		}
 		virtual void implFlush()  override {
 			source->getDirectWrite().flush();

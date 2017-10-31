@@ -299,6 +299,11 @@ void HTTPRequestData::sendErrorPage(int statusCode) {
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc) {
+	if (statusCode == 204) {
+		sendResponseLine(204,getStatuCodeMsg(204));
+		originStream << CRLF;
+	} else {
+
 	std::ostringstream body;
 	body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 			"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
@@ -315,6 +320,7 @@ void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrV
 			"</html>";
 
 	sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
+	}
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType) {
@@ -383,30 +389,21 @@ HTTPResponse::HTTPResponse(int code, StrViewA response):code(code),message(pool.
 }
 
 
-HTTPResponse& HTTPResponse::contentLength(std::size_t sz) {
-	SendHeaders::contentLength(sz);
-	return *this;
-}
-
 void HTTPResponse::clear() {
 	SendHeaders::clear();
 	message = Pool::String();
 }
 
 int HTTPResponse::getCode() const {
+	return code;
 }
 
-HTTPResponse& HTTPResponse::operator ()(const StrViewA key,
-		const StrViewA value) {
-}
-
-HTTPResponse& HTTPResponse::contentType(std::size_t sz) {
-}
-
-HTTPResponse::HTTPResponse(const HTTPResponse& other) {
+HTTPResponse::HTTPResponse(const HTTPResponse& other)
+:SendHeaders(other),code(other.code),message(pool.add(other.message.getView())) {
 }
 
 StrViewA HTTPResponse::getStatusMessage() const {
+	return message.getView();
 }
 
 

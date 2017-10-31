@@ -55,7 +55,9 @@ void runServerTest() {
 
 			req->readBodyAsync(1024*1024,[](HTTPRequest req){
 
-				Stream out = req->sendResponse("text/plain");
+				Stream out = req->sendResponse(HTTPResponse(200)
+						.contentType("text/plain")
+						.contentLength(req->userBuffer.size()));
 				out->write(BinaryView(req->userBuffer));
 
 			});
