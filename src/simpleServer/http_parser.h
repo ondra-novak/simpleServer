@@ -309,6 +309,159 @@ public:
 
 
 
+	///Retrieves method
+	/**
+	 * @return String contains method name: GET, PUT, POST, OPTIONS, etc
+	 */
+	StrViewA getMethod() const {return ptr->getMethod();}
+	///Retrieves path
+	/**
+	 * @return string contains path from the request line (raw)
+	 */
+	StrViewA getPath() const {return ptr->getPath();}
+	///Retrieves http version
+	/**
+	 * @return string contains HTTP version: HTTP/1.0 or HTTP/1.1
+	 */
+	HttpVersion getVersion() const {return ptr->getVersion();}
+	///Retrieves whole request line
+	StrViewA getRequestLine() const {return ptr->getRequestLine();}
+	///Forges full uri
+	/**
+	 * @param secure set true if the connection is secured, otherwise false
+	 * @return full URI
+	 *
+	 * @note function just combines Host and path to create URI.
+	 */
+	std::string getURI(bool secure=true) const {return ptr->getURI(secure);}
+
+
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body)const  {ptr->sendResponse(contentType,body);}
+	void sendResponse(StrViewA contentType, StrViewA body)const  {ptr->sendResponse(contentType,body);}
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body, int statusCode)const  {ptr->sendResponse(contentType,body,statusCode);}
+	void sendResponse(StrViewA contentType, StrViewA body, int statusCode) const  {ptr->sendResponse(contentType,body,statusCode);}
+	///Send response
+	/**
+	 * Allows to send simple response to the client
+	 *
+	 * @param contentType type of the content (i.e.: "text/plain")
+	 * @param body body of the response
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 * @param statusMessage sends with specified status message. (i.e. "Not found")
+	 *
+	 */
+	void sendResponse(StrViewA contentType, BinaryView body, int statusCode, StrViewA statusMessage) const
+	 	 {ptr->sendResponse(contentType,body,statusCode,statusMessage);}
+	void sendResponse(StrViewA contentType, StrViewA body, int statusCode, StrViewA statusMessage) const
+		{ptr->sendResponse(contentType,body,statusCode,statusMessage);}
+	///Generates error page
+	/**
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 *
+	 */
+	void sendErrorPage(int statusCode) const {ptr->sendErrorPage(statusCode);}
+	///Generates error page
+	/**
+	 * @param statusCode sends with specified status code. (i.e. 404)
+	 * @param statusMessage sends with specified status message. (i.e. "Not found")
+	 */
+	void sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc = StrViewA()) const {ptr->sendErrorPage(statusCode,statusMessage,desc);}
+
+
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType) const {return ptr->sendResponse(contentType);}
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @param statusCode allows to set status code
+	 * @param statusMessage allows to set status message
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType, int statusCode) const {return ptr->sendResponse(contentType, statusCode);}
+	///Generates response, returns stream
+	/**
+	 * Allows to stream response
+	 *
+	 * @param contentType contenr type of the stream
+	 * @param statusCode allows to set status code
+	 * @param statusMessage allows to set status message
+	 * @return stream. You can start sending data through the stream
+	 */
+	Stream sendResponse(StrViewA contentType, int statusCode, StrViewA statusMessage) const {return ptr->sendResponse(contentType, statusCode, statusMessage);}
+
+
+	///Generates response using HTTPResponse object
+	/**
+	 * @param resp object contains headers
+	 * @param content content
+	 */
+	void sendResponse(const HTTPResponse &resp, StrViewA body)const {ptr->sendResponse(resp,body);}
+	///Generates response using HTTPResponse object
+	/**
+	 * @param resp object contains headers
+	 * @return stream
+	 */
+	Stream sendResponse(const HTTPResponse &resp) const {return ptr->sendResponse(resp);}
+
+
+	void redirect(StrViewA url) {return ptr->redirect(url);}
+
+
+
+	std::vector<unsigned char> &getUserBuffer() const {return ptr->userBuffer;}
+
+	///Reads body of the request asynchronously.
+	/**
+	 * The content of the body is put into userBuffer. The buffer is cleared before
+	 * the reading starts. Reading is made asynchronously. Once the reading is complete,
+	 * the completion callback is called
+	 *
+	 * @param maxSize allows to limit size of the body. If the body is larger, error status
+	 * is generated
+	 * @param completion function called when reading is complette.
+	 *
+	 */
+	void readBodyAsync(std::size_t maxSize, HTTPHandler completion) const {ptr->readBodyAsync(maxSize, completion);}
+
+	///sends file directly from the disk to the client
+	/**
+	 * Function also supports ETag, so it can skip sending file when the file did not changed
+	 *
+	 * @param content_type content type of the file
+	 * @param pathname whole pathname. Note if the file doesn't exists or cannot be opened, 404 error is generated instead
+	 * @param etag true to support ETag. If file is not changed, 304 header can be generated. Note that
+	 * etag generation is implementation depended. It could be encoded time of modification, or has generated
+	 * from the content of the file.
+	 */
+
+	void sendFile(StrViewA content_type, StrViewA pathname, bool etag = true)const {ptr->sendFile(content_type, pathname, etag);}
+
+
 
 };
 

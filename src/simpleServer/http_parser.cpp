@@ -194,7 +194,9 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 			sendErrorPage(e.getStatusCode(), e.getStatusMessage());
 		}
 	} catch (const std::exception &e) {
-		sendErrorPage(500, StrViewA("InternalError"), e.what());
+		if (!responseSent) {
+			sendErrorPage(500, StrViewA("InternalError"), e.what());
+		}
 	}
 
 }
@@ -607,7 +609,17 @@ void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler compl
 
 				me->userBuffer.resize(me->userBuffer.size()-4096+data.length);
 				if (data.empty()) {
-					completion(HTTPRequest(me));
+					try {
+						completion(HTTPRequest(me));
+					} catch (const HTTPStatusException &e) {
+						if (!me->responseSent) {
+							me->sendErrorPage(e.getStatusCode(), e.getStatusMessage());
+						}
+					} catch (const std::exception &e) {
+						if (!me->responseSent) {
+							me->sendErrorPage(500, StrViewA("InternalError"), e.what());
+						}
+					}
 				} else {
 					me->readBodyAsync_cont1(maxSize, completion);
 				}
