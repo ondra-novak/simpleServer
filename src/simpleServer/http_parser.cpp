@@ -1,8 +1,14 @@
 #include <sstream>
+#include <fstream>
+#include <sys/stat.h>
+#include <cstring>
 #include "http_parser.h"
 
+#include <fcntl.h>
+#include <string.h>
+
 #include <cstdlib>
-#include <iosfwd>
+
 
 
 
@@ -101,16 +107,17 @@ class ChunkedStreamWrap: public ChunkedStream<16384> {
 public:
 
 	ChunkedStreamWrap(const Fn &fn, const Stream &source):ChunkedStream(source),fn(fn) {}
-	~ChunkedStreamWrap() noexcept {}
-
-	void onRelease() {
+	~ChunkedStreamWrap() noexcept {
 		try {
 			writeEof();
 			implFlush();
-			ChunkedStream<16384>::onRelease();
 			fn();
-		} catch (...) {}
+		} catch (...) {
+
+		}
+
 	}
+
 public:
 	Fn fn;
 };
@@ -119,15 +126,15 @@ template<typename Fn>
 class LimitedStreamWrap: public LimitedStream {
 public:
 
-	LimitedStreamWrap(const Fn &fn, const Stream &source,std::size_t writeLimit):LimitedStream(source,0,writeLimit,0),fn(fn) {}
-	~LimitedStreamWrap() noexcept {}
-
-	void onRelease() {
+	LimitedStreamWrap(const Fn &fn, const Stream &source,std::size_t writeLimit)
+		:LimitedStream(source,0,writeLimit,0),fn(fn) {
+	}
+	~LimitedStreamWrap() noexcept {
 		try {
 			writeEof();
-			LimitedStream::onRelease();
 			fn();
-		} catch (...) {}
+		} catch (...) {
+		}
 	}
 public:
 	Fn fn;
@@ -285,7 +292,7 @@ void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
 
 
 	sendResponseLine(statusCode, statusMessage);
-	Stream s = sendHeaders(nullptr, &contentType, &body.length);
+	Stream s = sendHeaders(statusCode,nullptr, &contentType, &body.length);
 
 	s.write(BinaryView(body));
 
@@ -299,10 +306,6 @@ void HTTPRequestData::sendErrorPage(int statusCode) {
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc) {
-	if (statusCode == 204) {
-		sendResponseLine(204,getStatuCodeMsg(204));
-		originStream << CRLF;
-	} else {
 
 	std::ostringstream body;
 	body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -320,7 +323,6 @@ void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrV
 			"</html>";
 
 	sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
-	}
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType) {
@@ -335,14 +337,14 @@ Stream HTTPRequestData::sendResponse(StrViewA contentType, int statusCode,
 		StrViewA statusMessage) {
 
 	sendResponseLine(statusCode, statusMessage);
-	return sendHeaders(nullptr, &contentType, nullptr);
+	return sendHeaders(statusCode, nullptr, &contentType, nullptr);
 
 
 }
 
 void HTTPRequestData::sendResponse(const HTTPResponse& resp, StrViewA body) {
 	sendResponseLine(resp.getCode(), resp.getStatusMessage());
-	Stream s = sendHeaders(&resp, nullptr, &body.length);
+	Stream s = sendHeaders(resp.getCode(), &resp, nullptr, &body.length);
 	s.write(BinaryView(body));
 	s.flush();
 	handleKeepAlive();
@@ -351,7 +353,7 @@ void HTTPRequestData::sendResponse(const HTTPResponse& resp, StrViewA body) {
 
 Stream HTTPRequestData::sendResponse(const HTTPResponse& resp) {
 	sendResponseLine(resp.getCode(), resp.getStatusMessage());
-	return sendHeaders(&resp, nullptr, nullptr);
+	return sendHeaders(resp.getCode(), &resp, nullptr, nullptr);
 
 }
 
@@ -419,16 +421,26 @@ void HTTPRequestData::sendResponseLine(int statusCode, StrViewA statusMessage) {
 
 class HTTPRequestData::KeepAliveFn {
 public:
-	KeepAliveFn(RefCntPtr<HTTPRequestData> h):h(h) {}
+	KeepAliveFn(RefCntPtr<HTTPRequestData> h, AsyncProvider p):h(h),p(p) {}
 	void operator()() const {
-		h->handleKeepAlive();
+
+		RefCntPtr<HTTPRequestData> h(this->h);
+		try {
+			if (p!= nullptr) {
+				p.runAsync([h]{h->handleKeepAlive();});
+			}	else {
+				h->handleKeepAlive();
+			}
+		} catch (...) {}
+
 	}
 protected:
 	RefCntPtr<HTTPRequestData> h;
+	AsyncProvider p;
 
 };
 
-Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
+Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 		const StrViewA* contentType, const size_t* contentLength) {
 
 	struct Flags {
@@ -441,6 +453,18 @@ Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
 	Flags flags;
 	std::size_t bodyLimit = -1;
 	bool usechunked = false;
+
+	if (code == 204) {
+
+		//when code 204, server should not generate any content
+		//so transfer encoding and content type should not apper in headers
+
+		contentType = 0;
+		contentLength = 0;
+		flags.hasCtl = true;
+		flags.hasCtt = true;
+		flags.hasTE = true;
+	}
 
 
 	if (contentType) {
@@ -500,24 +524,47 @@ Stream HTTPRequestData::sendHeaders(const HTTPResponse* resp,
 		}
 	}
 
-	if (!flags.hasCtt) {
-		originStream << CONTENT_TYPE << ": text/plain\r\n";
-	}
-	if (!flags.hasCtl && !flags.hasTE && keepAlive) {
-		originStream << TRANSFER_ENCODING << ": chunked\r\n";
-		usechunked = true;
-	}
 
-	originStream << CRLF;
+	KeepAliveFn nxfn(this,originStream.getAsyncProvider());
 
+	//when code 204, server should not generate any content
+	//so transfer encoding and content type should not apper in headers
+	if (code == 204) {
 
+		originStream << CRLF;
 
-	if (usechunked) {
-		return new ChunkedStreamWrap<KeepAliveFn>(KeepAliveFn(this),originStream);
-	} else if (bodyLimit!=-1) {
-		return new LimitedStreamWrap<KeepAliveFn>(KeepAliveFn(this),originStream,bodyLimit);
+		//Create empty limited stream, no content will allowed to the stream
+		return new LimitedStreamWrap<KeepAliveFn>(nxfn, originStream, 0);
+
 	} else {
-		return originStream;
+
+		if (!flags.hasCtt) {
+			originStream << CONTENT_TYPE << ": text/plain\r\n";
+		}
+		//do not put chunked in case that 101 is reported
+		//also when function has content length
+		//or already put Trasfer-Encoding
+		//or is not keepAlive
+		if (!flags.hasCtl && !flags.hasTE && keepAlive && code != 101) {
+			originStream << TRANSFER_ENCODING << ": chunked\r\n";
+			usechunked = true;
+		}
+
+		originStream << CRLF;
+
+		if (method == "HEAD") {
+			//In HEAD mode, headers are complete, but no content should be generated
+			return new LimitedStreamWrap<KeepAliveFn>(nxfn, originStream, 0);
+		} else if (usechunked) {
+			//use chunked protocol
+			return new ChunkedStreamWrap<KeepAliveFn>(nxfn, originStream);
+		} else if (bodyLimit!=-1) {
+			//is limit defined, use limit stream
+			return new LimitedStreamWrap<KeepAliveFn>(nxfn,originStream,bodyLimit);
+		} else {
+			//use original stream
+			return originStream;
+		}
 	}
 
 
@@ -575,6 +622,79 @@ void HTTPRequestData::handleKeepAlive() {
 
 	if (keepAliveHandler != nullptr && keepAlive) {
 		parseHttp(originStream, keepAliveHandler,true);
+	}
+}
+
+void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool etag) {
+	char *fname = (char *)alloca(pathname.length+1);
+	std::memcpy(fname, pathname.data, pathname.length);
+	fname[pathname.length] = 0;
+
+	HTTPResponse resp(200);
+
+	if (etag) {
+
+		struct stat statbuf;
+		if (stat(fname,&statbuf) == -1) {
+			sendErrorPage(404);
+		} else {
+			static char hexChars[]="0123456789ABCDEF";
+
+			char *hexBuff = (char *)alloca(sizeof(statbuf.st_mtim)*2+3);
+			char *p = hexBuff;
+			*p++='"';
+			BinaryView data(reinterpret_cast<const unsigned char *>(&statbuf.st_mtim), sizeof (statbuf.st_mtim));
+			for (unsigned int c : data) {
+				*p++ = hexChars[c>>4];
+				*p++ = hexChars[c & 0xF];
+			}
+			*p++='"';
+			*p = 0;
+			StrViewA curEtag(hexBuff, p-hexBuff);
+			HeaderValue prevEtags = (*this)["If-None-Match"];
+			auto spl = prevEtags.split(",");
+			while (spl) {
+				StrViewA tag = spl();
+				tag = tag.trim(&isspace);
+				if (tag == curEtag) {
+					sendErrorPage(304);
+					return;
+				}
+			}
+			resp("ETag", curEtag);
+		}
+	}
+
+	std::fstream file(fname, std::ios::binary | std::ios::in );
+	if (!file) {
+		sendErrorPage(404);
+	} else {
+		file.seekg(0,std::ios::end);
+		std::size_t sz = file.tellg();
+		if (sz == 0) {
+			sendErrorPage(204);
+		} else {
+			unsigned char buff[4096];
+			file.seekg(0,std::ios::beg);
+			int p = file.get();
+			if (p == EOF) {
+				sendErrorPage(403);
+			} else{
+				file.putback(p);
+				resp.contentLength(sz);
+				resp.contentType(content_type);
+				Stream out = sendResponse(resp);
+
+				while (sz && !(!file)) {
+					file.read(reinterpret_cast<char *>(buff),4096);
+					std::size_t cnt = std::min<std::size_t>(sz,file.gcount());
+					out.write(BinaryView(buff, cnt),writeWholeBuffer);
+					sz -= cnt;
+				}
+				out.flush();
+			}
+		}
+
 	}
 }
 

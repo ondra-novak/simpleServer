@@ -363,6 +363,9 @@ Stream TCPListen::create() {
 }
 
 TCPListen::~TCPListen() noexcept {
+	asyncData = nullptr;
+	for(auto &&x:openSockets)close(x);
+	openSockets.clear();
 }
 
 
@@ -596,17 +599,7 @@ void TCPListen::stop() {
 	}
 }
 
-void TCPStreamFactory::onRelease() {
-	target = NetAddr(nullptr);
-	AbstractStreamFactory::onRelease();
-}
 
-void TCPListen::onRelease() {
-	asyncData = nullptr;
-	for(auto &&x:openSockets)close(x);
-	openSockets.clear();
-	TCPStreamFactory::onRelease();
-}
 
 
 }

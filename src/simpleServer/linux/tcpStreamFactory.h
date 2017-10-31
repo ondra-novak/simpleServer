@@ -38,7 +38,6 @@ protected:
 
 	template<typename T> friend class RefCntPtr;
 
-	virtual void onRelease() override;
 
 
 	NetAddr target;
@@ -95,7 +94,6 @@ protected:
 
 	template<typename T> friend class RefCntPtr;
 
-	virtual void onRelease() override;
 
 protected:
 

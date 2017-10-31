@@ -239,7 +239,7 @@ protected:
 ///AbstractStream brings some additional function which halps to work with streams and buffers.
 /** Streams should extend this class, not IGenerlStream. The class also allows to ref-counted
  * references to the stream and expects that streams will be allocated by operator new  */
-class AbstractStream: public RefCntObjEx<IGeneralStream> {
+class AbstractStream: public RefCntObj, public IGeneralStream {
 public:
 
 
@@ -561,9 +561,6 @@ protected:
 
 	template<typename T> friend class RefCntPtr;
 
-	void onRelease() override {
-		asyncProvider = nullptr;
-	}
 
 };
 

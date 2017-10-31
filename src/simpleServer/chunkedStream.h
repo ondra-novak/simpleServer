@@ -12,7 +12,16 @@ public:
 		setAsyncProvider(source.getAsyncProvider());
 	}
 
-	~ChunkedStream() noexcept {}
+	~ChunkedStream() noexcept {
+		try {
+			if (wrBuff.size)
+				implCloseOutput();
+		}
+		catch (...) {
+			//don't bother with exception
+		}
+
+	}
 
 
 	virtual int setIOTimeout(int timeoutms) {
@@ -23,10 +32,6 @@ protected:
 	template<typename T> friend class RefCntPtr;
 
 	virtual void onRelease() {
-		if (wrBuff.size)
-			implCloseOutput();
-		source = nullptr;
-		AbstractStream::onRelease();
 	}
 
 

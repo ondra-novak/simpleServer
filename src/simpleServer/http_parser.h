@@ -234,6 +234,19 @@ public:
 	 */
 	void readBodyAsync(std::size_t maxSize, HTTPHandler completion);
 
+	///sends file directly from the disk to the client
+	/**
+	 * Function also supports ETag, so it can skip sending file when the file did not changed
+	 *
+	 * @param content_type content type of the file
+	 * @param pathname whole pathname. Note if the file doesn't exists or cannot be opened, 404 error is generated instead
+	 * @param etag true to support ETag. If file is not changed, 304 header can be generated. Note that
+	 * etag generation is implementation depended. It could be encoded time of modification, or has generated
+	 * from the content of the file.
+	 */
+
+	void sendFile(StrViewA content_type, StrViewA pathname, bool etag = true);
+
 protected:
 
 	ReceivedHeaders hdrs;
@@ -259,7 +272,8 @@ protected:
 
 
 	void sendResponseLine(int statusCode, StrViewA statusMessage);
-	Stream sendHeaders(const HTTPResponse *resp, const StrViewA *contentType,const size_t *contentLength);
+	Stream sendHeaders(int code, const HTTPResponse *resp, const StrViewA *contentType,const size_t *contentLength);
+
 
 	class KeepAliveFn;
 

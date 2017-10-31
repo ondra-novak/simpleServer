@@ -39,10 +39,6 @@ protected:
 	template<typename T> friend class RefCntPtr;
 
 
-	virtual void onRelease() override {
-		master = nullptr;
-		AddressAddrInfo::onRelease();
-	}
 
 	RefCntPtr<AddressAddrInfo> master;
 
@@ -269,12 +265,6 @@ protected:
 	template<typename T> friend class RefCntPtr;
 
 
-	virtual void onRelease() override {
-		master = NetAddr(nullptr);
-		slave = NetAddr(nullptr);
-		next = NetAddr(nullptr);
-		INetworkAddress::onRelease();
-	}
 
 };
 

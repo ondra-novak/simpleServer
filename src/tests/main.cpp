@@ -68,8 +68,10 @@ void runServerTest() {
 				for (int i = 0; i < 10000; i++)
 					out << "Hello world! ";
 				out << "... Konec";
+			} else if (req->getPath() == "/204") {
+				req->sendResponse("text/plain","empty",204);
 			} else {
-				req->sendErrorPage(404);
+				req->sendFile("text/plain",req->getPath().substr(1));
 			}
 		}
 

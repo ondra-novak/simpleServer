@@ -33,7 +33,6 @@ protected:
 
 	template<typename T> friend class RefCntPtr;
 
-	virtual void onRelease() override;
 
 protected:
 

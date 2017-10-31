@@ -185,6 +185,14 @@ namespace simpleServer {
 			return result.length == 0 && result.data == data + length;
 		}
 
+		template<typename Fn>
+		StringViewBase trim(const Fn &fn) {
+			StringViewBase src(*this);
+			while (!src.empty() && fn(src[0])) src = src.substr(1);
+			while (!src.empty() && fn(src[src.length-1])) src = src.substr(0,src.length-1);
+			return src;
+		}
+
 	};
 
 	template<typename T>

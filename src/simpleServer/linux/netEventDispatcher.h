@@ -101,12 +101,6 @@ protected:
 
 	Task runQueue();
 
-	virtual void onRelease() override {
-		taskMap.clear();
-		moveToProvider = nullptr;
-		AbstractStreamEventDispatcher::onRelease();
-
-	}
 
 };
 

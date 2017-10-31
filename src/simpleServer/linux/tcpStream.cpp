@@ -81,6 +81,9 @@ BinaryView TCPStream::implRead(MutableBinaryView buffer, bool nonblock) {
 		int r = recv(sck,buffer.data, buffer.length, MSG_DONTWAIT);
 		if (r < 0) {
 			int e = errno;
+			if (e == ECONNRESET) {
+				return eofConst;
+			}
 			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN)
 				throw SystemException(e,__FUNCTION__);
 			if (nonblock) return BinaryView();
@@ -168,14 +171,15 @@ void TCPStream::implFlush() {
 }
 
 TCPStream::~TCPStream() noexcept {
-}
-
-void TCPStream::onRelease() {
 	if (sck) {
-		flush(writeWholeBuffer);
+		try {
+			flush(writeWholeBuffer);
+		} catch (...) {
+			//do not try flush on error socket
+		}
 		close(sck);
 	}
-	peer = NetAddr(nullptr);
+
 }
 
 

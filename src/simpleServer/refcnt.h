@@ -31,46 +31,11 @@ namespace simpleServer {
 	protected:
 		mutable std::atomic_int counter;
 
-		//this function is dormant, but we need it to correctly compile
-		void onRelease() noexcept {}
 
 		template<typename T> friend class RefCntPtr;
 	};
 
 
-
-	///Simple refcounting, but with virtual table
-	/** It allows to overwrite onRelease() */
-
-	template<typename Base>
-	class RefCntObjEx: public Base, public RefCntObj {
-	public:
-		using Base::Base;
-
-	protected:
-		template<typename T> friend class RefCntPtr;
-
-		virtual ~RefCntObjEx() noexcept {}
-
-		///Called before the object destroyed. It can throw exception
-		virtual void onRelease() noexcept(false) {}
-
-	};
-
-	///Simple refcounting, but with virtual table
-	/** It allows to overwrite onRelease() */
-	template<>
-	class RefCntObjEx<void>: public RefCntObj {
-	protected:
-
-		template<typename T> friend class RefCntPtr;
-
-		virtual ~RefCntObjEx() noexcept {}
-
-		///Called before the object destroyed. It can throw exception
-		virtual void onRelease() noexcept(false) {}
-
-	};
 
 
 	///Simple refcounting smart pointer
@@ -82,7 +47,7 @@ namespace simpleServer {
 		RefCntPtr() :ptr(0)  {}
 		RefCntPtr(T *ptr) :ptr(ptr)  { addRefPtr(); }
 		RefCntPtr(const RefCntPtr &other)  :ptr(other.ptr) { addRefPtr(); }
-		~RefCntPtr() noexcept(false) {
+		~RefCntPtr()  {
 			releaseRefPtr();
 		}
 		RefCntPtr(RefCntPtr &&other) :ptr(other.ptr)  {
@@ -91,7 +56,7 @@ namespace simpleServer {
 
 
 
-		RefCntPtr &operator=(const RefCntPtr &other) noexcept(false) {
+		RefCntPtr &operator=(const RefCntPtr &other)  {
 			if (other.ptr != ptr) {
 				if (other.ptr) other.ptr->addRef();
 				releaseRefPtr();
@@ -140,26 +105,10 @@ namespace simpleServer {
 			if (ptr) {
 				T *save = ptr;
 				ptr = 0;
-				if (save->release()) {
-					try {
-						save->onRelease();
-					} catch (...) {
-						delete save;
-						throw;
-					}
+				if (save->release())
 					delete save;
-				}
 			}
 		}
-	};
-
-	template<typename T>
-	class RefCntPtrNoExcept: public RefCntPtr<T> {
-	public:
-		using RefCntPtr<T>::RefCntPtr;
-		RefCntPtrNoExcept() {}
-
-		~RefCntPtrNoExcept() noexcept {}
 	};
 
 

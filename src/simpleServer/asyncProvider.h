@@ -44,7 +44,7 @@ public:
 };
 
 
-class AbstractAsyncProvider: public RefCntObjEx<IAsyncProvider> {
+class AbstractAsyncProvider: public RefCntObj, public IAsyncProvider{
 public:
 
 

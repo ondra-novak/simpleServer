@@ -41,7 +41,7 @@ public:
 };
 
 
-class AbstractStreamFactory: public RefCntObjEx<IStreamFactory> {
+class AbstractStreamFactory: public RefCntObj, public IStreamFactory {
 public:
 
 	class Iterator {
