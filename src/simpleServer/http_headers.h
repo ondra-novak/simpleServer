@@ -3,13 +3,16 @@
 #include <unordered_map>
 
 #include "abstractStream.h"
-#include "common/stringpool.h"
+#include "shared/stringpool.h"
 
 #include "http_headervalue.h"
 
-#include "stringview.h"
+#include "shared/stringview.h"
 
 namespace simpleServer {
+
+using ondra_shared::StringPool;
+using ondra_shared::StringView;
 
 
 ///The class parses and stores headers read from the stream

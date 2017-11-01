@@ -1,10 +1,17 @@
 #pragma once
-#include "refcnt.h"
-#include "stringview.h"
+#include "shared/refcnt.h"
+#include "shared/stringview.h"
 #include "asyncProvider.h"
 #include "exceptions.h"
 
 namespace simpleServer {
+
+using ondra_shared::RefCntObj;
+using ondra_shared::RefCntPtr;
+using ondra_shared::StringView;
+using ondra_shared::StrViewA;
+using ondra_shared::MutableBinaryView;
+using ondra_shared::BinaryView;
 
 enum WriteMode {
 	///perform writing non-blocking. If it is impossible, nothing is written

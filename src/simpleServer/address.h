@@ -1,10 +1,15 @@
 #pragma once
 #include <string>
 
-#include "refcnt.h"
-#include "stringview.h"
+#include "shared/refcnt.h"
+#include "shared/stringview.h"
 
 namespace simpleServer {
+
+using ondra_shared::RefCntObj;
+using ondra_shared::RefCntPtr;
+using ondra_shared::StrViewA;
+using ondra_shared::BinaryView;
 
 class INetworkAddress: public RefCntObj {
 public:

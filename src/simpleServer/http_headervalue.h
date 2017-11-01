@@ -1,7 +1,10 @@
 #pragma once
-#include "stringview.h"
+#include "shared/stringview.h"
 
 namespace simpleServer {
+
+using ondra_shared::StrViewA;
+
 
 ///Contains value of the http header
 /** The value can be either defined with a string as content, or undefined */

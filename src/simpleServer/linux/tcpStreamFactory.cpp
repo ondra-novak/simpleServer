@@ -9,7 +9,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "../common/raii.h"
+#include "../raii.h"
 
 
 #include "../exceptions.h"

@@ -2,10 +2,13 @@
 #pragma once
 
 #include "asyncProvider.h"
-#include "common/msgqueue.h"
-#include "common/mtcounter.h"
+#include "shared/msgqueue.h"
+#include "shared/mtcounter.h"
 
 namespace simpleServer {
+
+using ondra_shared::MsgQueue;
+using ondra_shared::MTCounter;
 
 
 

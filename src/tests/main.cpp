@@ -14,7 +14,7 @@
 #include <mutex>
 #include "../simpleServer/tcp.h"
 #include "../simpleServer/threadPoolAsync.h"
-#include "../simpleServer/common/mtcounter.h"
+#include "../simpleServer/mtcounter.h"
 #include "../simpleServer/http_parser.h"
 #include "../simpleServer/http_server.h"
 

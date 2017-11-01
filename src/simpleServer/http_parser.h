@@ -6,14 +6,20 @@
 
 
 #include "abstractStream.h"
-#include "common/stringpool.h"
+#include "shared/stringpool.h"
 #include "http_headers.h"
 #include "http_headervalue.h"
 
-#include "refcnt.h"
-#include "stringview.h"
+#include "shared/refcnt.h"
+#include "shared/stringview.h"
 
 namespace simpleServer {
+
+using ondra_shared::StringPool;
+using ondra_shared::RefCntObj;
+using ondra_shared::RefCntPtr;
+using ondra_shared::StrViewA;
+using ondra_shared::BinaryView;;
 
 class HTTPRequest;
 class HTTPRequestData;

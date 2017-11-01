@@ -2,12 +2,13 @@
 
 #include <functional>
 
-#include "refcnt.h"
-
-#include "stringview.h"
+#include "shared/refcnt.h"
 
 
 namespace simpleServer {
+
+using ondra_shared::RefCntObj;
+using ondra_shared::RefCntPtr;
 
 
 class AsyncResource;
