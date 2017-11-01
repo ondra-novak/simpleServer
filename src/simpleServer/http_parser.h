@@ -458,14 +458,14 @@ public:
 	/**
 	 * Function also supports ETag, so it can skip sending file when the file did not changed
 	 *
-	 * @param content_type content type of the file
 	 * @param pathname whole pathname. Note if the file doesn't exists or cannot be opened, 404 error is generated instead
+	 * @param content_type content type of the file. If it is empty, function select content type depend on file extension
 	 * @param etag true to support ETag. If file is not changed, 304 header can be generated. Note that
 	 * etag generation is implementation depended. It could be encoded time of modification, or has generated
 	 * from the content of the file.
 	 */
 
-	void sendFile(StrViewA content_type, StrViewA pathname, bool etag = true)const {ptr->sendFile(content_type, pathname, etag);}
+	void sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true)const {ptr->sendFile(content_type, pathname, etag);}
 
 
 
