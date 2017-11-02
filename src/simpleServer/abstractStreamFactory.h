@@ -102,7 +102,7 @@ public:
 		return ptr->end();
 	}
 
-	void stop() {
+	void stop() const {
 		return ptr->stop();
 	}
 

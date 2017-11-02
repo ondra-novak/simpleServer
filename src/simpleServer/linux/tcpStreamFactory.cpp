@@ -62,10 +62,11 @@ typedef RAII<int, decltype(&::close), &::close> RAIISocket;
 static RAIISocket connectSocket(const NetAddr &addr, int &r) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
-	RAIISocket s(socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP));
+	bool isip = sa->sa_family==AF_INET||sa->sa_family == AF_INET6;
+	RAIISocket s(socket(sa->sa_family, SOCK_STREAM,  isip?IPPROTO_TCP:0));
 	if (s == -1) throw SystemException(errno);
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
-	disableNagle(s);
+	if (isip) disableNagle(s);
 	r = ::connect(s, sa, b.length);
 	return s;
 }
@@ -201,7 +202,7 @@ StreamFactory TCPListen::create(bool localhost, unsigned int port,
 static int listenSocket(const NetAddr &addr) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
-	int s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+	int s = socket(sa->sa_family, SOCK_STREAM, sa->sa_family==AF_INET||sa->sa_family == AF_INET6?IPPROTO_TCP:0);
 	if (s < 0) {
 		int e = errno;
 		throw SystemException(e,"failed to create socket");
@@ -305,7 +306,8 @@ static Stream acceptConnect(int s, int iotimeout) {
 	//non blocking because multiple threads can try to claim the socket
 	int a = accept4(s, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
 	if (a > 0) {
-		disableNagle(a);
+		if (sa->sa_family == AF_INET || sa->sa_family == AF_INET6)
+			disableNagle(a);
 		NetAddr addr = NetAddr::create(BinaryView(reinterpret_cast<const unsigned char *>(&sa), slen));
 		return new TCPStream(a,iotimeout, addr);
 	} else {

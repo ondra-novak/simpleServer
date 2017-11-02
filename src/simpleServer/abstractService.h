@@ -16,7 +16,7 @@ using ondra_shared::RefCntPtr;
 typedef StringView<StrViewA> ArgList;
 
 
-typedef std::function<void(ArgList, Stream output)> UserCommandFn;
+typedef std::function<int(ArgList, Stream output)> UserCommandFn;
 
 
 
@@ -90,14 +90,14 @@ public:
 	static int create(int argc, char **argv, StrViewA name, ServiceHandler handler);
 
 
-	void dispatch() {
+	void dispatch() const {
 		ptr->dispatch();
 	}
 
-	void addCommand(StrViewA command, UserCommandFn fn) {
+	void addCommand(StrViewA command, UserCommandFn fn) const {
 		ptr->addCommand(command, fn);
 	}
-	void stop() {
+	void stop() const {
 		ptr->stop();
 	}
 
