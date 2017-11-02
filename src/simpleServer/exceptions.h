@@ -92,5 +92,14 @@ public:
 	std::string message;
 };
 
+class ServiceInvalidParametersException: public Exception {
+public:
+	std::string getMessage() const {
+		return "Invalid arguments on command line";
+	}
+
+};
+
+
 
 }
