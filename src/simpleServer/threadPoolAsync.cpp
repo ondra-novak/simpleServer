@@ -90,7 +90,7 @@ void ThreadPoolAsyncImpl::setTasksPerDispLimit(unsigned int count) {
 
 }
 
-void ThreadPoolAsyncImpl::worker() {
+void ThreadPoolAsyncImpl::worker() noexcept {
 	for(;;) {
 
 		if (cQueue.size() > reqDispatcherCount) {
@@ -106,6 +106,7 @@ void ThreadPoolAsyncImpl::worker() {
 		PStreamEventDispatcher lst = tQueue.pop();
 		if (lst == nullptr) {
 			tQueue.push(nullptr);
+			threadCount.dec();
 			return;
 		}
 
@@ -116,6 +117,7 @@ void ThreadPoolAsyncImpl::worker() {
 			threadCount.dec();
 			return;
 		}
+
 		t();
 
 		if (threadCount.getCounter() > reqThreadCount) {

@@ -50,7 +50,7 @@ protected:
 
 	PStreamEventDispatcher getListener();
 
-	void worker();
+	void worker() noexcept;
 
 
 };
