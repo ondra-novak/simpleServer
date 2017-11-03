@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "../simpleServer/abstractStream.h"
 #include "../simpleServer/abstractService.h"
 
@@ -13,13 +15,10 @@ int main(int argc, char **argv) {
 	ServiceControl::create(argc, argv,"exampleService",[](ServiceControl control, StrViewA name, ArgList args) {
 
 		std::cout << "Service running: " << name << std::endl;
-		control.addCommand("stop",[=](ArgList args, Stream sx) {
-			sx << "Stopping service\r\n";
-			control.stop();
-			return 0;
-		});
 
 		control.dispatch();
+		sleep(40);
+
 		return 0;
 	});
 

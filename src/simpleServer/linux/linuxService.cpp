@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <iostream>
+#include <signal.h>
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -18,44 +19,63 @@ namespace simpleServer {
 
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
-
-
-	if (argc < 3) {
-		throw ServiceInvalidParametersException();
-	}
-
-
-	StrViewA tmp_arglist[argc];
-	for (int i = 0; i < argc; i++) {
-		tmp_arglist[i] = StrViewA(argv[i]);
-	}
-	ArgList arglist(tmp_arglist, argc);
-
-
-	StrViewA pidfile = arglist[1];
-	StrViewA command = arglist[2];
-	ArgList remainArgs = arglist.substr(3);
-
-	RefCntPtr<LinuxService> svc = new LinuxService(pidfile);
-
-
-	if (command == "start") {
-		if (!svc->enterDaemon()) {
-			return svc->waitForExitCode();
+	try {
+		if (argc < 3) {
+			throw ServiceInvalidParametersException();
 		}
-		return svc->startService(name, handler, remainArgs);
-	} else if (command == "run") {
-		return svc->startService(name, handler, remainArgs);
-	} else if (command == "restart") {
-		svc->postCommand( "stop", ArgList());
-		if (!svc->enterDaemon()) {
+
+
+		StrViewA tmp_arglist[argc];
+		for (int i = 0; i < argc; i++) {
+			tmp_arglist[i] = StrViewA(argv[i]);
+		}
+		ArgList arglist(tmp_arglist, argc);
+
+
+		StrViewA pidfile = arglist[1];
+		StrViewA command = arglist[2];
+		ArgList remainArgs = arglist.substr(3);
+
+		RefCntPtr<LinuxService> svc = new LinuxService(pidfile);
+
+
+		if (command == "start") {
+			if (!svc->enterDaemon()) {
 				return svc->waitForExitCode();
 			}
-		return svc->startService(name, handler, remainArgs);
-	} else {
-		svc->postCommand(command, remainArgs);
+			return svc->startService(name, handler, remainArgs);
+		} else if (command == "run") {
+			return svc->startService(name, handler, remainArgs);
+		} else if (command == "stop") {
+			svc->stopOtherService();return 0;
+		} else if (command == "wait") {
+			return svc->postCommand("wait",ArgList(),std::cerr,-1,true);
+		} else if (command == "restart") {
+			svc->stopOtherService();
+			//svc->postCommand( "stop", ArgList(), std::cerr);
+			if (!svc->enterDaemon()) {
+					return svc->waitForExitCode();
+				}
+			return svc->startService(name, handler, remainArgs);
+		} else if (command == "status") {
+			if (svc->checkPidFile()) return 0;
+			else std::cerr << "Service not running" << std::endl;
+			return 1;
+		} else {
+				svc->postCommand(command, remainArgs, std::cerr);
+		}
+		return 0;
+	} catch (SystemException &e) {
+		if (e.getErrNo() == ECONNREFUSED || e.getErrNo() == ENOENT) {
+			std::cerr << "Service not running" << std::endl;
+		} else {
+			std::cerr << "ERROR: " << e.what() << std::endl;
+		}
+		return e.getErrNo();
+	} catch (std::exception &e) {
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		return ENOENT;
 	}
-	return 0;
 }
 
 
@@ -66,20 +86,24 @@ void LinuxService::dispatch() {
 
 
 
+
+
 	Stream s;
-	StreamFactory mother = TCPListen::create(createNetAddr(),-1,30000);
+	setsid();
 	if (umbilicalCord) {
+		sendExitCode(0);
 		close(umbilicalCord);
 		umbilicalCord = 0;
 	}
 
-	stopFunctionPromise.set_value([mother] {mother.stop();});
 
 	 s = mother();
 
 	while (s != nullptr) {
 		processRequest(s);
 		 s = mother();
+		 cleanWaitings();
+		 idleRun();
 	}
 }
 
@@ -89,7 +113,10 @@ typedef StringPool<char> Pool;
 Pool::String readLine(Pool &p, Stream s) {
 	std::size_t m = p.begin_add();
 	int c = s();
-	while (c != -1 && c != '\n') p.push_back(c);
+	while (c != -1 && c != '\n') {
+		p.push_back(c);
+		c = s();
+	}
 	return p.end_add(m);
 }
 
@@ -100,6 +127,7 @@ void LinuxService::processRequest(Stream s) {
 	Pool::String item = readLine(p,s);
 	while (!item.getView().empty()) {
 		args.push_back(item);
+		item = readLine(p,s);
 	}
 
 	StrViewA argbuf[args.size()];
@@ -113,11 +141,12 @@ void LinuxService::processRequest(Stream s) {
 	} else {
 		auto it =cmdMap.find(argList[0]);
 		if (it == cmdMap.end()) {
-			s << "ERROR: command not supported:251";
+			s << "ERROR: command not supported~-1";
 		}
 
 		int ret =  it->second(argList, s);
-		s << ":" << ret;
+		s << "~" << ret;
+		s.flush();
 	}
 
 
@@ -129,8 +158,7 @@ void LinuxService::addCommand(StrViewA command,
 }
 
 void LinuxService::stop() {
-	auto fn = stopFunction.get();
-	fn();
+	mother.stop();
 }
 
 bool LinuxService::enterDaemon() {
@@ -139,11 +167,17 @@ bool LinuxService::enterDaemon() {
 	pipe2(fds, O_CLOEXEC);
 	int fres = fork();
 	if (fres == 0) {
+//		std::cout << "press enter after debugger attach" << std::endl;
+	//	std::cin.get();
 		umbilicalCord = fds[1];
 		close(fds[0]);
 		return true;
-	} else {
+	} else if (fres == -1) {
+		int e = errno;
+		throw SystemException(e, __FUNCTION__);
+	}else {
 		umbilicalCord = fds[0];
+		close(fds[1]);
 		return false;
 	}
 
@@ -169,30 +203,37 @@ int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 
 	try {
 
+		if (checkPidFile()) return 255;
+		mother = TCPListen::create(createNetAddr(),-1,30000);
+
 		ServiceControl me(this);
-		addCommand("stop",[=](ArgList, Stream) {
-			me.stop();return 0;
+		addCommand("stop",[=](ArgList, Stream sx) {
+			me.stop();
+			waitEnd.push(sx);
+			return getpid();
+		});
+		addCommand("status",[=](ArgList, Stream sx) {
+			sx << "Service '" << name << "' runnning as pid " << getpid() << "\n";
+			return 0;
+		});
+		addCommand("wait",[=](ArgList, Stream sx) {
+			waitEnd.push(sx);
+			return 0;
 		});
 
 		int ret = hndl(this, name, args);
+		unlink(controlFile.c_str());
 		sendExitCode(ret);
 
 	} catch (...) {
+		unlink(controlFile.c_str());
 		sendExitCode(253);
 		throw;
 	}
 
 }
 
-LinuxService::LinuxService(std::string controlFile):umbilicalCord(0),controlFile(controlFile),stopFunction(stopFunctionPromise.get_future()) {
-
-	if (access(controlFile.c_str(),0) == 0) {
-		try {
-			tcpConnect(createNetAddr(),-1,-1);
-		} catch (...) {
-			unlink(controlFile.c_str());
-		}
-	}
+LinuxService::LinuxService(std::string controlFile):umbilicalCord(0),controlFile(controlFile) {
 
 
 }
@@ -225,33 +266,96 @@ NetAddr LinuxService::createNetAddr() {
 	return NetAddr::create(BinaryView(reinterpret_cast<unsigned char *>(&sun), sizeof(sun)));
 }
 
-int LinuxService::postCommand(StrViewA command, ArgList args) {
-	Stream s = tcpConnect(createNetAddr(),30000,30000);
-	s << command << "\n";
-	for(StrViewA x : args) {
-		s << x << "\n";
-	}
-
-	int i = s();
-	int exitCode = 0;
-	bool hasExitCode = false;
-	while (i != -1) {
-		if (isdigit(i) && exitCode < std::numeric_limits<int>::max()/10) {
-			hasExitCode = true;
-			exitCode = exitCode * 10 + i;
-		} else {
-			if (hasExitCode) {
-				std::cerr << i;
-				hasExitCode = false;
-			}
-			exitCode = 0;
-			std::cerr.put((char)i);
+int LinuxService::postCommand(StrViewA command, ArgList args, std::ostream &output, int timeout , bool timeoutIsEnd) {
+		Stream s = tcpConnect(createNetAddr(),1000,timeout);
+		s << command << "\n";
+		for(StrViewA x : args) {
+			s << x << "\n";
 		}
-		i = s();
+		s << "\n";
+		s.flush();
+
+		int i = s();
+		int exitCode = 0;
+		bool hasExitCode = false;
+		bool collectExitCode = false;
+		try {
+			while (i != -1) {
+				if (collectExitCode) {
+					if (isdigit(i)) {
+						exitCode = exitCode * 10 + (i-'0');
+						hasExitCode = true;
+					} else {
+						if (collectExitCode) {
+							output << '~';
+							collectExitCode = false;
+						}
+						if (hasExitCode) {
+							output << exitCode;
+							hasExitCode = false;
+						}
+						output.put(i);
+					}
+				} else if (i == '~') {
+					collectExitCode = true;
+					exitCode= 0;
+				} else {
+					output.put(i);
+				}
+				i = s();
+			}
+		} catch (TimeoutException &e) {
+			if (timeoutIsEnd && hasExitCode) {
+				return exitCode;
+			} else {
+				throw;
+			}
+		}
+
+		return exitCode;
+}
+
+bool LinuxService::checkPidFile() {
+	if (access(controlFile.c_str(),0) == 0) {
+		try {
+			postCommand("status",ArgList(), std::cerr);
+			return true;
+		} catch (...) {
+			unlink(controlFile.c_str());
+			return false;
+		}
 	}
+}
 
-	return exitCode;
+void LinuxService::stopOtherService() {
+	auto b = std::chrono::steady_clock::now();
+	pid_t p = (pid_t)postCommand("stop", ArgList(), std::cerr,30000,true);
+	auto e = std::chrono::steady_clock::now();
+	if (p) {
+		auto d = std::chrono::duration_cast<std::chrono::seconds>(e - b);
+		if (d.count() > 29) {
+			if (kill(p, SIGKILL) == 0) {
+				std::cerr << "Terminated! (pid=" <<p<<")" <<std::endl;
+			}
+		}
+	}
+}
 
+void LinuxService::cleanWaitings() {
+	auto cnt = waitEnd.size();
+	for (decltype(cnt) i = 0; i < cnt; i++) {
+		Stream s ( waitEnd.front());
+		waitEnd.pop();
+		if (s.waitForInput(0) == false)
+			waitEnd.push(s);
+	}
+}
+
+void LinuxService::idleRun() {
+	auto it = cmdMap.find("");
+	if (it != cmdMap.end()) {
+
+	}
 }
 
 }

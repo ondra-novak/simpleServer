@@ -2,8 +2,11 @@
 
 #include <future>
 #include <functional>
+#include <iosfwd>
+#include <queue>
 #include <map>
 #include "../abstractService.h"
+#include "../abstractStreamFactory.h"
 #include "../address.h"
 
 namespace simpleServer {
@@ -39,12 +42,18 @@ protected:
 	NetAddr createNetAddr();
 
 	void processRequest(Stream s);
-	std::promise<std::function<void()> >stopFunctionPromise;
-	std::future<std::function<void()> >stopFunction;
 
 	std::map<std::string, UserCommandFn> cmdMap;
 
-	int postCommand(StrViewA command, ArgList args);
+	int postCommand(StrViewA command, ArgList args, std::ostream &output, int timeout = 30000, bool timeoutIsEnd=false);
+
+	bool checkPidFile();
+	void stopOtherService();
+	void cleanWaitings();
+	void idleRun();
+
+	std::queue<Stream> waitEnd;
+	StreamFactory mother;
 };
 
 
