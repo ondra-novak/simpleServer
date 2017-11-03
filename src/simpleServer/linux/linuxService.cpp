@@ -101,9 +101,9 @@ void LinuxService::dispatch() {
 
 	while (s != nullptr) {
 		processRequest(s);
+		s = nullptr;
 		 s = mother();
 		 cleanWaitings();
-		 idleRun();
 	}
 }
 
@@ -141,11 +141,12 @@ void LinuxService::processRequest(Stream s) {
 	} else {
 		auto it =cmdMap.find(argList[0]);
 		if (it == cmdMap.end()) {
-			s << "ERROR: command not supported~-1";
-		}
+			s << "ERROR: command '" << argList[0] << "' is not supported~-1";
 
-		int ret =  it->second(argList, s);
-		s << "~" << ret;
+		} else {
+			int ret =  it->second(argList, s);
+			s << "~" << ret;
+		}
 		s.flush();
 	}
 
@@ -348,13 +349,6 @@ void LinuxService::cleanWaitings() {
 		waitEnd.pop();
 		if (s.waitForInput(0) == false)
 			waitEnd.push(s);
-	}
-}
-
-void LinuxService::idleRun() {
-	auto it = cmdMap.find("");
-	if (it != cmdMap.end()) {
-
 	}
 }
 

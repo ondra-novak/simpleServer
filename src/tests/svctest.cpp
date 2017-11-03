@@ -17,7 +17,6 @@ int main(int argc, char **argv) {
 		std::cout << "Service running: " << name << std::endl;
 
 		control.dispatch();
-		sleep(40);
 
 		return 0;
 	});
