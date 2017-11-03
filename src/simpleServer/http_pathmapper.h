@@ -3,6 +3,7 @@
 #include <functional>
 #include "stringview.h"
 #include "shared/constref.h"
+#include <initializer_list>
 
 #include "http_parser.h"
 
@@ -59,6 +60,7 @@ public:
 		StrViewA path;
 		HTTPMappedHandler handler;
 
+
 		operator HTTPMappedHandler() const {return handler;}
 		operator StrViewA() const {return path;}
 	};
@@ -80,7 +82,7 @@ public:
 
 
 		bool operator==(const Iterator &other) {return cur == other.cur;}
-		bool operator!=(const Iterator &other) {return cur == other.cur;}
+		bool operator!=(const Iterator &other) {return cur != other.cur;}
 		Iterator &operator++() {
 			if (lookPath.empty()) cur = owner.getEnd();
 			else {
@@ -124,7 +126,12 @@ public:
 	};
 
 	HttpStaticPathMapper();
-	HttpStaticPathMapper(std::initializer_list<MapRecord> mappings);
+	template<int N>
+	HttpStaticPathMapper(const MapRecord (&mappings)[N]) {
+		pathDir.reserve(N);
+		for (auto &&x:mappings) pathDir.push_back(x);
+		sort();
+	}
 
 	Collection operator()(StrViewA path) const;
 
@@ -134,6 +141,7 @@ protected:
 	PathDir::const_iterator getEnd() const;
 
 	static bool compareMapRecord (const MapRecord &a, const MapRecord &b);
+	void sort();
 
 };
 

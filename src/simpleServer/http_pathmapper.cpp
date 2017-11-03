@@ -10,8 +10,7 @@ bool HttpStaticPathMapper::compareMapRecord (const MapRecord &a,const MapRecord 
 	return a.path > b.path;
 }
 
-HttpStaticPathMapper::HttpStaticPathMapper( std::initializer_list<MapRecord> mappings)
-	:pathDir(mappings)
+void HttpStaticPathMapper::sort()
 {
 	std::sort(pathDir.begin(),pathDir.end(),&compareMapRecord);
 }

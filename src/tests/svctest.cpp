@@ -7,12 +7,15 @@
 using namespace simpleServer;
 
 
+
+
 int main(int argc, char **argv) {
 
 	return
 
 
 	ServiceControl::create(argc, argv,"exampleService",[](ServiceControl control, StrViewA name, ArgList args) {
+
 
 		std::cout << "Service running: " << name << std::endl;
 
