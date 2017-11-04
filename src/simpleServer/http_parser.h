@@ -28,7 +28,7 @@ typedef RefCntPtr<HTTPRequestData> PHTTPRequestData;
 
 
 
-typedef std::function<void(HTTPRequest)> HTTPHandler;
+typedef std::function<void(const HTTPRequest &)> HTTPHandler;
 
 enum HttpVersion {
 	http09,
@@ -73,7 +73,18 @@ protected:
 };
 
 
-
+enum class Redirect {
+	///Permanent redirect - browser can choose whether the method will be repeated
+	permanent = 301,
+	///Temporary redirect - browser can choose whether the method will be repeated
+	temporary = 302,
+	///Temporary redirect - browser will use the method GET
+	temporary_GET = 303,
+	///Temporary redirect - browser will repeat the request to new url
+	temporary_repeat = 307,
+	///Permanent redirect - browser will repeat the request to new url
+	permanent_repeat = 308,
+};
 
 
 class HTTPRequestData: public RefCntObj {
@@ -215,7 +226,7 @@ public:
 	Stream sendResponse(const HTTPResponse &resp);
 
 
-	void redirect(StrViewA url);
+	void redirect(StrViewA url, Redirect type);
 
 
 
@@ -252,6 +263,9 @@ public:
 	 */
 
 	void sendFile(StrViewA content_type, StrViewA pathname, bool etag = true);
+
+	bool redirectToFolderRoot(Redirect type);
+
 
 protected:
 
@@ -435,7 +449,10 @@ public:
 	Stream sendResponse(const HTTPResponse &resp) const {return ptr->sendResponse(resp);}
 
 
-	void redirect(StrViewA url) {return ptr->redirect(url);}
+	void redirect(StrViewA url, Redirect type = Redirect::temporary) const {return ptr->redirect(url,type);}
+
+	///Redirects the browser
+	bool redirectToFolderRoot(Redirect type = Redirect::permanent_repeat) const {return ptr->redirectToFolderRoot(type);}
 
 
 

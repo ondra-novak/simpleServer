@@ -360,7 +360,14 @@ Stream HTTPRequestData::sendResponse(const HTTPResponse& resp) {
 
 }
 
-void HTTPRequestData::redirect(StrViewA url) {
+void HTTPRequestData::redirect(StrViewA url, Redirect type) {
+
+	HTTPResponse resp((int)type);
+	resp("Location", url);
+
+	sendResponse(resp,StrViewA());
+
+
 }
 
 Stream HTTPRequestData::prepareStream(const Stream& stream) {
@@ -590,6 +597,14 @@ void HTTPRequestData::readBodyAsync(std::size_t maxSize, HTTPHandler completion)
 	readBodyAsync_cont1(maxSize, completion);
 }
 
+bool HTTPRequestData::redirectToFolderRoot(Redirect type) {
+	StrViewA p = getPath();
+	if (!p.empty() && p[p.length-1] == '/') return false;
+	std::string path = p;
+	path.append("/");
+	redirect(path,type);
+	return true;
+}
 
 void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler completion) {
 	PHTTPRequestData me(this);

@@ -1,6 +1,9 @@
 #pragma once
 #include <map>
 #include <mutex>
+#include <string>
+
+#include "http_pathmapper.h"
 
 namespace simpleServer {
 
@@ -15,8 +18,9 @@ public:
 
 	class Result {
 	public:
-		StrViewA getBase() const;
+		StrViewA getPath() const;
 		const HTTPMappedHandler &getHandler() const;
+		static constexpr bool isBase() {return true;}
 
 		Result(const std::string &base,const HTTPMappedHandler &handler)
 			:base(base),handler(handler) {}
@@ -27,11 +31,17 @@ public:
 
 	};
 
-	Result operator()(const StrViewA &path) const;
+	Result operator()(const HTTPRequest &, const StrViewA &path) const;
+	void add(std::string &&str, HTTPMappedHandler &&handler);
+	void add(const std::string &str, const HTTPMappedHandler &handler);
+	void remove(const std::string &str);
+	void remove(std::string &&str);
 
 protected:
 
-	std::mutex lock;
+	Result findlk(const StrViewA &path) const;
+
+	mutable std::mutex lock;
 	typedef std::lock_guard<std::mutex> Sync;
 	HMap hmap;
 

@@ -6,8 +6,10 @@ namespace simpleServer {
 HttpStaticPathMapper::MapRecord HttpStaticPathMapper::emptyResult;
 
 
-const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::operator()(const StrViewA &path) {
-
+const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::operator()(const HTTPRequest &r, const StrViewA &path) const {
+	return find(path);
+}
+const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::find(const StrViewA &path) const {
 	MapRecord dummy;
 	dummy.path = path;
 	auto itr = std::lower_bound(pathDir.begin(), pathDir.end(),dummy,&compareMapRecord);
@@ -16,7 +18,7 @@ const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::operator()(const St
 	const MapRecord &found = *itr;
 	StrViewA cp = commonPart(dummy.path, found.path);
 	if (cp.length == found.path.length) return found;
-	else return operator()(cp);
+	else return find(cp);
 }
 
 
