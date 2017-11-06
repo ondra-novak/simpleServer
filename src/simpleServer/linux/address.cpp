@@ -1,8 +1,13 @@
 #include <cstring>
 #include <netdb.h>
+#include <sys/un.h>
 #include "../address.h"
 
 #include "../exceptions.h"
+
+#include "../stringview.h"
+
+using ondra_shared::StringView;
 
 
 namespace simpleServer {
@@ -135,8 +140,37 @@ public:
 	}
 };
 
+static NetAddr createUnixAddress(StrViewA file) {
+	struct sockaddr_un sun;
+	sun.sun_family = AF_UNIX;
+	file = file.substr(0,sizeof(sun.sun_path)-1);
+	std::memcpy(sun.sun_path, file.data, file.length);
+	sun.sun_path[file.length] = 0;
+	return NetAddr::create(BinaryView(StringView<struct sockaddr_un>(&sun,1)));
+}
+
 
 NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType type) {
+
+
+	if (addr.indexOf(",") != addr.npos) {
+		auto spl = addr.split(",");
+		StrViewA a = spl();
+		a = a.trim(isspace);
+		NetAddr addr = create(a, defaultPort, type);
+		while (spl) {
+			a = spl();
+			a = a.trim(isspace);
+			NetAddr b = create(a, defaultPort, type);
+			addr = addr + b;
+		}
+		return addr;
+	}
+
+	if (addr.substr(0,7) == "unix://") {
+
+		return createUnixAddress(addr.substr(6));
+	}
 
 	struct addrinfo req, *result;
 	std::memset(&req,0,sizeof(req));

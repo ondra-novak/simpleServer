@@ -620,7 +620,7 @@ void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler compl
 		} else {
 
 			userBuffer.resize(end+4096);
-			reqStream.readASync(MutableBinaryView(&userBuffer[end],remain),
+			reqStream.readAsync(MutableBinaryView(&userBuffer[end],remain),
 				[me, maxSize,completion](AsyncState st, const BinaryView data) {
 
 				me->userBuffer.resize(me->userBuffer.size()-4096+data.length);

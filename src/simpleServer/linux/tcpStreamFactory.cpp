@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <cstring>
 #include <mutex>
 #include "tcpStreamFactory.h"
@@ -7,6 +8,8 @@
 #include <poll.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "../raii.h"
@@ -202,6 +205,15 @@ StreamFactory TCPListen::create(bool localhost, unsigned int port,
 static int listenSocket(const NetAddr &addr) {
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
+	if (sa->sa_family == AF_UNIX) {
+		const struct sockaddr_un *sun = reinterpret_cast<const struct sockaddr_un *>(sa);
+		struct stat buf;
+		if (stat(sun->sun_path, &buf) == 0) {
+			if (buf.st_mode & S_IFSOCK) {
+				unlink(sun->sun_path);
+			}
+		}
+	}
 	int s = socket(sa->sa_family, SOCK_STREAM, sa->sa_family==AF_INET||sa->sa_family == AF_INET6?IPPROTO_TCP:0);
 	if (s < 0) {
 		int e = errno;

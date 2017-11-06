@@ -65,7 +65,7 @@ protected:
 			}
 			RefCntPtr<LimitedStream> me(this);
 			Callback ccb(cb);
-			source.readASync([=](AsyncState st, const BinaryView &b) {
+			source.readAsync([=](AsyncState st, const BinaryView &b) {
 				BinaryView x = b.substr(me->readLimit);
 				source.putBack(b.substr(x.length));
 				me->readLimit-=x.length;
@@ -80,7 +80,7 @@ protected:
 			MutableBinaryView b = buffer.substr(0,readLimit);
 			RefCntPtr<LimitedStream> me(this);
 			Callback ccb(cb);
-			source.readASync(b,[=](AsyncState st, const BinaryView &b) {
+			source.readAsync(b,[=](AsyncState st, const BinaryView &b) {
 				me->readLimit-=b.length;
 				ccb(st,b);
 			});

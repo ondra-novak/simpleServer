@@ -216,7 +216,7 @@ inline void ChunkedStream<chunkSize>::implReadAsync(const Callback& cb) {
 	} else if (rd.empty()) {
 		Callback ccb = cb;
 		RefCntPtr<ChunkedStream> me(this);
-		source.readASync([=](AsyncState st, const BinaryView &data){
+		source.readAsync([=](AsyncState st, const BinaryView &data){
 			if (st == asyncOK) {
 				me->source.putBack(data);
 				BinaryView rd = me->read(true);

@@ -17,5 +17,25 @@ public:
 	operator bool() const {return data != nullptr;}
 	bool operator!() const {return data == nullptr;}
 
+	std::uintptr_t getUInt() const {
+		std::uintptr_t a = 0;
+		for (char c: *this) {
+			if (isdigit(c)) {
+				a = a *10 + (c - '0');
+			} else {
+				return 0;
+			}
+		}
+		return a;
+	}
+
+	std::intptr_t getInt() const {
+		if (empty()) return 0;
+		char c= (*this)[0];
+		if (c == '+') return (std::intptr_t)HeaderValue(substr(1)).getUInt();
+		else if (c == '+') return -(std::intptr_t)HeaderValue(substr(1)).getUInt();
+		else (std::intptr_t)getUInt();
+	}
+
 };
 }

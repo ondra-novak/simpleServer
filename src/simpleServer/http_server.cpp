@@ -56,7 +56,7 @@ static RefCntPtr<_intr::MiniServerImpl> initServerCore(StreamFactory sf, AsyncPr
 }
 
 MiniHttpServer::MiniHttpServer(StreamFactory sf, AsyncProvider asyncProvider)
-:srv(initServerCore(sf,asyncProvider)), onError(srv->ehndl)
+:srv(initServerCore(sf,asyncProvider)), onError(srv->ehndl), preHandler(srv->preHandler)
 {
 }
 
@@ -72,15 +72,31 @@ void MiniHttpServer::operator >>(HTTPHandler handler) {
 	}
 }
 
+
+
 void _intr::MiniServerImpl::runCycle() {
 
 	RefCntPtr<MiniServerImpl> me(this);
 	sf(ap, [=](AsyncState st, Stream s){
 
 		if (st == asyncOK) {
+			if (me->preHandler != nullptr) {
+				//preHandler defined, wait for first bytes
+				s.readAsync([=](AsyncState st, BinaryView b) {
+					//put the buffer back - will be read by preHandler
+					s.putBack(b);
+					//try preHandler
+					if (!me->preHandler(s)) {
+						//if preHandler rejected request, continue with http
+						HTTPRequest::parseHttp(s, me->hndl, true);
+					}
+				});
+				me->runCycle();
+			} else {
 
-			HTTPRequest::parseHttp(s, me->hndl, true);
-			me->runCycle();
+				HTTPRequest::parseHttp(s, me->hndl, true);
+				me->runCycle();
+			}
 		} else {
 			if (me->ehndl) me->ehndl();
 		}

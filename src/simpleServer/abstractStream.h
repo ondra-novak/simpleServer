@@ -728,11 +728,11 @@ public:
 		return ptr->waitForOutput(timeout);
 	}
 	template<typename Fn>
-	void readASync(const Fn &completion) const {
+	void readAsync(const Fn &completion) const {
 		return ptr->readAsync(completion);
 	}
 	template<typename Fn>
-	void readASync(const MutableBinaryView &buffer, const Fn &completion) const {
+	void readAsync(const MutableBinaryView &buffer, const Fn &completion) const {
 		return ptr->readAsync(buffer,completion);
 	}
 	template<typename Fn>

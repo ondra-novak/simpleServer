@@ -41,7 +41,7 @@ bool ReceivedHeaders::parse(const Stream& stream) {
 void ReceivedHeaders::parseAsync(const Stream& stream, const std::function<void(AsyncState)>& callback) {
 	std::function<void(AsyncState)> cb(callback);
 	Stream s(stream);
-	stream.readASync([=](AsyncState st, const BinaryView &data){
+	stream.readAsync([=](AsyncState st, const BinaryView &data){
 		if (st == asyncOK) {
 			BinaryView putBack;
 			if (parse(data, putBack)) {

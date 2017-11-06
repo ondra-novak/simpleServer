@@ -484,6 +484,18 @@ public:
 
 	void sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true)const {ptr->sendFile(content_type, pathname, etag);}
 
+	///Begin of the headers
+	ReceivedHeaders::HdrMap::const_iterator begin() const {
+		return ptr->begin();
+	}
+	///End of the headers
+	ReceivedHeaders::HdrMap::const_iterator end() const {
+		return ptr->end();
+	}
+	///Retrieves header value
+	HeaderValue operator[](StrViewA key) const {
+		return ptr->operator [](key);
+	}
 
 
 };

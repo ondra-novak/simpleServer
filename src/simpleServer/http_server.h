@@ -10,6 +10,7 @@ class HTTPRequest;
 
 
 typedef std::function<void()> ErrorHandler;
+typedef std::function<bool(const Stream &sx)> PreHTTPHandler;
 
 namespace _intr {
 
@@ -53,6 +54,7 @@ namespace _intr {
 
 
 		ErrorHandler ehndl;
+		PreHTTPHandler preHandler;
 
 
 	protected:
@@ -84,10 +86,19 @@ public:
 
 protected:
 
+
 	RefCntPtr<_intr::MiniServerImpl> srv;
 	bool running = false;
 public:
+	///Put there a function called on connection error
 	ErrorHandler &onError;
+	///Put there a function called before http parser is called
+	/** This allows to construct a hybrid service which supports multiple protocols.
+	 *  Depends on the first bytes, the server can choose different protocol
+	 *
+	 *  @note preHandler shoudl putBack the read bytes if it rejected the request
+	 */
+	PreHTTPHandler &preHandler;
 
 
 };
