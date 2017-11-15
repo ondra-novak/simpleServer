@@ -84,7 +84,7 @@ void WebSocketParser::afterSize() {
 
 void WebSocketParser::reset() {
 	currentState = opcodeFlags;
-	ftype = incomplette;
+	ftype = init;
 }
 
 void WebSocketParser::epilog(){

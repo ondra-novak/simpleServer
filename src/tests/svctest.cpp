@@ -2,6 +2,7 @@
 
 #include "../simpleServer/abstractStream.h"
 #include "../simpleServer/abstractService.h"
+#include "../simpleServer/shared/dbgLog.h"
 
 
 using namespace simpleServer;

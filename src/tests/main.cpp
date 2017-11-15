@@ -32,7 +32,7 @@ public:
 		if (data.empty()) event.dec();
 		else {
 			out << StrViewA(data);
-			sx.readASync(*this);
+			sx.readAsync(*this);
 		}
 	}
 
@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
 
 		server(async, [&](AsyncState, Stream s){
 			if (s != nullptr) {
-				s.readASync(AsyncReader(s,out,event));
+				s.readAsync(AsyncReader(s,out,event));
 			}
 		});
 		std::this_thread::sleep_for(std::chrono::milliseconds(200));

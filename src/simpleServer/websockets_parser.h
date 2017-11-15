@@ -1,5 +1,7 @@
 #pragma once
 
+#include <random>
+
 #include "stringview.h"
 #include <vector>
 
@@ -48,7 +50,14 @@ public:
 		///ping frame
 		ping,
 		///pong frame
-		pong
+		pong,
+		///Object is initial state
+		/**
+		 * No data has been retrieved yet
+		 *
+		 * This frame has no data
+		 */
+		init
 	};
 
 	///parse received block
@@ -93,7 +102,7 @@ public:
 	std::size_t stateRemain;
 
 	std::size_t size;
-	FrameType ftype = incomplette;
+	FrameType ftype = init;
 	unsigned int closeCode;
 	unsigned char opcode;
 	unsigned char mask[4];
