@@ -8,6 +8,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 
 #include "../abstractStreamFactory.h"
 
@@ -168,6 +169,7 @@ bool LinuxService::enterDaemon() {
 	pipe2(fds, O_CLOEXEC);
 	int fres = fork();
 	if (fres == 0) {
+		daemonEntered = true;
 //		std::cout << "press enter after debugger attach" << std::endl;
 	//	std::cin.get();
 		umbilicalCord = fds[1];
@@ -352,4 +354,68 @@ void LinuxService::cleanWaitings() {
 	}
 }
 
+void LinuxService::enableRestart() noexcept {
+	if (restartEnabled || umbilicalCord == 0) return;
+	do {
+		time_t startTime;
+		time(&startTime);
+		/*
+		int input[2];
+		int output[2];
+
+		if (pipe2(input,O_CLOEXEC)) {
+			int e = errno;
+			throw SystemException(e, "pipe2 input");
+		}
+		if (pipe2(output,O_CLOEXEC)) {
+			int e = errno;
+			throw SystemException(e, "pipe2 output");
+		}
+		*/
+		pid_t chld = fork();
+		if (chld == 0) break;
+		if (chld == -1) {
+			int e = errno;
+			if (e != EINTR) {
+				throw SystemException(e, "fork");
+			}
+		}
+
+		if (umbilicalCord) {
+			close(umbilicalCord);
+			umbilicalCord = 0;
+		}
+
+		int status;
+		if (waitpid(chld,&status, 0) == -1) {
+			int e = errno;
+			if (e != EINTR) {
+				throw SystemException(e, "waitpid");
+			}
+		}
+
+		if (WIFEXITED(status)) {
+			exit(WEXITSTATUS(status));
+		}
+		if (WIFSIGNALED(status)) {
+			int signal =  WTERMSIG(status);
+			if (signal == SIGTERM|| signal == SIGKILL)
+				exit(0);
+		}
+
+		time_t endTime;
+		time(&endTime);
+		if (endTime - startTime < 5) {
+			exit(255);
+		}
+	}
+	while (true);
+	restartEnabled = true;
 }
+
+bool LinuxService::isDaemon() const {
+	return daemonEntered;
+}
+
+}
+
