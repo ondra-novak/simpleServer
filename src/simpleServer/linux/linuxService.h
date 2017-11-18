@@ -20,7 +20,8 @@ public:
 
 protected:
 
-
+	virtual void enableRestart() noexcept;
+	virtual bool isDaemon() const;
 
 	virtual void dispatch();
 	virtual void addCommand(StrViewA command, UserCommandFn fn) ;
@@ -50,10 +51,11 @@ protected:
 	bool checkPidFile();
 	void stopOtherService();
 	void cleanWaitings();
-	void idleRun();
 
 	std::queue<Stream> waitEnd;
 	StreamFactory mother;
+	bool daemonEntered = false;
+	bool restartEnabled = false;
 };
 
 
