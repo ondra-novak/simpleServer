@@ -9,6 +9,7 @@
 #include "shared/stringpool.h"
 #include "http_headers.h"
 #include "http_headervalue.h"
+#include "shared/logOutput.h"
 
 #include "shared/refcnt.h"
 #include "shared/stringview.h"
@@ -39,7 +40,8 @@ enum HttpVersion {
 
 
 
-class HTTPResponse: public SendHeaders {
+
+class HTTPResponse: public SendHeaders{
 public:
 
 	explicit HTTPResponse(int code);
@@ -87,12 +89,11 @@ enum class Redirect {
 };
 
 
-class HTTPRequestData: public RefCntObj {
+class HTTPRequestData: public RefCntObj   {
 
 
 public:
 
-	HTTPRequestData() {}
 
 	typedef ReceivedHeaders::HdrMap HdrMap;
 
@@ -300,6 +301,8 @@ protected:
 	void handleKeepAlive();
 
 	void readBodyAsync_cont1(std::size_t maxSize, HTTPHandler completion);
+
+
 
 };
 
