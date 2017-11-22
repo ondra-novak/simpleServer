@@ -20,7 +20,7 @@ public:
 
 protected:
 
-	virtual void enableRestart() noexcept;
+	virtual void enableRestart();
 	virtual bool isDaemon() const;
 
 	virtual void dispatch();
@@ -56,6 +56,9 @@ protected:
 	StreamFactory mother;
 	bool daemonEntered = false;
 	bool restartEnabled = false;
+
+	virtual void changeUser(StrViewA userInfo);
+
 };
 
 

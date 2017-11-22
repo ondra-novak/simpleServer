@@ -70,6 +70,10 @@ public:
 	 * @note function can return just only whether the service was started by start/restart or run
 	 */
 	virtual bool isDaemon() const = 0;
+
+	///Changes user/group of the service
+
+	virtual void changeUser(StrViewA userInfo) = 0;
 };
 
 
@@ -142,6 +146,24 @@ public:
 		ptr->isDaemon();
 	}
 
+
+	///Changes user (and group) od the service
+	/** this function is primarily useful for linux environment. It allows
+	 * to change effective user and group for the service, so the service is no longer
+	 * running under the root account. The function can be implemented for other
+	 * platforms. It should have empty implementation in case, that such
+	 * operation is not defined
+	 *
+	 * @param userInfo Specify name of the user. Under linux, you can specify in
+	 * pair of group name separated by collon. "user:group". If you ommit the group,
+	 * the function use the user's active group. Failures during switching are reported
+	 * throught the SystemException. A special meaing has an empty string, which performs
+	 * no action. This allows to connect the argument with an configuration option, where
+	 * empty name is interpreted as disable function.
+	 */
+	void changeUser(StrViewA userInfo) {
+		ptr->changeUser(userInfo);
+	}
 };
 
 

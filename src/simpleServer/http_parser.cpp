@@ -17,9 +17,13 @@
 #include "stringview.h"
 
 #include "limitedStream.h"
+#include "shared/logOutput.h"
+
 
 namespace simpleServer {
 
+using ondra_shared::AbstractLogProvider;
+using ondra_shared::unsignedToString;
 
 
 static StrViewA statusMessages[] = {
@@ -71,6 +75,7 @@ static const char* CONTENT_TYPE = "Content-Type";
 static const char* CONTENT_LENGTH = "Content-Length";
 static const char* TRANSFER_ENCODING = "Transfer-Encoding";
 static const char* CONNECTION = "Connection";
+static const char* HOST = "Host";
 static const char* CRLF = "\r\n";
 
 
@@ -101,6 +106,30 @@ std::string Rfc1123_DateTimeNow()
     return buf;
 }
 */
+
+
+struct HttpIdent{
+	unsigned int instanceId;
+};
+
+template<typename WrFn>
+void logPrintValue(WrFn &wr, const HttpIdent &ident) {
+	wr("http:");
+	unsignedToString(ident.instanceId,wr,36,4);
+}
+
+
+static LogObject initLogIdent(AbstractLogProvider *lp) {
+	std::atomic<unsigned int> counter(0);
+	HttpIdent ident;
+	ident.instanceId = ++counter;
+	return LogObject(lp, ident);
+
+}
+HTTPRequestData::HTTPRequestData()
+	:log(initLogIdent(AbstractLogProvider::initInstance().get())) {}
+HTTPRequestData::HTTPRequestData(LogObject curLog)
+	:log(initLogIdent(curLog.getProvider())){}
 
 
 template<typename Fn>
@@ -274,7 +303,6 @@ StrViewA HTTPRequestData::getRequestLine() const {
 
 std::string HTTPRequestData::getURI(bool secure) const {
 	std::string r(secure?"https://":"http://");
-	HeaderValue host = operator[]("Host");
 	r.append(host.data, host.length);
 	r.append(path.data, path.length);
 	return r;
@@ -372,6 +400,8 @@ void HTTPRequestData::redirect(StrViewA url, Redirect type) {
 
 Stream HTTPRequestData::prepareStream(const Stream& stream) {
 
+	host = operator[](HOST);
+
 	HeaderValue con = operator[](CONNECTION);
 	if (con == "keep-alive") keepAlive = true;
 	else if (con == "close") keepAlive = false;
@@ -453,6 +483,9 @@ protected:
 Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 		const StrViewA* contentType, const size_t* contentLength) {
 
+	intptr_t lgCtxLen = -1;
+	StrViewA lgCtxType;
+
 	struct Flags {
 		bool hasCtt = false;
 		bool hasCtl = false;
@@ -480,10 +513,12 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 	if (contentType) {
 		originStream << CONTENT_TYPE << ": " << *contentType << CRLF;
 		flags.hasCtt = true;
+		lgCtxType = *contentType;
 	}
 	if (contentLength) {
 		originStream << CONTENT_LENGTH << ": " << *contentLength << CRLF;
 		flags.hasCtl = true;
+		lgCtxLen = *contentLength;
 	}
 
 	if (resp) {
@@ -493,11 +528,13 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 			if (key == CONTENT_TYPE) {
 				if (flags.hasCtt) return true;
 				flags.hasCtt = true;
+				lgCtxType =value;
 			}
 			else if (key == CONTENT_LENGTH) {
 				if (flags.hasCtl) return true;
 				flags.hasCtl = true;
 				bodyLimit = std::strtol(value.data,0,10);
+				lgCtxLen = bodyLimit;
 			}
 			else if (key == TRANSFER_ENCODING) {
 				if (flags.hasTE) return true;
@@ -536,6 +573,8 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 
 
 	KeepAliveFn nxfn(this,originStream.getAsyncProvider());
+
+	log.progress("$1 $2 $3 $4 $5 $6", host, method, path, code, lgCtxType, lgCtxLen);
 
 	//when code 204, server should not generate any content
 	//so transfer encoding and content type should not apper in headers

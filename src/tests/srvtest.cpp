@@ -2,8 +2,11 @@
 #include "../simpleServer/http_pathmapper.h"
 #include "../simpleServer/html_escape.h"
 #include "../simpleServer/http_server.h"
+#include "../simpleServer/shared/stdLogFile.h"
 
 using namespace simpleServer;
+
+using ondra_shared::StdLogFile;
 
 static bool demoPage(const HTTPRequest &req, const StrViewA &vpath) {
 	if (vpath.empty()) {
@@ -26,6 +29,10 @@ static bool demoPage(const HTTPRequest &req, const StrViewA &vpath) {
 int main(int argc, char **argv) {
 	return
 	ServiceControl::create(argc, argv,"exampleWebServer",[](ServiceControl control, StrViewA name, ArgList args) {
+
+		StdLogFile log("logfile");
+		log.setCurrent();
+
 		typedef HttpStaticPathMapper::MapRecord M;
 		M mappings[] = {
 			{"",&demoPage},
@@ -46,6 +53,8 @@ int main(int argc, char **argv) {
 		MiniHttpServer server(NetAddr::create("",port),0,0);
 
 		server >> pages;
+
+//		control.changeUser("ondra:sudo");
 
 		std::cout << "Server running on port " <<port << std::endl;
 		control.dispatch();

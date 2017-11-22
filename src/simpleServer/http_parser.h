@@ -20,7 +20,8 @@ using ondra_shared::StringPool;
 using ondra_shared::RefCntObj;
 using ondra_shared::RefCntPtr;
 using ondra_shared::StrViewA;
-using ondra_shared::BinaryView;;
+using ondra_shared::BinaryView;
+using ondra_shared::LogObject;
 
 class HTTPRequest;
 class HTTPRequestData;
@@ -93,6 +94,9 @@ class HTTPRequestData: public RefCntObj   {
 
 
 public:
+
+	HTTPRequestData();
+	HTTPRequestData(LogObject curLog);
 
 
 	typedef ReceivedHeaders::HdrMap HdrMap;
@@ -268,6 +272,8 @@ public:
 	bool redirectToFolderRoot(Redirect type);
 
 
+	LogObject log;
+
 protected:
 
 	ReceivedHeaders hdrs;
@@ -276,6 +282,7 @@ protected:
 	StrViewA method;
 	StrViewA path;
 	StrViewA versionStr;
+	StrViewA host;
 	HttpVersion version;
 	bool keepAlive;
 
@@ -499,6 +506,8 @@ public:
 	HeaderValue operator[](StrViewA key) const {
 		return ptr->operator [](key);
 	}
+
+
 
 
 };

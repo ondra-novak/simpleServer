@@ -2,6 +2,8 @@
 
 #include <limits>
 #include <fcntl.h>
+#include <grp.h>
+#include <pwd.h>
 #include <unistd.h>
 #include <iostream>
 #include <signal.h>
@@ -15,9 +17,13 @@
 #include "../exceptions.h"
 #include "tcpStreamFactory.h"
 #include "../http_headers.h"
+#include "../logOutput.h"
 
 namespace simpleServer {
 
+using ondra_shared::logWarning;
+using ondra_shared::logProgress;
+using ondra_shared::logError;
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
 	try {
@@ -86,6 +92,9 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 void LinuxService::dispatch() {
 
 
+	if (getuid() == 0) {
+		logWarning("The service is starting under the root priviledge. This is not recomended for the security reasons.");
+	}
 
 
 
@@ -100,12 +109,16 @@ void LinuxService::dispatch() {
 
 	 s = mother();
 
+	 logProgress("The service started, pid= $1",getpid);
+
 	while (s != nullptr) {
 		processRequest(s);
 		s = nullptr;
 		 s = mother();
 		 cleanWaitings();
 	}
+
+	logProgress("The service is exiting");
 }
 
 typedef StringPool<char> Pool;
@@ -354,7 +367,7 @@ void LinuxService::cleanWaitings() {
 	}
 }
 
-void LinuxService::enableRestart() noexcept {
+void LinuxService::enableRestart()  {
 	if (restartEnabled || umbilicalCord == 0) return;
 	do {
 		time_t startTime;
@@ -403,11 +416,14 @@ void LinuxService::enableRestart() noexcept {
 				exit(0);
 		}
 
+
 		time_t endTime;
 		time(&endTime);
 		if (endTime - startTime < 5) {
+			logError("The service crashed with status $1", WTERMSIG(status));
 			exit(255);
 		}
+		logError("The service crashed with status $1. Restarting...", WTERMSIG(status));
 	}
 	while (true);
 	restartEnabled = true;
@@ -415,6 +431,71 @@ void LinuxService::enableRestart() noexcept {
 
 bool LinuxService::isDaemon() const {
 	return daemonEntered;
+}
+
+void LinuxService::changeUser(StrViewA userInfo) {
+	if (userInfo.empty()) return;
+
+	auto sep = userInfo.indexOf(":");
+	StrViewA user;
+	StrViewA group;
+
+	if (sep == userInfo.npos) {
+		user = userInfo;
+	} else {
+		user = userInfo.substr(0,sep);
+		group = userInfo.substr(sep+1);
+	}
+
+	char strUser[user.length+1];
+	char strGroup[group.length+1];
+
+	std::copy(user.begin(),user.end(),strUser);
+	std::copy(group.begin(),group.end(),strGroup);
+
+	strUser[user.length] = 0;
+	strGroup[group.length] = 0;
+
+	int reqSz =  sysconf(_SC_GETGR_R_SIZE_MAX);
+	if (reqSz == -1) {
+		reqSz = 16384;
+	}
+	std::vector<char> buffer(reqSz,0);
+	passwd uinfo, *uinfores;
+	if (getpwnam_r(strUser,&uinfo,buffer.data(),buffer.size(),&uinfores)) {
+		int e = errno;
+		throw SystemException(e, "changeUser: Failed to retrieve user information");
+	}
+	if (uinfores == nullptr) {
+		throw SystemException(ESRCH, "changeUser: User not found");
+	}
+
+	uid_t uid = uinfo.pw_uid;
+	gid_t gid = uinfo.pw_gid;
+
+
+	if (!group.empty()) {
+		::group gr, *gres;
+		if (getgrnam_r(strGroup,&gr,buffer.data(),buffer.size(),&gres)) {
+			int e = errno;
+			throw SystemException(e, "changeUser: Failed to retrieve group information");
+		}
+		if (gres == nullptr) {
+			throw SystemException(ESRCH, "changeUser: Group not found");
+		}
+
+		gid = gr.gr_gid;
+	}
+
+	if (setgid(gid)) {
+		int e = errno;
+		throw SystemException(e, "changeUser: Cannot change current group");
+	}
+	if (setuid(uid)) {
+		int e = errno;
+		throw SystemException(e, "changeUser: Cannot change current user");
+	}
+
 }
 
 }
