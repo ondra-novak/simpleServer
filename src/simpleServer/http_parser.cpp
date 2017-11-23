@@ -123,7 +123,7 @@ static LogObject initLogIdent(AbstractLogProvider *lp) {
 	std::atomic<unsigned int> counter(0);
 	HttpIdent ident;
 	ident.instanceId = ++counter;
-	return LogObject(lp, ident);
+	return LogObject(*lp, ident);
 
 }
 HTTPRequestData::HTTPRequestData()

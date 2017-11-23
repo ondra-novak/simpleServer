@@ -21,9 +21,7 @@
 
 namespace simpleServer {
 
-using ondra_shared::logWarning;
-using ondra_shared::logProgress;
-using ondra_shared::logError;
+using ondra_shared::AbstractLogProviderFactory;
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
 	try {
@@ -424,6 +422,9 @@ void LinuxService::enableRestart()  {
 			exit(255);
 		}
 		logError("The service crashed with status $1. Restarting...", WTERMSIG(status));
+		AbstractLogProviderFactory *logProvider = AbstractLogProviderFactory::getInstance();
+		//reopen log to ensure, that we have a correct file descriptor
+		if (logProvider) logProvider->reopenLogs();
 	}
 	while (true);
 	restartEnabled = true;
