@@ -6,6 +6,10 @@ using ondra_shared::StrViewA;
 
 namespace simpleServer {
 
+///Maps path to files on filesystem
+/**
+ * It allows to customize mapping. By default it maps path to files and selects proper mime type
+ */
 class HttpFileMapper {
 public:
 
