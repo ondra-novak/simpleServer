@@ -5,6 +5,12 @@
 namespace simpleServer {
 
 
+#ifdef _WIN32
+char HttpFileMapper::pathSeparator = '\\';
+#else
+char HttpFileMapper::pathSeparator = '/';
+#endif
+
 HttpFileMapper::HttpFileMapper(std::string &&documentRoot, std::string &&index)
 	:documentRoot(std::move(documentRoot))
 	,index(std::move(index)) {
@@ -688,9 +694,9 @@ StrViewA HttpFileMapper::mapMime(StrViewA fullPathname) {
 		return "application/octet-stream";
 	}
 	std::pair<StrViewA, StrViewA> srch;
-	srch.first = fullPathname;
+	srch.first = fullPathname.substr(sep);
 	auto fnd = std::lower_bound(std::begin(mimeList),std::end(mimeList),srch, std::less<decltype(srch)>());
-	if (fnd = std::end(mimeList))
+	if (fnd == std::end(mimeList) || fnd->first != srch.first)
 		return "application/octet-stream";
 
 	return fnd->second;
@@ -714,15 +720,29 @@ bool HttpFileMapper::operator ()(const HTTPRequest& req, const StrViewA& vpath) 
 	int level = 0;
 
 	auto splt = qp.getPath().split("/");
+	bool dir = false;
 	while (splt) {
 		StrViewA x = splt();
-		if (x.empty()) break;
-		if (x == ".") break;
+		if (x.empty()) {
+			dir = true;
+			continue;
+		}
+		dir = false;
+
+		if (x == ".") continue;
 		if (x == "..") {
 			if (!level) return false;
+			level--;
+		} else {
+			level++;
 		}
+
 		buffer.push_back(pathSeparator);
 		buffer.insert(buffer.end(),x.begin(),x.end());
+	}
+	if (dir) {
+		buffer.push_back(pathSeparator);
+		buffer.insert(buffer.end(),index.begin(),index.end());
 	}
 	return mapFile(req, StrViewA(buffer.data(), buffer.size()));
 
