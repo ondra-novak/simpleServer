@@ -10,6 +10,11 @@
 
 namespace simpleServer {
 
+
+bool HostMappingHandler::compareRecord(const Record &rc1, const Record &rc2) {
+	return rc1.host < rc2.host;
+}
+
 void HostMappingHandler::setMapping(StrViewA mapping) {
 
 	clear();
@@ -21,40 +26,41 @@ void HostMappingHandler::setMapping(StrViewA mapping) {
 
 	buffer = str;
 
-	std::vector<PathMap> srch;
+	std::vector<Record> srch;
 
 	m = m.trim(isspace);
 	auto splt = m.split(",");
 	while  (splt) {
 
 		StrViewA item = StrViewA(splt()).trim(isspace);
+		Record rc;
 		if (item == "*") {
-			srch.push_back(PathMap(HostAndPath(item,"/"),"/"));
+			rc.host = item;
+			rc.path = rc.vpath = "/";
+			srch.push_back(rc);
 		} else {
 			auto parts = item.split("->");
 			StrViewA hostpath = StrViewA(parts()).trim(isspace);
-			StrViewA vpath = StrViewA(parts).trim(isspace);
-			StrViewA host;
-			StrViewA path;
+			rc.vpath = StrViewA(parts).trim(isspace);
 
 			auto s = hostpath.indexOf("/");
 			if (s == hostpath.npos) {
-				host = hostpath;
-				path = "/";
+				rc.host = hostpath;
+				rc.path = rc.vpath;
 			} else {
-				host = hostpath.substr(0,s).trim(isspace);
-				path = hostpath.substr(s);
+				rc.host = hostpath.substr(0,s).trim(isspace);
+				rc.path = hostpath.substr(s);
 			}
 
-			srch.push_back(PathMap(HostAndPath(host,path), vpath));
+			srch.push_back(rc);
 		}
 	}
 
-	std::sort(srch.begin(), srch.end(), std::less<PathMap>());
+	std::sort(srch.begin(), srch.end(), &compareRecord);
 
 
 	srchDataLen = srch.size();
-	srchData = std::shared_ptr<PathMap> (new PathMap[srchDataLen], std::default_delete<PathMap[]>());
+	srchData = std::shared_ptr<Record> (new Record[srchDataLen], std::default_delete<Record[]>());
 	std::copy(srch.begin(),srch.end(), srchData.get());
 
 
@@ -83,6 +89,7 @@ bool HostMappingHandler::operator ()(const HTTPRequest& req, const StrViewA& vpa
 		return false;
 	}
 	if (handler == nullptr) return false;
+//	req->log.debug("mapping host $1 $2 -> $3", req.getHost(), vpath, newvpath);
 	return handler(req, newvpath);
 }
 
@@ -90,29 +97,31 @@ StrViewA HostMappingHandler::map(StrViewA host, StrViewA path, std::string &tmpB
 
 	if (srchData == nullptr) return path;
 
-	PathMap l;
-	l.first.first = host;
-	PathMap u(l);
-	u.first.second = "\xFF";
+	Record v;
+	v.host = host;
 
-	StringView<PathMap> data(srchData.get(), srchDataLen);
+	StringView<Record> data(srchData.get(), srchDataLen);
 
-	auto b = std::lower_bound(data.begin(), data.end(), l, std::less<PathMap>());
-	auto e = std::upper_bound(data.begin(), data.end(), u, std::less<PathMap>());
+	auto range = std::equal_range(data.begin(), data.end(), v, &compareRecord);
 
-	for (auto i = b; i != e; ++i) {
-		auto offset = i->first.second.length;
-		if (i->first.second == path.substr(0,offset)) {
+	for (auto i = range.first; i != range.second; ++i) {
+		auto offset = i->path.length;
+		if (i->path == path.substr(0,offset)) {
 
-			StrViewA vpath = i->second;
+			StrViewA vpath = i->vpath;
 			if (vpath.length< offset && path.substr(offset-vpath.length, vpath.length) == vpath) {
 				return path.substr(offset-vpath.length);
 			} else {
-				tmpBuffer.clear();
-				tmpBuffer.reserve(vpath.length+path.length - offset);
-				tmpBuffer.append(vpath.data, vpath.length);
-				tmpBuffer.append(path.data+offset, path.length-offset);
-				return tmpBuffer;
+				StrViewA adjpath = path.substr(offset);
+				if (adjpath.empty()) {
+					return vpath;
+				} else {
+					tmpBuffer.clear();
+					tmpBuffer.reserve(vpath.length+adjpath.length);
+					tmpBuffer.append(vpath.data, vpath.length);
+					tmpBuffer.append(adjpath.data, adjpath.length);
+					return tmpBuffer;
+				}
 			}
 		}
 	}

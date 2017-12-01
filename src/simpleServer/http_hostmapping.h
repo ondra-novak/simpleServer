@@ -64,14 +64,19 @@ protected:
 
 	std::shared_ptr<char> buffer;
 
-	typedef std::pair<StrViewA, StrViewA> HostAndPath;
-	typedef std::pair<HostAndPath, StrViewA> PathMap;
+	struct Record {
+		StrViewA host;
+		StrViewA path;
+		StrViewA vpath;
+	};
 
-	std::shared_ptr<PathMap> srchData;
+
+	std::shared_ptr<Record> srchData;
 	std::size_t srchDataLen;
 
 	HTTPMappedHandler handler;
 
+	static bool compareRecord(const Record &rc1, const Record &rc2);
 
 
 };
