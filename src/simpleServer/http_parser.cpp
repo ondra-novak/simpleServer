@@ -837,5 +837,10 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 	}
 }
 
+StrViewA HTTPRequestData::getHost() const {
+	return host;
+}
+
 
 }
+

@@ -128,6 +128,9 @@ public:
 	 * @return string contains HTTP version: HTTP/1.0 or HTTP/1.1
 	 */
 	HttpVersion getVersion() const;
+
+	StrViewA getHost() const;
+
 	///Retrieves whole request line
 	StrViewA getRequestLine() const;
 	///Forges full uri
@@ -138,6 +141,7 @@ public:
 	 * @note function just combines Host and path to create URI.
 	 */
 	std::string getURI(bool secure=true) const;
+
 
 
 	///Send response
@@ -349,7 +353,9 @@ public:
 	 * @return string contains path from the request line (raw)
 	 */
 	StrViewA getPath() const {return ptr->getPath();}
-	///Retrieves http version
+
+	StrViewA getHost() const {return ptr->getHost();}
+///Retrieves http version
 	/**
 	 * @return string contains HTTP version: HTTP/1.0 or HTTP/1.1
 	 */

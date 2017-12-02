@@ -79,7 +79,7 @@ public:
 	MiniHttpServer(StreamFactory sf, AsyncProvider asyncProvider);
 	~MiniHttpServer();
 
-	void operator >> (HTTPHandler handler);
+	MiniHttpServer &operator >> (HTTPHandler handler);
 
 
 

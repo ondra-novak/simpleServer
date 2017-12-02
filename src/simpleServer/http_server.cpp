@@ -64,12 +64,13 @@ MiniHttpServer::~MiniHttpServer() {
 	if (running) srv->stopCycle();
 }
 
-void MiniHttpServer::operator >>(HTTPHandler handler) {
+MiniHttpServer &MiniHttpServer::operator >>(HTTPHandler handler) {
 	if (!running) {
 		srv->setHndl(handler);
 		srv->runCycle();
 		running = true;
 	}
+	return *this;
 }
 
 
