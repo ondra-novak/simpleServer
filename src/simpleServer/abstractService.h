@@ -74,6 +74,7 @@ public:
 	///Changes user/group of the service
 
 	virtual void changeUser(StrViewA userInfo) = 0;
+
 };
 
 

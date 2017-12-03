@@ -43,6 +43,7 @@ static StrViewA statusMessages[] = {
 		"304 Not Modified",
 		"305 Use Proxy",
 		"307 Temporary Redirect",
+		"308 Permanent Redirect",
 		"400 Bad Request",
 		"401 Unauthorized",
 		"402 Payment Required",
