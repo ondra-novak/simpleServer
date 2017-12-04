@@ -18,6 +18,10 @@
 #include "../simpleServer/http_parser.h"
 #include "../simpleServer/http_server.h"
 
+#include "../simpleServer/shared/future.h"
+
+ondra_shared::Future<int> x;
+
 using namespace simpleServer;
 
 
