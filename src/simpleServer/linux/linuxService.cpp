@@ -339,6 +339,7 @@ bool LinuxService::checkPidFile() {
 			return false;
 		}
 	}
+	return false;
 }
 
 void LinuxService::stopOtherService() {
