@@ -11,7 +11,7 @@ namespace simpleServer {
 using ondra_shared::const_ref;
 using ondra_shared::StrViewA;
 
-extern char *urlEncode_validChards;
+extern const char *urlEncode_validChards;
 
 template<typename Fn>
 class UrlEncode {

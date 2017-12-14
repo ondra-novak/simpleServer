@@ -3,7 +3,7 @@
 namespace simpleServer {
 
 
-char *urlEncode_validChards = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$'()*+,;`.";
+const char *urlEncode_validChards = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$'()*+,;`.";
 
 
 }
