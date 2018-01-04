@@ -273,11 +273,10 @@ void LinuxService::sendExitCode(int code) {
 
 
 NetAddr LinuxService::createNetAddr() {
-	sockaddr_un sun;
-	sun.sun_family = AF_UNIX;
-	strncpy(sun.sun_path, controlFile.data(), sizeof(sun.sun_path));
-	sun.sun_path[sizeof(sun.sun_path)-1] = 0;
-	return NetAddr::create(BinaryView(reinterpret_cast<unsigned char *>(&sun), sizeof(sun)));
+	std::string netpath = "unix://";
+	netpath.append(controlFile.data(), controlFile.length());
+	netpath.append(":666");
+	return NetAddr::create(netpath,0,NetAddr::IPvAll);
 }
 
 int LinuxService::postCommand(StrViewA command, ArgList args, std::ostream &output, int timeout , bool timeoutIsEnd) {

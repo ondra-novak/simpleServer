@@ -1,6 +1,8 @@
 #include <cstring>
 #include <netdb.h>
 #include <sys/un.h>
+ #include <arpa/inet.h>
+#include "localAddr.h"
 #include "../address.h"
 
 #include "../exceptions.h"
@@ -24,6 +26,8 @@ public:
 		if (addr) freeaddrinfo(addr);
 	}
 
+	virtual const INetworkAddress &unproxy() const override {return *this;}
+
 
 protected:
 
@@ -40,6 +44,8 @@ public:
 	~AddressAddrInfoSlave() noexcept {
 		addr = nullptr;
 	}
+
+	virtual const INetworkAddress &unproxy() const {return *this;}
 protected:
 	template<typename T> friend class RefCntPtr;
 
@@ -82,6 +88,7 @@ public:
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const override {
 		return nullptr;
 	}
+	virtual const INetworkAddress &unproxy() const override {return *this;}
 
 
 
@@ -92,7 +99,30 @@ protected:
 
 
 std::string AddressAddrInfo::toString(bool resolve) const {
-	return addr->ai_canonname;
+	if (addr->ai_canonname == 0) {
+		char addrbuff[256];
+		char portbuff[256];
+		switch (addr->ai_family) {
+		case AF_INET:
+			inet_ntop(addr->ai_family,
+					&reinterpret_cast<const sockaddr_in *>(addr->ai_addr)->sin_addr,
+					addrbuff,sizeof(addrbuff));
+			snprintf(portbuff, sizeof(portbuff), "%d", htons(reinterpret_cast<const sockaddr_in *>(addr->ai_addr)->sin_port));
+			return std::string(addrbuff)+":"+portbuff;
+		case AF_INET6:
+			inet_ntop(addr->ai_family,
+					&reinterpret_cast<const sockaddr_in6 *>(addr->ai_addr)->sin6_addr,
+					addrbuff,sizeof(addrbuff));
+			snprintf(portbuff, sizeof(portbuff), "%d", htons(reinterpret_cast<const sockaddr_in6 *>(addr->ai_addr)->sin6_port));
+			return std::string("[")+addrbuff+"]:"+portbuff;
+		case AF_UNIX:
+			return std::string("unix://")+reinterpret_cast<const sockaddr_un *>(addr->ai_addr)->sun_path;
+		default:
+			return "<unknown address>";
+		}
+	} else {
+		return addr->ai_canonname;
+	}
 }
 
 BinaryView AddressAddrInfo::toSockAddr() const {
@@ -141,13 +171,27 @@ public:
 };
 
 static NetAddr createUnixAddress(StrViewA file) {
-	struct sockaddr_un sun;
-	sun.sun_family = AF_UNIX;
-	file = file.substr(0,sizeof(sun.sun_path)-1);
-	std::memcpy(sun.sun_path, file.data, file.length);
-	sun.sun_path[file.length] = 0;
-	return NetAddr::create(BinaryView(StringView<struct sockaddr_un>(&sun,1)));
+	unsigned int perms = 0;
+	auto seppos = file.indexOf(":");
+	if (seppos != file.npos) {
+		perms = 0;
+		if (file.length - seppos < 4) {
+			throw SystemException(EINVAL,std::string("Permission must have 3 octal numbers:")+std::string(file));
+		}
+		for (unsigned int i = 0; i < 3; i++) {
+			unsigned int v = file[seppos+i+1]-'0';
+			if (v > 7) {
+				throw SystemException(EINVAL,std::string("Permission must be octal number:")+std::string(file));
+			}
+			perms = perms * 8 + v;
+		}
+		file = file.substr(0,seppos);
+	}
+
+
+	return NetAddr(new NetAddrSocket(file,perms));
 }
+
 
 
 NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType type) {
@@ -167,9 +211,8 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 		return addr;
 	}
 
-	if (addr.substr(0,7) == "unix://") {
-
-		return createUnixAddress(addr.substr(6));
+	if (addr.substr(0,7) == "unix://" && addr.length>8) {
+		return createUnixAddress(addr.substr(6+(addr[7]=='.'?1:0)));
 	}
 
 	struct addrinfo req, *result;
@@ -189,6 +232,8 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 		case IPv4: 		req.ai_family = AF_INET;break;
 		case IPv6: 		req.ai_family = AF_INET6;break;
 	}
+
+	req.ai_flags |=  AI_CANONIDN;
 
 
 	if (addr.empty()) {
@@ -292,6 +337,7 @@ public:
 
 	~ChainedNetworkAddr() noexcept {}
 
+	virtual const INetworkAddress &unproxy() const {return (slave.getHandle())->unproxy();}
 
 protected:
 	NetAddr master, slave, next;

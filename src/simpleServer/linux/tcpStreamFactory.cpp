@@ -17,9 +17,10 @@
 
 #include "../exceptions.h"
 #include "async.h"
-
+#include "localAddr.h"
 
 #include "tcpStream.h"
+#include "localAddr.h"
 
 namespace simpleServer {
 
@@ -203,45 +204,64 @@ StreamFactory TCPListen::create(bool localhost, unsigned int port,
 }
 
 static int listenSocket(const NetAddr &addr) {
+	const INetworkAddress &naddr = addr.getHandle()->unproxy();
+	const NetAddrSocket *saddr = dynamic_cast<const NetAddrSocket *>(&naddr);
 	BinaryView b = addr.toSockAddr();
 	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
-	if (sa->sa_family == AF_UNIX) {
-		const struct sockaddr_un *sun = reinterpret_cast<const struct sockaddr_un *>(sa);
+	int s;
+	if (saddr) {
 		struct stat buf;
-		if (stat(sun->sun_path, &buf) == 0) {
+		const char *path = saddr->getPath();
+		if (stat(path, &buf) == 0) {
 			if (buf.st_mode & S_IFSOCK) {
-				unlink(sun->sun_path);
+				unlink(path);
 			}
 		}
-	}
-	int s = socket(sa->sa_family, SOCK_STREAM, sa->sa_family==AF_INET||sa->sa_family == AF_INET6?IPPROTO_TCP:0);
-	if (s < 0) {
-		int e = errno;
-		throw SystemException(e,"failed to create socket");
-	}
-	int enable = 1;
-	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-	{
-		int e = errno;
-		close(s);
-		throw SystemException(e,"setsockopt(SO_REUSEADDR) failed");
-	}
-	if (sa->sa_family == AF_INET6) {
-		if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(int)) < 0)
+
+		s = socket(sa->sa_family, SOCK_STREAM, 0);
+		if (s < 0) {
+			int e = errno;
+			throw SystemException(e,"failed to create socket");
+		}
+		if (::bind(s,sa,b.length)== -1) {
+			int e = errno;
+			close(s);
+			throw SystemException(e,"Cannot bind socket to port");
+		}
+		auto perms = saddr->getPermissions();
+		if (perms) {
+			if (chmod(path,perms) == -1) {
+				int e = errno;
+				close(s);
+				throw SystemException(e,"cannot change permissions of the socket");
+			}
+		}
+	} else {
+		s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+		if (s < 0) {
+			int e = errno;
+			throw SystemException(e,"failed to create socket");
+		}
+		int enable = 1;
+		if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+		{
+			int e = errno;
+			close(s);
+			throw SystemException(e,"setsockopt(SO_REUSEADDR) failed");
+		}
+		if (sa->sa_family == AF_INET6 && setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(int)) < 0)
 		{
 			int e = errno;
 			close(s);
 			throw SystemException(e,"setsockopt(IPV6_V6ONLY) failed");
 		}
+		if (::bind(s, sa, b.length) == -1) {
+			int e = errno;
+			close(s);
+			throw SystemException(e,"Cannot bind socket to port");
+		}
 	}
-
-	if (s == -1) throw SystemException(errno,"socket() failure");
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
-	if (::bind(s, sa, b.length) == -1) {
-		int e = errno;
-		close(s);
-		throw SystemException(e,"Cannot bind socket to port");
-	}
 	if (::listen(s,SOMAXCONN) == -1) {
 		int e = errno;
 		close(s);

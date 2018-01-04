@@ -23,6 +23,8 @@ public:
 	 * @return ref pointer to next address, or nullptr
 	 */
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const = 0;
+	virtual const INetworkAddress &unproxy() const = 0;
+
 
 
 };
@@ -64,8 +66,8 @@ protected:
 
 	RefCntPtr<INetworkAddress> addr;
 
-
 };
+
 
 
 }
