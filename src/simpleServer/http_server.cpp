@@ -83,7 +83,7 @@ void _intr::MiniServerImpl::runCycle() {
 		if (st == asyncOK) {
 			if (me->preHandler != nullptr) {
 				//preHandler defined, wait for first bytes
-				s.readAsync([=](AsyncState st, BinaryView b) {
+				s.readAsync([=](AsyncState , BinaryView b) {
 					//put the buffer back - will be read by preHandler
 					s.putBack(b);
 					//try preHandler
