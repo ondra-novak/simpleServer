@@ -70,15 +70,15 @@ public:
 	}
 
 	void *operator new(std::size_t sz, const int &salen) {
-		std::size_t totalsz = sizeof(AddressAddrInfo)+salen;
+		std::size_t totalsz = sz+salen;
 		return ::operator new(totalsz);
 	}
 
-	void operator delete(void *ptr, const int &salen) {
+	void operator delete(void *ptr, const int &) {
 		::operator delete(ptr);
 	}
 
-	void operator delete(void *ptr, std::size_t sz) {
+	void operator delete(void *ptr, std::size_t ) {
 		::operator delete(ptr);
 	}
 
@@ -98,7 +98,7 @@ protected:
 };
 
 
-std::string AddressAddrInfo::toString(bool resolve) const {
+std::string AddressAddrInfo::toString(bool ) const {
 	if (addr->ai_canonname == 0) {
 		char addrbuff[256];
 		char portbuff[256];

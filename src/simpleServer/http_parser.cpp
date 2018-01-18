@@ -412,8 +412,8 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 		return new ChunkedStream<16>(stream);
 	} else {
 		HeaderValue cl = operator[](CONTENT_LENGTH);
-		bool hasLength = false;
-		long length;
+//		bool hasLength = false;
+		long length = 0;
 		if (cl.defined()) {
 			if (isdigit(cl[0])) {
 				length = std::strtol(cl.data,0,10);
@@ -428,7 +428,7 @@ HTTPResponse::HTTPResponse(int code):code(code), message(pool.add(getStatuCodeMs
 {
 }
 
-HTTPResponse::HTTPResponse(int code, StrViewA response):code(code),message(pool.add(message)) {
+HTTPResponse::HTTPResponse(int code, StrViewA response):code(code),message(pool.add(response)) {
 }
 
 
@@ -608,7 +608,7 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 		} else if (usechunked) {
 			//use chunked protocol
 			return new ChunkedStreamWrap<KeepAliveFn>(nxfn, originStream);
-		} else if (bodyLimit!=-1) {
+		} else if (bodyLimit!=(std::size_t)-1) {
 			//is limit defined, use limit stream
 			return new LimitedStreamWrap<KeepAliveFn>(nxfn,originStream,bodyLimit);
 		} else {
@@ -661,7 +661,7 @@ void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler compl
 
 			userBuffer.resize(end+4096);
 			reqStream.readAsync(MutableBinaryView(&userBuffer[end],remain),
-				[me, maxSize,completion](AsyncState st, const BinaryView data) {
+				[me, maxSize,completion](AsyncState , const BinaryView data) {
 
 				me->userBuffer.resize(me->userBuffer.size()-4096+data.length);
 				if (data.empty()) {

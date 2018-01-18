@@ -145,11 +145,17 @@ public:
 	}
 
 	template<int N>	HttpStaticPathMapper(const MapRecord (&data)[N]) {
-		for (auto &&x: data) pathDir.push_back(x); sort();
+		for (auto &&x: data) {
+			pathDir.push_back(x);
+		}
+		sort();
 	}
 
 	HttpStaticPathMapper(const std::initializer_list<MapRecord> &data) {
-		for (auto &&x: data) pathDir.push_back(x); sort();
+		for (auto &&x: data) {
+			pathDir.push_back(x);
+		}
+		sort();
 	}
 
 

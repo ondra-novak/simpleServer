@@ -286,7 +286,7 @@ void SHA1Final(
 void SHA1(
     char *hash_out,
     const char *str,
-    int len)
+    unsigned int len)
 {
     SHA1_CTX ctx;
     unsigned int ii;

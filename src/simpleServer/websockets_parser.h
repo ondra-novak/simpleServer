@@ -124,7 +124,7 @@ class WebSocketSerializer {
 public:
 
 	WebSocketSerializer(std::default_random_engine *randomEngine)
-		:randomEnginemasking(randomEnginemasking) {}
+		:randomEnginemasking(randomEngine) {}
 
 	///Create server serializer
 	static WebSocketSerializer server();

@@ -75,6 +75,8 @@ public:
 
 	virtual void changeUser(StrViewA userInfo) = 0;
 
+	virtual ~AbstractServiceControl() {}
+
 };
 
 
@@ -144,7 +146,7 @@ public:
 		ptr->enableRestart();
 	}
 	bool isDaemon() const{
-		ptr->isDaemon();
+		return ptr->isDaemon();
 	}
 
 

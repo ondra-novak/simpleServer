@@ -156,6 +156,9 @@ BinaryView ChunkedStream<chunkSize>::implRead(bool nonblock) {
 			putBack(d.substr(1));
 			return eofConst;
 			break;
+		case chunkEof:
+			invalidChunk();
+			break;
 		}
 		d = d.substr(1);
 		if (d.empty()) {
@@ -246,14 +249,14 @@ inline BinaryView ChunkedStream<chunkSize>::implRead(MutableBinaryView buffer,bo
 }
 
 template<std::size_t chunkSize>
-inline BinaryView ChunkedStream<chunkSize>::implWrite(BinaryView buffer, bool nonblock) {
+inline BinaryView ChunkedStream<chunkSize>::implWrite(BinaryView buffer, bool ) {
 	source.write(makeHdr(buffer.length),writeWholeBuffer);
 	source.write(buffer,writeWholeBuffer);
 	source.write(BinaryView(StrViewA("\r\n")),writeWholeBuffer);
 	return BinaryView(0,0);
 }
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool nonblock) {
+inline void ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool ) {
 	if (curBuffer.size == 0) {
 		curBuffer = WrBuffer(chunkBuffer,chunkSize);
 	} else {

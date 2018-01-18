@@ -63,8 +63,8 @@ protected:
 };
 
 
-static const char *base64_standard;
-static const char *base64_url;
+extern const char *base64_standard;
+extern const char *base64_url;
 
 template<typename Fn> Base64Encode<Fn> base64encode(const Fn &output, const char *chars = base64_standard, bool notail = false) {
 	return Base64Encode<Fn>(output, chars, notail);

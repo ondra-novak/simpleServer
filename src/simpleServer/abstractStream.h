@@ -588,7 +588,7 @@ public:
 	 * */
 
 	int operator()() const {
-		ptr->readByte();
+		return ptr->readByte();
 	}
 
 	///The Stream can be used as function to write next byte to the output stream
@@ -606,7 +606,7 @@ public:
 	 * @retval -1 end of stream (no more data)
 	 */
 	int peek() const {
-		ptr->peekByte();
+		return ptr->peekByte();
 	}
 	///Reads some bytes from the stream
 	/**

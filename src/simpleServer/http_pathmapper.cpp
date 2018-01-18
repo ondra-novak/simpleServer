@@ -6,7 +6,7 @@ namespace simpleServer {
 HttpStaticPathMapper::MapRecord HttpStaticPathMapper::emptyResult;
 
 
-const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::operator()(const HTTPRequest &r, const StrViewA &path) const {
+const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::operator()(const HTTPRequest &, const StrViewA &path) const {
 	return find(path);
 }
 const HttpStaticPathMapper::MapRecord &HttpStaticPathMapper::find(const StrViewA &path) const {

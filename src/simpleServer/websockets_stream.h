@@ -237,7 +237,7 @@ public:
 	 * }
 	 * @endcode
 	 */
-	bool read( bool nonblock = false) {ptr->read(nonblock);}
+	bool read( bool nonblock = false) {return ptr->read(nonblock);}
 
 	///Send close request
 	/**

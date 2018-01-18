@@ -110,7 +110,8 @@ static int waitForSockets(std::vector<pollfd> &sockets, int timeout) {
 
 }
 
-TCPConnect::TCPConnect(NetAddr target, int connectTimeout, int ioTimeout):TCPStreamFactory(target, ioTimeout) {
+TCPConnect::TCPConnect(NetAddr target, int connectTimeout, int ioTimeout)
+	:TCPStreamFactory(target, ioTimeout),connectTimeout(connectTimeout) {
 }
 
 Stream TCPConnect::create() {
@@ -323,13 +324,15 @@ static NetAddr createListeningAddr(bool localhost, unsigned int port) {
 TCPListen::TCPListen(bool localhost, unsigned int port, int listenTimeout, int ioTimeout)
 	:TCPListen(createListeningAddr(localhost,port),listenTimeout, ioTimeout) {}
 
+
+/*
 static void fillPollFdListen(int s, pollfd &fd) {
 	fd.events = POLLIN;
 	fd.fd = s;
 	fd.revents = 0;
 }
 
-
+*/
 
 static Stream acceptConnect(int s, int iotimeout) {
 	unsigned char buff[256];
@@ -594,7 +597,7 @@ public:
 	}
 
 	void setStopped() {
-		bool stopped = true;
+		stopped = true;
 	}
 
 protected:

@@ -50,6 +50,7 @@ protected:
 			BinaryView b = buffer.substr(0,writeLimit);
 			BinaryView r = source->getDirectWrite().write(b,nonblock);
 			writeLimit-=b.length - r.length;
+			return r;
 		}
 		virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override {
 			if (writeLimit < curBuffer.wrpos)

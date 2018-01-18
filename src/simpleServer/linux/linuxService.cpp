@@ -134,31 +134,37 @@ Pool::String readLine(Pool &p, Stream s) {
 
 void LinuxService::processRequest(Stream s) {
 
-	Pool p;
-	std::vector<Pool::String> args;
-	Pool::String item = readLine(p,s);
-	while (!item.getView().empty()) {
-		args.push_back(item);
-		item = readLine(p,s);
-	}
-
-	StrViewA argbuf[args.size()];
-	for (std::size_t i =0, cnt = args.size(); i < cnt; ++i) {
-		argbuf[i] = args[i].getView();
-	}
-
-	ArgList argList(argbuf, args.size());
-	if (argList.empty()) {
-		return;
-	} else {
-		auto it =cmdMap.find(argList[0]);
-		if (it == cmdMap.end()) {
-			s << "ERROR: command '" << argList[0] << "' is not supported~-1";
-
-		} else {
-			int ret =  it->second(argList, s);
-			s << "~" << ret;
+	try {
+		Pool p;
+		std::vector<Pool::String> args;
+		Pool::String item = readLine(p,s);
+		while (!item.getView().empty()) {
+			args.push_back(item);
+			item = readLine(p,s);
 		}
+
+		StrViewA argbuf[args.size()];
+		for (std::size_t i =0, cnt = args.size(); i < cnt; ++i) {
+			argbuf[i] = args[i].getView();
+		}
+
+		ArgList argList(argbuf, args.size());
+		if (argList.empty()) {
+			return;
+		} else {
+			auto it =cmdMap.find(argList[0]);
+			if (it == cmdMap.end()) {
+				s << "ERROR: command '" << argList[0] << "' is not supported~-1";
+
+			} else {
+				int ret =  it->second(argList, s);
+				s << "~" << ret;
+			}
+			s.flush();
+		}
+	} catch (std::exception &e) {
+		logWarning("Failed to process command: $1",e.what());
+		s << "ERROR: " << e.what();
 		s.flush();
 	}
 
@@ -177,7 +183,10 @@ void LinuxService::stop() {
 bool LinuxService::enterDaemon() {
 
 	int fds[2];
-	pipe2(fds, O_CLOEXEC);
+	if (pipe2(fds, O_CLOEXEC) != 0) {
+		int err = errno;
+		throw SystemException(err,"Failed to call pipe2 (enterDaemon)");
+	}
 	int fres = fork();
 	if (fres == 0) {
 		daemonEntered = true;
@@ -238,6 +247,7 @@ int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 		int ret = hndl(this, name, args);
 		unlink(controlFile.c_str());
 		sendExitCode(ret);
+		return ret;
 
 	} catch (...) {
 		unlink(controlFile.c_str());

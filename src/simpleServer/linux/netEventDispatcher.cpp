@@ -18,7 +18,10 @@ namespace simpleServer {
 
 LinuxEventDispatcher::LinuxEventDispatcher() {
 	int fds[2];
-	pipe2(fds, O_CLOEXEC);
+	if (pipe2(fds, O_CLOEXEC)!=0) {
+		int err = errno;
+		throw SystemException(err,"Failed to call pipe2 (LinuxEventDispatcher)");
+	}
 	intrHandle = fds[1];
 	intrWaitHandle = fds[0];
 
@@ -126,6 +129,7 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 			}
 		}
 	}
+	return []{};
 }
 
 
@@ -137,7 +141,7 @@ void LinuxEventDispatcher::stop() {
 
 void LinuxEventDispatcher::removeTask(int index, TaskMap::iterator &iter) {
 	std::size_t end = fdmap.size()-1;
-	if (index < fdmap.size()-1) {
+	if ((unsigned int)index < fdmap.size()-1) {
 		std::swap(fdmap[index],fdmap[end]);
 	}
 	fdmap.resize(end);

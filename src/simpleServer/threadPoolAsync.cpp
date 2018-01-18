@@ -34,7 +34,7 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 
 
 void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
-	int tries = 0;
+	unsigned int tries = 0;
 	auto retry = [&] {
 		Sync _(lock);
 		++tries;
