@@ -30,7 +30,7 @@ void HostMappingHandler::setMapping(StrViewA mapping) {
 
 	m = m.trim(isspace);
 	auto splt = m.split(",");
-	while  (splt) {
+	while  (!!splt) {
 
 		StrViewA item = StrViewA(splt()).trim(isspace);
 		Record rc;
@@ -39,9 +39,9 @@ void HostMappingHandler::setMapping(StrViewA mapping) {
 			rc.path = rc.vpath = "/";
 			srch.push_back(rc);
 		} else {
-			auto parts = item.split("->");
+			auto parts = item.split("->",1);
 			StrViewA hostpath = StrViewA(parts()).trim(isspace);
-			rc.vpath = StrViewA(parts).trim(isspace);
+			rc.vpath = StrViewA(parts()).trim(isspace);
 
 			auto s = hostpath.indexOf("/");
 			if (s == hostpath.npos) {

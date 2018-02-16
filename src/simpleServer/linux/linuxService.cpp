@@ -29,8 +29,9 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 			throw ServiceInvalidParametersException();
 		}
 
+		StrViewA *tmp_arglist = (StrViewA *)alloca(sizeof(StrViewA)*argc);
 
-		StrViewA tmp_arglist[argc];
+
 		for (int i = 0; i < argc; i++) {
 			tmp_arglist[i] = StrViewA(argv[i]);
 		}
@@ -143,7 +144,7 @@ void LinuxService::processRequest(Stream s) {
 			item = readLine(p,s);
 		}
 
-		StrViewA argbuf[args.size()];
+		auto argbuf = (StrViewA *)alloca(sizeof(StrViewA)*args.size());
 		for (std::size_t i =0, cnt = args.size(); i < cnt; ++i) {
 			argbuf[i] = args[i].getView();
 		}

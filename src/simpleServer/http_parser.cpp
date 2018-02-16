@@ -181,7 +181,7 @@ static StrViewA getStatuCodeMsg(int code) {
 				std::begin(statusMessages),
 				std::end(statusMessages),
 				codestr, [](StrViewA a, StrViewA b){
-			return a.substr(0,3) < b.substr(0.3);
+			return a.substr(0,3) < b.substr(0,3);
 		});
 		if (f != std::end(statusMessages)) {
 			if (f->substr(0,3) == codestr)

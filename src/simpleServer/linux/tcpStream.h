@@ -20,9 +20,9 @@ protected:
 
 	virtual BinaryView implRead(bool nonblock) override;
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
-	virtual BinaryView implWrite(BinaryView buffer, bool nonblock);
-	virtual void implWrite(WrBuffer &curBuffer, bool nonblock);
-	virtual void implReadAsync(const Callback &cb);
+	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
+	virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override;
+	virtual void implReadAsync(const Callback &cb) override;
 	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb)  override;
 	virtual void implWriteAsync(const BinaryView &data, const Callback &cb)  override;
 	virtual bool implWaitForRead(int timeoutms)  override;
@@ -31,7 +31,7 @@ protected:
 	virtual void implCloseOutput()  override;
 	virtual void implFlush()  override;
 
-	template<typename T> friend class RefCntPtr;
+//	template<typename T> friend class RefCntPtr;
 
 
 protected:

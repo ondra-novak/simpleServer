@@ -24,12 +24,12 @@ public:
 	}
 
 
-	virtual int setIOTimeout(int timeoutms) {
+	virtual int setIOTimeout(int timeoutms) override {
 		return source.setIOTimeout(timeoutms);
 	}
 protected:
 
-	template<typename T> friend class RefCntPtr;
+	//template<typename T> friend class RefCntPtr;
 
 	virtual void onRelease() {
 	}

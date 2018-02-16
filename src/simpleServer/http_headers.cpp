@@ -105,11 +105,11 @@ void ReceivedHeaders::parseHeaders(const StrViewA &hdr) {
 	hdrMap.clear();
 	auto splt = hdr.split("\r\n");
 	reqLine = splt();
-	while (splt) {
+	while (!!splt) {
 		StrViewA line = splt();
-		auto kvsp = line.split(":");
+		auto kvsp = line.split(":",1);
 		StrViewA key = trim(kvsp());
-		StrViewA value = trim(StrViewA(kvsp));
+		StrViewA value = trim(kvsp());
 		hdrMap.insert(std::make_pair(key, value));
 	}
 }

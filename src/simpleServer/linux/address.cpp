@@ -18,8 +18,8 @@ class AddressAddrInfo: public INetworkAddress {
 public:
 	AddressAddrInfo(struct addrinfo *addr):addr(addr) {}
 
-	virtual std::string toString(bool resolve = false) const;
-	virtual BinaryView toSockAddr() const;
+	virtual std::string toString(bool resolve = false) const override;
+	virtual BinaryView toSockAddr() const override;
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const override;
 
 	~AddressAddrInfo() {
@@ -47,7 +47,7 @@ public:
 
 	virtual const INetworkAddress &unproxy() const {return *this;}
 protected:
-	template<typename T> friend class RefCntPtr;
+//	template<typename T> friend class RefCntPtr;
 
 
 
@@ -82,8 +82,8 @@ public:
 		::operator delete(ptr);
 	}
 
-	virtual std::string toString(bool resolve) const;
-	virtual BinaryView toSockAddr() const;
+	virtual std::string toString(bool resolve) const override;
+	virtual BinaryView toSockAddr() const override;
 
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const override {
 		return nullptr;
@@ -337,12 +337,12 @@ public:
 
 	~ChainedNetworkAddr() noexcept {}
 
-	virtual const INetworkAddress &unproxy() const {return (slave.getHandle())->unproxy();}
+	virtual const INetworkAddress &unproxy() const override {return (slave.getHandle())->unproxy();}
 
 protected:
 	NetAddr master, slave, next;
 
-	template<typename T> friend class RefCntPtr;
+//	template<typename T> friend class RefCntPtr;
 
 
 

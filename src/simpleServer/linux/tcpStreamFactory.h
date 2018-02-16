@@ -36,7 +36,7 @@ public:
 	~TCPStreamFactory() noexcept {}
 protected:
 
-	template<typename T> friend class RefCntPtr;
+//	template<typename T> friend class RefCntPtr;
 
 
 
@@ -92,7 +92,7 @@ protected:
 	virtual void stop() override;
 	virtual void createAsync(const AsyncProvider &provider, const Callback &cb) override;
 
-	template<typename T> friend class RefCntPtr;
+//	template<typename T> friend class RefCntPtr;
 
 
 protected:

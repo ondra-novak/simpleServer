@@ -566,7 +566,7 @@ protected:
 
 	void copydata(unsigned char *target, const unsigned char *source, std::size_t count);
 
-	template<typename T> friend class RefCntPtr;
+//OD	template<typename TX> friend class RefCntPtr;
 
 
 };

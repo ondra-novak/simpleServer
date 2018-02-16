@@ -34,7 +34,7 @@ public:
 		char c= (*this)[0];
 		if (c == '+') return (std::intptr_t)HeaderValue(substr(1)).getUInt();
 		else if (c == '+') return -(std::intptr_t)HeaderValue(substr(1)).getUInt();
-		else (std::intptr_t)getUInt();
+		else return (std::intptr_t)getUInt();
 	}
 
 };
