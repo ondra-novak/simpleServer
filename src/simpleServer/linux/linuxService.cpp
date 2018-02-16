@@ -24,6 +24,7 @@ namespace simpleServer {
 using ondra_shared::AbstractLogProviderFactory;
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
+	bool handleExcept = false;
 	try {
 		if (argc < 3) {
 			throw ServiceInvalidParametersException();
@@ -53,11 +54,15 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 		} else if (command == "run") {
 			return svc->startService(name, handler, remainArgs);
 		} else if (command == "stop") {
+			handleExcept = true;
 			svc->stopOtherService();return 0;
 		} else if (command == "wait") {
+			handleExcept = true;
 			return svc->postCommand("wait",ArgList(),std::cerr,-1,true);
 		} else if (command == "restart") {
+			handleExcept = true;
 			svc->stopOtherService();
+			handleExcept = false;
 			//svc->postCommand( "stop", ArgList(), std::cerr);
 			if (!svc->enterDaemon()) {
 					return svc->waitForExitCode();
@@ -68,11 +73,12 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 			else std::cerr << "Service not running" << std::endl;
 			return 1;
 		} else {
+				handleExcept = true;
 				svc->postCommand(command, remainArgs, std::cerr);
 		}
 		return 0;
 	} catch (SystemException &e) {
-		if (e.getErrNo() == ECONNREFUSED || e.getErrNo() == ENOENT) {
+		if (handleExcept && (e.getErrNo() == ECONNREFUSED || e.getErrNo() == ENOENT)) {
 			std::cerr << "Service not running" << std::endl;
 		} else {
 			std::cerr << "ERROR: " << e.what() << std::endl;
