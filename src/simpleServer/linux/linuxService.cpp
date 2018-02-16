@@ -18,10 +18,12 @@
 #include "tcpStreamFactory.h"
 #include "../http_headers.h"
 #include "../logOutput.h"
+#include "shared/vla.h"
 
 namespace simpleServer {
 
 using ondra_shared::AbstractLogProviderFactory;
+using ondra_shared::VLA;
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
 	bool handleExcept = false;
@@ -30,13 +32,13 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 			throw ServiceInvalidParametersException();
 		}
 
-		StrViewA *tmp_arglist = (StrViewA *)alloca(sizeof(StrViewA)*argc);
+		VLA<StrViewA, 10> tmp_arglist(argc);
 
 
 		for (int i = 0; i < argc; i++) {
 			tmp_arglist[i] = StrViewA(argv[i]);
 		}
-		ArgList arglist(tmp_arglist, argc);
+		ArgList arglist(tmp_arglist);
 
 
 		StrViewA pidfile = arglist[1];
@@ -150,12 +152,11 @@ void LinuxService::processRequest(Stream s) {
 			item = readLine(p,s);
 		}
 
-		auto argbuf = (StrViewA *)alloca(sizeof(StrViewA)*args.size());
+		VLA<StrViewA, 10> argList(args.size());
 		for (std::size_t i =0, cnt = args.size(); i < cnt; ++i) {
-			argbuf[i] = args[i].getView();
+			argList[i] = args[i].getView();
 		}
 
-		ArgList argList(argbuf, args.size());
 		if (argList.empty()) {
 			return;
 		} else {
