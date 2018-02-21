@@ -33,8 +33,8 @@ public:
 protected:
 
 
-	String clientRoot;
 	RpcServer &rpcserver;
+	String clientRoot;
 	std::size_t maxReqSize=10*1024*1024;
 
 
