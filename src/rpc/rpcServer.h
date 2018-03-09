@@ -18,7 +18,6 @@ class RpcHandler {
 public:
 
 	RpcHandler(RpcServer &rpcserver);
-	RpcHandler(RpcServer &rpcserver, String clientRoot);
 
 
 
@@ -29,13 +28,16 @@ public:
 	void setMaxReqSize(std::size_t maxReqSize) {
 		this->maxReqSize=maxReqSize;
 	}
+	void enableConsole(bool e) {
+		consoleEnabled = e;
+	}
 
 protected:
 
 
 	RpcServer &rpcserver;
-	String clientRoot;
 	std::size_t maxReqSize=10*1024*1024;
+	bool consoleEnabled = false;
 
 
 
@@ -47,8 +49,14 @@ public:
 
 	using simpleServer::MiniHttpServer::MiniHttpServer;
 
+	struct Config {
+		bool enableConsole = true;
+		std::size_t maxReqSize = 0;
+	};
 
-	void addRPCPath(String path, String clientRoot, std::size_t maxReqSize = 0);
+
+	void addRPCPath(String path);
+	void addRPCPath(String path, const Config &cfg);
 	void addPath(String path, simpleServer::HTTPMappedHandler hndl);
 	void setHostMapping(const String &mapping);
 

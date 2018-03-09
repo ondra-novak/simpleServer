@@ -10,9 +10,10 @@
 #include <imtjson/parser.h>
 #include "../simpleServer/asyncProvider.h"
 #include "../simpleServer/http_hostmapping.h"
+#include "../simpleServer/query_parser.h"
 
 #include "shared/logOutput.h"
-
+#include "resources.h"
 
 namespace simpleServer {
 
@@ -29,9 +30,6 @@ RpcHandler::RpcHandler(RpcServer& rpcserver)
 	:rpcserver(rpcserver) {
 }
 
-RpcHandler::RpcHandler(RpcServer& rpcserver, String clientRoot)
-	:rpcserver(rpcserver),clientRoot(clientRoot) {
-}
 
 void RpcHandler::operator ()(simpleServer::HTTPRequest req) const {
 
@@ -108,19 +106,22 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 	} else if (vpath.empty()) {
 		req.redirectToFolderRoot();
 	} else {
-		if (clientRoot.empty()) {
-			return false;
+		Resource *selRes = nullptr;
+		StrViewA fname;
+		QueryParser qp(vpath);
+		auto splt = qp.getPath().split("/");
+		while (splt) fname = splt();
+		if (fname.empty()) fname="index.html";
+
+		if (fname == "index.html") selRes = consoleEnabled?&client_index_html:nullptr;
+		else if (fname == "styles.css") selRes = consoleEnabled?&client_styles_css:nullptr;
+		else if (fname == "rpc.js") selRes = &client_rpc_js;
+
+		if (selRes == nullptr) {
+			req.sendErrorPage(404);
 		} else {
-			StrViewA fname;
-			auto splt = vpath.split("/");
-			while (splt) fname = splt();
-			if (fname.empty()) fname="index.html";
-			String pathname = { clientRoot,"/",fname};
-
-			req.sendFile(pathname);
+			req.sendResponse(selRes->contentType, selRes->data);
 		}
-
-
 
 	}
 
@@ -128,9 +129,14 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 }
 
 
-void RpcHttpServer::addRPCPath(String path, String clientRoot, std::size_t maxReqSize) {
-	RpcHandler h(*this, clientRoot);
-	if (maxReqSize) h.setMaxReqSize(maxReqSize);
+void RpcHttpServer::addRPCPath(String path) {
+	Config cfg;
+	addRPCPath(path,cfg);
+}
+void RpcHttpServer::addRPCPath(String path, const Config &cfg) {
+	RpcHandler h(*this);
+	if (cfg.maxReqSize) h.setMaxReqSize(cfg.maxReqSize);
+	h.enableConsole(cfg.enableConsole);
 	mapRecords.push_back(Item(path, h));
 
 }
