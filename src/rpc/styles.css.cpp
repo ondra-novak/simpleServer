@@ -7,7 +7,7 @@ Resource client_styles_css = {
 
 body {
 	background-color:#333;
-	font-family: 'Maven Pro';
+	font-family: "Fira Mono", monospace;
 	font-size: 0.4cm;
 	color: #CCC;
 	margin:0;
@@ -27,6 +27,8 @@ body {
 .input_outer {
 flex-grow: 1;
 }
+
+
 
 .quickhelp {
 	background-color: #555;
@@ -269,6 +271,19 @@ div.row {
 	display: table;
 	font-size: 12px;
 }
+
+
+.bottom_tips {
+	transition: all 0.5s;
+	font-size: 12px;
+	height: 1em;
+	overflow: hidden;
+}
+
+.bottom_tips.hidden {
+	height: 0;
+}
+
 .context_list > div{
 	display:table-row;	
 }
@@ -345,7 +360,7 @@ menu > li.disabled:hover {
 }
 
 .panel menu.mainmenu {
-	width:5cm;
+	width:7cm;
 	right: 7px;
 	top: 0.9cm;
 

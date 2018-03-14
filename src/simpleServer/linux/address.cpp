@@ -283,6 +283,40 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 		if (e == EAI_SYSTEM) throw SystemException(errno);
 		else throw GaiError(e);
 	}
+
+	//HACK: Some OS returns duplicated records. Perform deduplication
+	{
+		struct addrinfo *tmp, *x = result;
+		while (x) {
+			auto z = x->ai_next;
+			x->ai_next = tmp;
+			auto p = tmp;
+			while (p) {
+				if (p->ai_addrlen == x->ai_addrlen
+						&& p->ai_family == x->ai_family
+						&& memcmp(p->ai_addr,x->ai_addr,x->ai_addrlen) == 0)
+					break;
+				p = p->ai_next;
+			}
+			if (p == nullptr) {
+				tmp = x;
+			}
+			x = z;
+		}
+
+		result = 0;
+		while (tmp) {
+			auto x = tmp;
+			tmp = tmp->ai_next;
+			x->ai_next = result;
+			result = x;
+		}
+	}
+
+
+
+
+
 	return PNetworkAddress::staticCast(RefCntPtr<AddressAddrInfo>(new AddressAddrInfo(result)));
 }
 

@@ -9,7 +9,7 @@ Resource client_index_html = {
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href='https://fonts.googleapis.com/css?family=Maven Pro' rel='stylesheet'>
+<link href='https://fonts.googleapis.com/css?family=Fira Mono' rel='stylesheet'>
 <link href='styles.css' rel='stylesheet'>
 <meta charset="utf-8">
 <title>RPC Console</title>
@@ -36,6 +36,8 @@ Resource client_index_html = {
 		    <li class="separator"></li>
 			<li id="toggleTheme">Toggle theme</li>	
 		</menu>		
+		<div class="bottom_tips hidden" id="tabhelp">Press TAB for completion</div>
+		<div class="bottom_tips hidden" id="no_context_list">Hint: Type 'key=value' to add a context value </div>
 		<div class="context_list" id="context_list"></div>
 	</div>
 	<div><button id="sendbutt" class="bottombutt">▶</button></div>
@@ -48,6 +50,8 @@ Resource client_index_html = {
 function start() {
 	var rpc = new RpcClient("");
 	var input = window.input;
+	var tabpressed = false;
+	var ctxHint = false;	
 	themeToggle.setAttribute("class",localStorage["theme"]);
 	
 	function setInput(z) {
@@ -66,25 +70,44 @@ function start() {
      		}
      	}
      }
+	function updateCtxHint() {
+		if (!ctxHint && Object.keys(rpc.context).length == 0) {
+			no_context_list.classList.remove("hidden");
+			ctxHint = true;
+		} else {
+			no_context_list.classList.add("hidden");
+		}
+	}
 	input.addEventListener("keydown", function(ev) {
 		var x = ev.which || ev.keyCode;
-		if (x == 13) {
+		if (x == 13 && !ev.getModifierState("Control")) {
 			hideHelp();
+			tabhelp.classList.add("hidden");
 			ev.preventDefault();
 			sendCommand(rpc, input.innerText).then(function(){			
 				input.focus();
+				updateCtxHint();
 			});
 			input.innerText="";
 		} else if (x == 9) {
 			ev.preventDefault();
+			tabpressed = true;
+			tabhelp.classList.add("hidden");
 			showHelp(rpc, input.innerText, setInput);
 		} else if (x == 27) {
 			hideHelp();
+		} else {
+			if (!tabpressed 				
+					&& input.innerText.length > 3 
+					&& !isHelpShown()) {
+				tabhelp.classList.remove("hidden");
+			}
 		}
 	});
 	sendbutt.addEventListener("click",function() {
 		sendCommand(rpc, input.innerText).then(function(){			
 				input.focus();
+				updateCtxHint();
 		});
 		input.innerText="";
 	});

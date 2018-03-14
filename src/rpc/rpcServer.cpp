@@ -162,7 +162,7 @@ void RpcHttpServer::directRpcAsync(Stream s) {
 
 		}, RpcFlags::notify);
 		this->operator ()(req);
-		s.readAsync([=](simpleServer::AsyncState st, const ondra_shared::BinaryView &b) {
+		s.readAsync([=](simpleServer::AsyncState, const ondra_shared::BinaryView &b) {
 			s.putBack(b);
 			directRpcAsync(s);
 		});
