@@ -24,7 +24,7 @@ public:
 
 
 	explicit WebSocketStreamImpl(Stream stream):stream(stream),serializer(WebSocketSerializer::server()) {}
-	WebSocketStreamImpl(Stream stream, std::default_random_engine &randomEngine):stream(stream),serializer(WebSocketSerializer::client(randomEngine)) {}
+	WebSocketStreamImpl(Stream stream, WebSocketSerializer::RandomGen randomEngine):stream(stream),serializer(WebSocketSerializer::client(randomEngine)) {}
 
 
 	template<typename Fn>
@@ -54,6 +54,7 @@ protected:
 	WebSocketSerializer serializer;
 	std::mutex lock;
 	typedef std::lock_guard<std::mutex> Sync;
+	bool closed = false;
 
 	template<typename Fn>
 	class CallAfterRead {
@@ -67,7 +68,7 @@ protected:
 			if (st == asyncOK) {
 				BinaryView rest = owner->parse(data);
 				owner->stream.putBack(rest);
-				if (owner->isComplette()) {
+				if (owner->isComplete()) {
 					owner->completeRead();
 					fn(st);
 				} else {
@@ -99,8 +100,8 @@ protected:
 	};
 	void completeRead() {
 		switch (getFrameType()) {
-			case WebSocketParser::connClose: close();break;
-			case WebSocketParser::ping: {
+			case WSFrameType::connClose: if (!closed) close();break;
+			case WSFrameType::ping: {
 				Sync _(lock);
 				stream.write(serializer.forgePongFrame(getData()),writeAndFlush);
 			}break;
@@ -121,14 +122,15 @@ inline bool WebSocketStreamImpl::read(bool nonblock) {
 	if (b.empty()) return true;
 	BinaryView c = parse(b);
 	stream.putBack(c);
-	if (isComplette()) {
+	if (isComplete()) {
 		completeRead();
 	}
-	return getFrameType() != WebSocketParser::connClose;
+	return getFrameType() != WSFrameType::connClose;
 }
 
 inline void WebSocketStreamImpl::close(int code) {
 	Sync _(lock);
+	closed = true;
 	stream.write(serializer.forgeCloseFrame(code),writeAndFlush);
 }
 inline void WebSocketStreamImpl::ping(const BinaryView &data) {
@@ -148,6 +150,7 @@ template<typename Fn>
 void WebSocketStreamImpl::closeAsync(int code, const Fn &fn) {
 	lock.lock();
 	try {
+		closed = true;
 		stream.writeAsync(serializer.forgeCloseFrame(code),UnlockAfterWrite<Fn>(fn,this));
 	} catch (...) {
 		lock.unlock();
@@ -205,14 +208,17 @@ public:
 
 	///Read next message asynchronously
 	/** Function starts to reading message asynchronously. The underlying socket
-	 * must have defined an asychnrooous provdider, otherwise the function fails
+	 * must have defined an asychnrooous provider, otherwise the function fails
 	 *
 	 * @param fn function called when the message is ready to collect. The function
 	 * has following prototype void(AsyncState)
 	 *
 	 */
 	template<typename Fn>
-	void readAsync(const Fn &fn) {ptr->readAsync(fn);}
+	void readAsync(const Fn &fn) {
+			discardFrame();
+			ptr->readAsync(fn);
+	}
 
 	///Read next message synchronously
 	/** Function tries to read data a collect enough bytes to complete the message.
@@ -225,7 +231,7 @@ public:
 	 * @retval true stream continues
 	 * @retval false connection has been closed
 	 *
-	 * @note to detect whether message has been completted, use the function isComplete()
+	 * @note to detect whether message has been completed, use the function isComplete()
 	 *
 	 *
 	 * @code
@@ -239,6 +245,33 @@ public:
 	 */
 	bool read( bool nonblock = false) {return ptr->read(nonblock);}
 
+	///Discards current frame
+	/** The function must be called when the current frame has been already processed and
+	 * the new frame is being to read.
+	 *
+	 * Non blocking read operation can cause no processing, which doesn't discard
+	 * the current frame. In such situation, program can mistakenly process previous
+	 * frame again. You need to discardFrame before you start to read. However,
+	 * the calling of this function is optional. For blocking reads and for readFrame()
+	 * this is not necesery.
+	 */
+	void discardFrame() {
+		ptr->discardFrame();
+	}
+
+	///Reads whole frame while it blocks current thread until the frame is read whole.
+	/**
+	 *
+	 * @retval true frame is ready (isComplete() returns true)
+	 * @retval false connection has been reset
+	 */
+	bool readFrame() {
+		ptr->discardFrame();
+		while (read()) {
+			if (isComplete()) return true;
+		}
+		return false;
+	}
 	///Send close request
 	/**
 	 * Before the websocket conection is closed, the close() should be called
@@ -331,7 +364,7 @@ public:
 	 * @retval true message is complete
 	 * @retval false more data are needed
 	 */
-	bool isComplete() const {return ptr->isComplette();}
+	bool isComplete() const {return ptr->isComplete();}
 
 
 	///Retrieves type of frame has been received
@@ -344,7 +377,7 @@ public:
 	 *@retval pong pong received
 	 *
 	 */
-	WebSocketParser::FrameType getFrameType() const {return ptr->getFrameType();}
+	WSFrameType getFrameType() const {return ptr->getFrameType();}
 
 	///Retrieve data as binary view
 	/** Function retrieves data as binary view*/

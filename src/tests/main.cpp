@@ -22,6 +22,7 @@
 #include "../simpleServer/http_client.h"
 #include "../simpleServer/linux/ssl_exceptions.h"
 #include "../simpleServer/shared/mtcounter.h"
+#include "../simpleServer/websockets_stream.h"
 
 
 
@@ -149,7 +150,7 @@ int main(int argc, char *argv[]) {
 		AsyncState lastst;
 		std::exception_ptr e;
 		ondra_shared::MTCounter mtc(1);
-		client.request_ws_async("ws://echo.websocket.org/",SendHeaders(),[&](AsyncState st, Stream) {
+		connectWebSocketAsync(client,"wss://echo.websocket.org/",SendHeaders(),[&](AsyncState st, WebSocketStream) {
 			e = std::current_exception();
 			lastst = st;
 			mtc.dec();
@@ -157,6 +158,19 @@ int main(int argc, char *argv[]) {
 		mtc.wait();
 		if (e != nullptr) std::rethrow_exception(e);
 		out << (int)lastst;
+	};
+	tst.test("HttpClient.websocket.echo","This is test message") >>[](std::ostream &out) {
+
+		HttpClient client;
+		client.setHttpsProvider(newHttpsProvider());
+		WebSocketStream ws = connectWebSocket(client,"wss://echo.websocket.org/", SendHeaders());
+		ws.postText("This is test message");
+		ws.readFrame();
+		if (ws.getFrameType() == WSFrameType::text) {
+			out << ws.getText();
+			ws.close();
+			ws.readFrame();
+		}
 	};
 
 

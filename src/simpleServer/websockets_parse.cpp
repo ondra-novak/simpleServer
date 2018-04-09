@@ -5,6 +5,9 @@ namespace simpleServer {
 
 
 
+void WebSocketParser::discardFrame() {
+	ftype = WSFrameType::incomplete;
+}
 
 BinaryView WebSocketParser::parse(const BinaryView& data) {
 	if (data.empty()) return data;
@@ -22,9 +25,10 @@ BinaryView WebSocketParser::parse(const BinaryView& data) {
 				opcode = lopc;
 			}
 
-			ftype = incomplette;
+			ftype = WSFrameType::incomplete;
 
 			mask[0] = mask[1] = mask[2] = mask[3] = 0;
+			maskPos = 0;
 
 			break;
 
@@ -64,7 +68,7 @@ BinaryView WebSocketParser::parse(const BinaryView& data) {
 			}
 		}
 		++p;
-	} while (p < data.length && ftype == incomplette);
+	} while (p < data.length && ftype == WSFrameType::incomplete);
 	return data.substr(p);
 }
 
@@ -84,18 +88,18 @@ void WebSocketParser::afterSize() {
 
 void WebSocketParser::reset() {
 	currentState = opcodeFlags;
-	ftype = init;
+	ftype = WSFrameType::init;
 }
 
 void WebSocketParser::epilog(){
 	currentState = opcodeFlags;
 	if (fin) {
 		switch (opcode) {
-		case WebSocketsConstants::opcodeBinaryFrame: ftype = binary;break;
-		case WebSocketsConstants::opcodeTextFrame: ftype = text;break;
-		case WebSocketsConstants::opcodePing: ftype = ping;break;
-		case WebSocketsConstants::opcodePong: ftype = pong;break;
-		case WebSocketsConstants::opcodeConnClose: ftype = connClose;
+		case WebSocketsConstants::opcodeBinaryFrame: ftype = WSFrameType::binary;break;
+		case WebSocketsConstants::opcodeTextFrame: ftype = WSFrameType::text;break;
+		case WebSocketsConstants::opcodePing: ftype = WSFrameType::ping;break;
+		case WebSocketsConstants::opcodePong: ftype = WSFrameType::pong;break;
+		case WebSocketsConstants::opcodeConnClose: ftype = WSFrameType::connClose;
 			if (receivedData.size() < 2) closeCode = 0;
 			else closeCode = (receivedData[0] << 8) + receivedData[1];
 			break;
@@ -105,11 +109,11 @@ void WebSocketParser::epilog(){
 }
 
 
-bool WebSocketParser::isComplette() const {
-	return ftype != incomplette;
+bool WebSocketParser::isComplete() const {
+	return ftype != WSFrameType::incomplete;
 }
 
-WebSocketParser::FrameType WebSocketParser::getFrameType() const {
+WSFrameType WebSocketParser::getFrameType() const {
 	return ftype;
 }
 
@@ -129,8 +133,8 @@ WebSocketSerializer WebSocketSerializer::server() {
 	return WebSocketSerializer(nullptr);
 }
 
-WebSocketSerializer WebSocketSerializer::client(std::default_random_engine& rnd) {
-	return WebSocketSerializer(&rnd);
+WebSocketSerializer WebSocketSerializer::client(WebSocketSerializer::RandomGen rnd) {
+	return WebSocketSerializer(rnd);
 }
 
 BinaryView WebSocketSerializer::forgeBinaryFrame(const BinaryView& data) {
@@ -174,7 +178,7 @@ BinaryView WebSocketSerializer::forgeFrame(int opcode, const BinaryView& data) {
 	unsigned char masking[4];
 	if (randomEnginemasking) {
 		for (unsigned char i = 0; i < 4; ++i) {
-			masking[i] = (unsigned char)((*randomEnginemasking)() & 0xFF);
+			masking[i] = (unsigned char)randomEnginemasking() & 0xFF;
 			frameData.push_back(masking[i]);
 		}
 	} else {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <random>
 
 #include "stringview.h"
@@ -35,30 +36,32 @@ public:
 
 };
 
+enum class WSFrameType {
+	///frame is not complete yet
+	incomplete,
+	///text frame
+	text,
+	///binary frame
+	binary,
+	///connection close frame
+	connClose,
+	///ping frame
+	ping,
+	///pong frame
+	pong,
+	///Object is initial state
+	/**
+	 * No data has been retrieved yet
+	 *
+	 * This frame has no data
+	 */
+	init
+};
+
+
 class WebSocketParser {
 public:
 
-	enum FrameType {
-		///frame is not complete yet
-		incomplette,
-		///text frame
-		text,
-		///binary frame
-		binary,
-		///connection close frame
-		connClose,
-		///ping frame
-		ping,
-		///pong frame
-		pong,
-		///Object is initial state
-		/**
-		 * No data has been retrieved yet
-		 *
-		 * This frame has no data
-		 */
-		init
-	};
 
 	///parse received block
 	/**
@@ -72,10 +75,13 @@ public:
 
 
 	///Returns true, when previous parse() finished whole frame and the frame is ready to collect
-	bool isComplette() const;
+	bool isComplete() const;
 
+	///Discards current frame.
+	/** this causes, that function isComplete starts to return false */
+	void discardFrame();
 
-	FrameType getFrameType() const;
+	WSFrameType getFrameType() const;
 
 	///Retrieve data as binary view
 	BinaryView getData() const;
@@ -102,7 +108,7 @@ public:
 	std::size_t stateRemain;
 
 	std::size_t size;
-	FrameType ftype = init;
+	WSFrameType ftype = WSFrameType::init;
 	unsigned int closeCode;
 	unsigned char opcode;
 	unsigned char mask[4];
@@ -123,14 +129,16 @@ public:
 class WebSocketSerializer {
 public:
 
-	WebSocketSerializer(std::default_random_engine *randomEngine)
-		:randomEnginemasking(randomEngine) {}
+	typedef std::function<std::default_random_engine::result_type()> RandomGen;
+
+	WebSocketSerializer(const RandomGen &randomGen)
+		:randomEnginemasking(randomGen) {}
 
 	///Create server serializer
 	static WebSocketSerializer server();
 	///Create client serializer
 	/** Client serializer need random generator to create masked frames */
-	static WebSocketSerializer client(std::default_random_engine& rnd);
+	static WebSocketSerializer client(RandomGen rnd);
 
 
 	BinaryView forgeBinaryFrame(const BinaryView &data);
@@ -142,7 +150,7 @@ protected:
 
 	BinaryView forgeFrame(int opcode, const BinaryView &data);
 
-	std::default_random_engine *randomEnginemasking;
+	RandomGen randomEnginemasking;
 
 	std::vector<unsigned char> frameData;
 

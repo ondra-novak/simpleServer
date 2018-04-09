@@ -239,19 +239,6 @@ public:
 	void setHttpsProvider(IHttpsProvider *provider);
 	void setProxyProvider(IHttpProxyProvider *provider);
 
-	///Requests to open websocket connection
-	/**
-	 * Function uses client to initialize websocket connection. Result is opened stream, This stream must be
-	 * used to initialize WebSocketStream
-	 * @param url url to foreign websocket server. URL can be also specified as ws:// and wss://, however, it
-	 * is transfered to apropriate http:// and https://
-	 * @param headers Specifies additional headers (standard websocket headers are handled by a function)
-	 * @return pointer to stream. The stream cannot be used directly. You need to construct WebSocketStream
-	 */
-	Stream request_ws( StrViewA url, SendHeaders &&headers);
-
-	///Requests to open websocket asynchronously
-	void request_ws_async( StrViewA url, SendHeaders &&headers, const HttpClientParser::Callback &cb);
 
 protected:
 
@@ -290,6 +277,10 @@ protected:
 	void send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, SendHeaders &&hdrs, const BinaryView &data);
 };
 
+class WebSocketStream;
+
+WebSocketStream connectWebSocket(HttpClient &client, StrViewA url, SendHeaders &&hdrs = SendHeaders());
+void connectWebSocketAsync(HttpClient &client, StrViewA url, SendHeaders &&hdrs, std::function<void(AsyncState, WebSocketStream)> cb);
 
 
 

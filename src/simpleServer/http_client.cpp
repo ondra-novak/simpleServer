@@ -13,6 +13,7 @@
 #include "base64.h"
 #include <random>
 
+#include "websockets_stream.h"
 namespace simpleServer {
 
 HttpClientParser::HttpClientParser(Stream connection, bool useHTTP10)
@@ -551,7 +552,7 @@ void HttpClient::setProxyProvider(IHttpProxyProvider* provider) {
 	this->proxyProvider = std::unique_ptr<IHttpProxyProvider>(provider);
 }
 
-void prepareWS(SendHeaders &hdrs, StrViewA &url, std::string &tmp) {
+static void prepareWS(std::default_random_engine &rnd, SendHeaders &hdrs, StrViewA &url, std::string &tmp) {
 	if (url.substr(0,5) == "ws://") {
 		tmp.clear();
 		tmp.append("http://");
@@ -565,7 +566,7 @@ void prepareWS(SendHeaders &hdrs, StrViewA &url, std::string &tmp) {
 	}
 
 	 std::random_device rd;
-	 std::default_random_engine rnd(rd());
+  	 rnd.seed(rd());
 	 std::uniform_int_distribution<> dist(32,127);
 
 	 char key[24];
@@ -584,42 +585,43 @@ void prepareWS(SendHeaders &hdrs, StrViewA &url, std::string &tmp) {
 }
 
 
-Stream HttpClient::request_ws( StrViewA url, SendHeaders&& headers) {
+WebSocketStream connectWebSocket(HttpClient &client, StrViewA url, SendHeaders &&hdrs) {
 	std::string tmp;
-	prepareWS(headers,url, tmp);
-	HttpResponse resp = request("GET",url,std::move(headers));
+	std::default_random_engine rnd;
+	prepareWS(rnd, hdrs,url, tmp);
+	HttpResponse resp = client.request("GET",url,std::move(hdrs));
 	if (resp.getStatus() != 101 || resp.getHeaders()["Upgrade"] != "websocket") {
 		throw HTTPStatusException(resp.getStatus(), resp.getMessage());
 	}
-	return resp.getBody();
+	return WebSocketStream(new _details::WebSocketStreamImpl(resp.getBody(),rnd));
 }
-
-void HttpClient::request_ws_async( StrViewA url, SendHeaders&& headers, const HttpClientParser::Callback& cb) {
+void connectWebSocketAsync(HttpClient &client, StrViewA url, SendHeaders &&hdrs, std::function<void(AsyncState, WebSocketStream)> cb) {
 	std::string tmp;
-	prepareWS(headers,url, tmp);
-	HttpClientParser::Callback cbc(cb);
-	request_async("GET",url,std::move(headers),
-			[cbc](AsyncState st, Stream, AsyncResponse rsp){
+	std::default_random_engine rnd;
+	prepareWS(rnd, hdrs,url, tmp);
+	client.request_async("GET",url,std::move(hdrs),
+			[cb,rnd](AsyncState st, Stream, HttpClient::AsyncResponse rsp){
 		if (st == asyncOK) {
-			rsp([cbc](AsyncState st, HttpResponse resp){
+			rsp([cb,rnd](AsyncState st, HttpResponse resp){
 				if (st == asyncOK) {
 					try {
 						if (resp.getStatus() != 101 || resp.getHeaders()["Upgrade"] != "websocket") {
 							throw HTTPStatusException(resp.getStatus(), resp.getMessage());
 						} else {
-							cbc(st, resp.getBody());
+							cb(st, WebSocketStream(new _details::WebSocketStreamImpl(resp.getBody(),rnd)));
 						}
 					} catch (...) {
-						cbc(asyncError, Stream());
+						cb(asyncError, WebSocketStream());
 					}
 				} else {
-					cbc(st, Stream());
+					cb(st, WebSocketStream());
 				}
 			});
 		} else {
-			cbc(st, Stream());
+			cb(st, WebSocketStream());
 		}
 	});
+
 }
 
 
