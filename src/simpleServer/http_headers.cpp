@@ -33,7 +33,7 @@ bool ReceivedHeaders::parse(const Stream& stream) {
 	while (!data.empty() && parse(data,putBack)) {
 		data = stream.read(false);
 	}
-	if (!data.empty()) return false;
+	if (data.empty()) return false;
 	stream.putBack(putBack);
 	return true;
 }
@@ -48,7 +48,7 @@ void ReceivedHeaders::parseAsync(const Stream& stream, const std::function<void(
 				parseAsync(s, cb);
 			} else {
 				s.putBack(putBack);
-				cb(st);
+				cb(asyncOK);
 			}
 		} else {
 			cb(st);
@@ -123,32 +123,32 @@ static char *putNumber(char *x, std::size_t sz, bool first) {
 	}
 }
 
-SendHeaders& SendHeaders::contentLength(std::size_t sz) {
+SendHeaders&& SendHeaders::contentLength(std::size_t sz) {
 	char buff[100];
 
 	char *x = putNumber(buff,sz,true);
 	return operator()("Content-Length", StrViewA(buff, x-buff));
 }
 
-SendHeaders& SendHeaders::operator ()(const StrViewA key, const StrViewA value) {
+SendHeaders&& SendHeaders::operator ()(const StrViewA key, const StrViewA value) {
 	Pool::String k = pool.add(key);
 	Pool::String v = pool.add(value);
 	hdrMap[k] = v;
-	return *this;
+	return std::move(*this);
 }
 
-SendHeaders& SendHeaders::contentType(StrViewA str) {
+SendHeaders&& SendHeaders::contentType(StrViewA str) {
 	return operator()("Content-Type", str);
 }
 
-SendHeaders& SendHeaders::status(StrViewA str) {
+SendHeaders&& SendHeaders::status(StrViewA str) {
 	firstLine = pool.add(str);
-	return *this;
+	return std::move(*this);
 }
 
-SendHeaders& SendHeaders::request(StrViewA str) {
+SendHeaders&& SendHeaders::request(StrViewA str) {
 	firstLine = pool.add(str);
-	return *this;
+	return std::move(*this);
 }
 
 void SendHeaders::clear() {
@@ -163,5 +163,14 @@ ReceivedHeaders::ReceivedHeaders(const ReceivedHeaders& other)
 	parseHeaders(requestHdrLineBuffer);
 }
 
+
+HeaderValue simpleServer::SendHeaders::operator [](StrViewA key) const {
+		auto x = hdrMap.find(key);
+		if (x == hdrMap.end()) {
+			return HeaderValue();
+		} else {
+			return HeaderValue(x->second);
+		}
 }
 
+}

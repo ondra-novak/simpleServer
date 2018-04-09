@@ -198,7 +198,17 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::addTask(const TaskAddRequest& r
 		RKey kk(req.first.fd, req.first.events);
 		auto itr = taskMap.find(kk);
 		if (itr != taskMap.end()) {
-			itr->second = req.second;
+			//if task already exists
+			//update timeout to longest
+			itr->second.org_timeout = std::max(itr->second.org_timeout, req.second.org_timeout);
+			itr->second.timeout = std::max(itr->second.timeout, req.second.timeout);
+			//combine two functions into one
+			CompletionFn oldfn = itr->second.taskFn;
+			CompletionFn newfn = req.second.taskFn;
+			itr->second.taskFn = [=](AsyncState st) {
+				oldfn(st);
+				newfn(st);
+			};
 		} else {
 			fdmap.push_back(req.first);
 			taskMap.insert(std::make_pair(kk, req.second));

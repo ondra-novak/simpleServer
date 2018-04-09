@@ -31,7 +31,7 @@ protected:
 		virtual BinaryView implRead(bool nonblock) override {
 			if (readLimit == 0) return eofConst;
 			BinaryView b = source.read(nonblock);
-			BinaryView r = b.substr(readLimit);
+			BinaryView r = b.substr(0,readLimit);
 			source.putBack(b.substr(r.length));
 			readLimit -= r.length;
 			return r;

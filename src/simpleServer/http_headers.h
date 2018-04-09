@@ -82,6 +82,7 @@ public:
 			operator()(key, value);
 		});
 	}
+	SendHeaders(const StrViewA &key, const StrViewA &value) {this->operator ()(key,value);}
 
 	explicit SendHeaders(StrViewA firstLine) {
 		request(firstLine);
@@ -97,35 +98,35 @@ public:
 	 * @param key key
 	 * @param value value
 	 */
-	SendHeaders &operator()(const StrViewA key, const StrViewA value);
+	SendHeaders &&operator()(const StrViewA key, const StrViewA value);
 	///Put content-length
 	/**
 	 * Function is equivalent to ("Content-Length",sz)
 	 *
 	 * @param sz size of content
 	 */
-	SendHeaders &contentLength(std::size_t sz);
+	SendHeaders &&contentLength(std::size_t sz);
 	///Put content-type
 	/**
 	 * Function is equivalent to ("Content-Type",str)
 	 *
 	 * @param str type of content
 	 */
-	SendHeaders &contentType(StrViewA str);
+	SendHeaders &&contentType(StrViewA str);
 	///Sets status line
 	/**
 	 * Status line is the first line in header block
 	 * @param str string containing whole status line
 	 * @note function is alias to request(), use appropriate function for descriptive reasons
 	 */
-	SendHeaders &status(StrViewA str);
+	SendHeaders &&status(StrViewA str);
 	///Sets status line
 		/**
 		 * Request line is the first line in header block
 		 * @param str string containing whole request line
 		 * @note function is alias to status(), use appropriate function for descriptive reasons
 		 */
-	SendHeaders &request(StrViewA str);
+	SendHeaders &&request(StrViewA str);
 
 
 	///Clear content of object
@@ -146,7 +147,7 @@ public:
 	 * @param fn function which receives BinaryView contains parts of the headers. It expects
 	 * that function sends these buffers directly to the stream
 	 *
-	 * @note It is still prefered to use buffered stream, because results don't need to have
+	 * @note It is still preferred to use buffered stream, because results don't need to have
 	 * optimal length for the stream
 	 */
 	template<typename Fn>
@@ -176,6 +177,8 @@ public:
 
 	void operator=(const SendHeaders &other) = delete;
 
+	///Retrieves header value
+	HeaderValue operator[](StrViewA key) const;
 protected:
 	typedef StringPool<char> Pool;
 	typedef std::map<Pool::String, Pool::String> HdrMap;

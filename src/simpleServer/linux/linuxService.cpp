@@ -18,7 +18,7 @@
 #include "tcpStreamFactory.h"
 #include "../http_headers.h"
 #include "../logOutput.h"
-#include "shared/vla.h"
+#include "../shared/vla.h"
 
 namespace simpleServer {
 

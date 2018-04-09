@@ -14,6 +14,8 @@ public:
 	virtual ~TCPStream() noexcept;
 
 	virtual int setIOTimeout(int timeoutms) override;
+	int getSocket() const {return sck;}
+	int getIOTimeout() const {return iotimeout;}
 
 protected:
 
@@ -47,6 +49,10 @@ protected:
 	int iotimeout;
 	NetAddr peer;
 
+	virtual void asyncReadCallback(const MutableBinaryView& buffer, const Callback& cb, AsyncState state);
+	virtual void asyncWriteCallback(const BinaryView& data, const Callback& cb, AsyncState state);
+
+	static bool doPoll(int sock, int events, int timeoutms);
 
 };
 

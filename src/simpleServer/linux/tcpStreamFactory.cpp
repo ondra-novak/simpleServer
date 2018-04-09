@@ -416,7 +416,7 @@ struct ConnectShared {
 	int iotimeout;
 
 
-	ConnectShared(IStreamFactory::Callback cb, int timeout,int iotimeout):cb(cb),finished(false),timeout(timeout),iotimeout(iotimeout) {}
+	ConnectShared(IStreamFactory::Callback cb, int timeout,int iotimeout):cb(cb),finished(false),pending(0),timeout(timeout),iotimeout(iotimeout) {}
 
 	void inc_pending() {
 		++pending;
@@ -447,13 +447,13 @@ static void connectAsyncCycle(const AsyncProvider& provider, const NetAddr &addr
 	NetAddr thisAddr(addr);
 	AsyncProvider p(provider);
 
-	int sock = connectSocket(addr,r);
+	RAIISocket sock = connectSocket(addr,r);
 	//if error in connect
 	if (r) {
 		//if not wouldblock
 		int e = errno;
 		//create socket
-		std::shared_ptr<RAIISocket> s(new RAIISocket(sock));
+		std::shared_ptr<RAIISocket> s(new RAIISocket(std::move(sock)));
 
 		if (e != EINPROGRESS && e != EWOULDBLOCK && e != EAGAIN) {
 			//throw exception
@@ -514,7 +514,7 @@ static void connectAsyncCycle(const AsyncProvider& provider, const NetAddr &addr
 	} else {
 		bool exp = false;
 		//create socket
-		std::shared_ptr<RAIISocket> s(new RAIISocket(sock));
+		std::shared_ptr<RAIISocket> s(new RAIISocket(std::move(sock)));
 
 		if (shared->finished.compare_exchange_strong(exp,true)) {
 			Stream sx = new TCPStream(s->detach(), shared->timeout, thisAddr);

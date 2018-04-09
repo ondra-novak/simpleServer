@@ -286,7 +286,7 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 
 	//HACK: Some OS returns duplicated records. Perform deduplication
 	{
-		struct addrinfo *tmp, *x = result;
+		struct addrinfo *tmp = nullptr, *x = result;
 		while (x) {
 			auto z = x->ai_next;
 			x->ai_next = tmp;

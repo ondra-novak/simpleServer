@@ -100,6 +100,27 @@ public:
 
 };
 
+class UnsupportedURLSchema: public Exception {
+public:
+	UnsupportedURLSchema(std::string url);
+
+	std::string getMessage() const;
+
+protected:
+	std::string url;
+};
+
+class HttpsIsNotEnabled: public Exception {
+public:
+	HttpsIsNotEnabled(std::string addrport);
+
+	std::string getMessage() const;
+
+protected:
+	std::string addrport;
+};
+
+
 
 
 }

@@ -18,10 +18,31 @@ std::string SystemException::getMessage() const {
 }
 
 
-}
 
-std::string simpleServer::HTTPStatusException::getMessage() const {
+std::string HTTPStatusException::getMessage() const {
 	std::ostringstream s;
 	s << "HTTP Exception: " << code << message;
 	return s.str();
+}
+
+UnsupportedURLSchema::UnsupportedURLSchema(std::string url):url(url) {
+
+}
+
+std::string UnsupportedURLSchema::getMessage() const {
+	std::ostringstream s;
+	s << "Unsupported schema: " << url;
+	return s.str();
+
+}
+
+HttpsIsNotEnabled::HttpsIsNotEnabled(std::string addrport):addrport(addrport) {
+}
+
+std::string HttpsIsNotEnabled::getMessage() const {
+	std::ostringstream s;
+	s << "HTTPS is not enabled: " << addrport;
+	return s.str();
+}
+
 }

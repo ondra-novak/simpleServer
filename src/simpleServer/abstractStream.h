@@ -774,6 +774,16 @@ public:
 		return *this;
 	}
 
+	std::string toString(std::size_t limit = (std::size_t)-1, bool nonblock = false) {
+		std::string x;
+		BinaryView b = read(nonblock);
+		while (!b.empty()) {
+			x.append(reinterpret_cast<const char *>(b.data),b.length);
+			b = read(nonblock);
+		}
+		return x;
+	}
+
 };
 
 

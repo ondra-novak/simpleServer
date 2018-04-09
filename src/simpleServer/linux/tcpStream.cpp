@@ -37,7 +37,7 @@ BinaryView TCPStream::implWrite(BinaryView buffer, bool nonblock) {
 }
 
 
-static bool doPoll(int sock, int events, int timeoutms) {
+bool TCPStream::doPoll(int sock, int events, int timeoutms) {
 	struct pollfd pfd;
 	pfd.events = events;
 	pfd.fd = sock;
@@ -117,6 +117,35 @@ void TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
  }
 }
 
+void TCPStream::asyncReadCallback(const MutableBinaryView& b, const Callback& cbc, AsyncState state) {
+	if (state == asyncOK) {
+		BinaryView r = implRead(b,true);
+		if (isEof(r)) {
+			cbc(asyncEOF,r);
+		} else if (r.empty()) {
+			implReadAsync(b,cbc);
+		}else {
+			cbc(state, r);
+		}
+	} else {
+		cbc(state, BinaryView(0,0));
+	}
+}
+void TCPStream::asyncWriteCallback(const BinaryView& b, const Callback& cbc, AsyncState state){
+	if (state == asyncOK) {
+		BinaryView r = implWrite(b, true);
+		if (r.length == b.length) {
+			implWriteAsync(b, cbc);
+		}else {
+			cbc(state, r);
+		}
+	} else {
+		cbc(state, BinaryView(0,0));
+	}
+
+}
+
+
 void TCPStream::implReadAsync(const MutableBinaryView& buffer, const Callback& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	RefCntPtr<TCPStream> me(this);
@@ -125,19 +154,7 @@ void TCPStream::implReadAsync(const MutableBinaryView& buffer, const Callback& c
 	MutableBinaryView b(buffer);
 
 	auto fn = [me,cbc,b](AsyncState state) {
-		if (state == asyncOK) {
-			BinaryView r = me->implRead(b,true);
-			if (isEof(r)) {
-				cbc(asyncEOF,r);
-			} else if (r.empty()) {
-				me->implReadAsync(b,cbc);
-			}else {
-				cbc(state, r);
-			}
-		} else {
-			cbc(state, BinaryView(0,0));
-		}
-
+		me->asyncReadCallback(b, cbc, state);
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
@@ -151,16 +168,7 @@ void TCPStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
 	BinaryView b(data);
 
 	auto fn = [me,cbc, b](AsyncState state) {
-		if (state == asyncOK) {
-			BinaryView r = me->implWrite(b, true);
-			if (r.length == b.length) {
-				me->implWriteAsync(b, cbc);
-			}else {
-				cbc(state, r);
-			}
-		} else {
-			cbc(state, BinaryView(0,0));
-		}
+		me->asyncWriteCallback(b,cbc,state);
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);

@@ -5,6 +5,7 @@
  *      Author: ondra
  */
 
+#include <simpleServer/http_client.h>
 #include <unistd.h>
 
 #include "../simpleServer/mt.h"
@@ -18,9 +19,11 @@
 #include "../simpleServer/http_parser.h"
 #include "../simpleServer/http_server.h"
 
-#include "../simpleServer/shared/future.h"
+#include "../simpleServer/http_client.h"
+#include "../simpleServer/linux/ssl_exceptions.h"
+#include "../simpleServer/shared/mtcounter.h"
 
-ondra_shared::Future<int> x;
+
 
 using namespace simpleServer;
 
@@ -86,35 +89,76 @@ void runServerTest() {
 
 }
 
+
+
 int main(int argc, char *argv[]) {
 
 	TestSimple tst;
 
-	runServerTest();
+//	runServerTest();
 
 
-	tst.test("queue.removeAt","98,56,54,44,30,23,22,21,20,20,11,10,1 - 98,54,44,30,22,21,20,20,11,10") >> [](std::ostream &out) {
-
-		int items[] = {10,30,20,1,23,44,21,22,56,20,11,54,98};
-		PrioQueue<int> r,t;
-		for (auto v:items) r.push(v);
-
-		auto printq = [&](PrioQueue<int> r){
-			out << r.top();
-			r.pop();
-			while (!r.empty()) {
-				out << "," << r.top();
-				r.pop();
+	tst.test("HttpClient.GET","Y") >>[](std::ostream &out) {
+		HttpClient client;
+		HttpResponse resp = client.request("GET","http://httpbin.org/get",std::move(SendHeaders()("Accept","application/json")));
+		if (resp.getStatus() == 200) {
+			Stream b = resp.getBody();
+			std::string content = b.toString();
+			if (StrViewA(content).indexOf(R"("url": "http://httpbin.org/get")") != StrViewA::npos) {
+				out.put('Y');
+			} else {
+				out << content;
 			}
-		};
-
-		printq(r);
-		r.remove_at(3);
-		r.remove_at(2);
-		r.remove_at(7);
-		out << " - ";
-		printq(r);
+		} else {
+			out << "Status:" << resp.getStatus();
+		}
 	};
+
+	tst.test("HttpClient.https.GET","Y") >>[](std::ostream &out) {
+		HttpClient client;
+		client.setHttpsProvider(newHttpsProvider());
+		HttpResponse resp = client.request("GET","https://httpbin.org/get",std::move(SendHeaders()("Accept","application/json")));
+		if (resp.getStatus() == 200) {
+			Stream b = resp.getBody();
+			std::string content = b.toString();
+			if (StrViewA(content).indexOf(R"("url": "https://httpbin.org/get")") != StrViewA::npos) {
+				out.put('Y');
+			} else {
+				out << content;
+			}
+		} else {
+			out << "Status:" << resp.getStatus();
+		}
+	};
+
+	tst.test("HttpClient.https.untrusted","Error in certificate '/C=US/ST=California/L=Walnut Creek/O=Lucas Garron/CN=*.badssl.com': Host mismatch (code: 62)") >>[](std::ostream &out) {
+		HttpClient client;
+		client.setHttpsProvider(newHttpsProvider());
+		try {
+			HttpResponse resp = client.request("GET","https://wrong.host.badssl.com/",SendHeaders());
+			out << "Status:" << resp.getStatus();
+		} catch (const SSLCertError &e) {
+			out << e.what();
+		}
+	};
+
+	tst.test("HttpClient.initWebsocket","0") >>[](std::ostream &out) {
+		HttpClient client;
+		client.setHttpsProvider(newHttpsProvider());
+		client.setAsyncProvider(ThreadPoolAsync::create());
+		AsyncState lastst;
+		std::exception_ptr e;
+		ondra_shared::MTCounter mtc(1);
+		client.request_ws_async("ws://echo.websocket.org/",SendHeaders(),[&](AsyncState st, Stream) {
+			e = std::current_exception();
+			lastst = st;
+			mtc.dec();
+		});
+		mtc.wait();
+		if (e != nullptr) std::rethrow_exception(e);
+		out << (int)lastst;
+	};
+
 
 	tst.test("Listener.openRandomPort.localhost","127.0.0.1") >> [](std::ostream &out) {
 		StreamFactory server = TCPListen::create(true,0);
