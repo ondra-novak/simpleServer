@@ -11,7 +11,7 @@
 #include "ssl_socket.h"
 #include <poll.h>
 #include "async.h"
-#include "../shared/dispatcher.h"
+#include <shared/dispatcher.h>
 #include <openssl/err.h>
 #include <sstream>
 
@@ -402,7 +402,7 @@ Stream SSLClientFactory::convert_to_ssl(Stream stream, const std::string &host) 
 }
 
 Stream SSLClientFactory::convert_to_ssl(Stream stream) {
-	convert_to_ssl(stream,host);
+	return convert_to_ssl(stream,host);
 }
 
 void SSLAbstractStreamFactory::setup(SSL_CTX* ctx) {
@@ -472,7 +472,7 @@ void SSLClientFactory::verifyConnection(SSL_CTX* ctx, SSL* ssl, AbstractStream* 
 }
 
 
-void SSLAbstractStreamFactory::precreateConnection(SSL_CTX* ctx, SSL* ssl) {
+void SSLAbstractStreamFactory::precreateConnection(SSL_CTX* , SSL* ) {
 }
 
 void SSLServerFactory::precreateConnection(SSL_CTX* ctx, SSL* ssl) {

@@ -447,6 +447,7 @@ void HttpClient::send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, 
 
 HttpClient&& HttpClient::setAsyncProvider(AsyncProvider provider) {
 	this->asyncProvider= provider;
+	return std::move(*this);
 }
 
 HttpClient&& HttpClient::setIOTimeout(int t_ms) {

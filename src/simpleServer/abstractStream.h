@@ -778,8 +778,16 @@ public:
 		std::string x;
 		BinaryView b = read(nonblock);
 		while (!b.empty()) {
-			x.append(reinterpret_cast<const char *>(b.data),b.length);
-			b = read(nonblock);
+			if (b.length > limit) {
+				putBack(b.substr(limit));
+				b = b.substr(0,limit);
+				x.append(reinterpret_cast<const char *>(b.data),b.length);
+				break;
+			} else {
+				x.append(reinterpret_cast<const char *>(b.data),b.length);
+				b = read(nonblock);
+			}
+
 		}
 		return x;
 	}
