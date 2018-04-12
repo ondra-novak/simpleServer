@@ -4,7 +4,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/)
 
 
 
-include_directories(BEFORE src)
+include_directories(BEFORE src/simpleServer)
 
 
 add_subdirectory (src/simpleServer)

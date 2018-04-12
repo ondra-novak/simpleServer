@@ -5,7 +5,6 @@
  *      Author: ondra
  */
 
-#include <simpleServer/base64.h>
 #include "tcp.h"
 #include "chunkedStream.h"
 #include "http_client.h"

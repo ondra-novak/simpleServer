@@ -124,10 +124,18 @@ bool SSLTcpStream::handleSSLError(int errCode) {
 BinaryView SSLTcpStream::implRead(MutableBinaryView buffer, bool nonblock) {
 	do {
 		Sync _(lock);
-		if (nonblock) {
-			bool dataReady = SSL_pending(ssl) != 0 || TCPStream::implWaitForRead(0);
-			if (!dataReady) return BinaryView();
+		bool dataReady = SSL_pending(ssl) != 0 || TCPStream::implWaitForRead(0);
+		if (!dataReady) {
+			if (nonblock) return BinaryView();
+			else {
+				_.unlock();
+				if (!TCPStream::waitForInput(iotimeout)) {
+					throw TimeoutException();
+				}
+				continue;
+			}
 		}
+
 		int r = SSL_read(ssl,buffer.data, buffer.length);
 		if (r <= 0) {
 			bool rt = handleSSLError(r);
@@ -144,9 +152,16 @@ BinaryView SSLTcpStream::implRead(MutableBinaryView buffer, bool nonblock) {
 BinaryView SSLTcpStream::implWrite(BinaryView buffer, bool nonblock)  {
 	do {
 		Sync _(lock);
-		if (nonblock) {
-			bool dataReady = TCPStream::implWaitForWrite(0);
-			if (!dataReady) return buffer;
+		bool dataReady = TCPStream::implWaitForWrite(0);
+		if (!dataReady)  {
+			if (nonblock) return buffer;
+			else {
+				_.unlock();
+				if (!TCPStream::waitForOutput(iotimeout)) {
+					throw TimeoutException();
+				}
+				continue;
+			}
 		}
 		int r = SSL_write(ssl,buffer.data, buffer.length);
 		if (r <= 0) {
@@ -279,6 +294,7 @@ inline void SSLTcpStream::implReadAsyncTicket(unsigned int ticket,const MutableB
 }
 
 inline void SSLTcpStream::connect() {
+	Sync _(lock);
 	int r = SSL_connect(ssl);
 	while (r < 1) {
 		if (!handleSSLError(r)) return;
@@ -287,6 +303,7 @@ inline void SSLTcpStream::connect() {
 }
 
 inline void SSLTcpStream::accept() {
+	Sync _(lock);
 	int r = SSL_accept(ssl);
 	while (r < 1) {
 		if (!handleSSLError(r)) return;

@@ -5,7 +5,7 @@
  *      Author: ondra
  */
 
-#include <simpleServer/http_client.h>
+#include "http_client.h"
 #include <unistd.h>
 
 #include "../simpleServer/mt.h"

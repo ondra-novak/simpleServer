@@ -130,6 +130,7 @@ inline bool WebSocketStreamImpl::read(bool nonblock) {
 
 inline void WebSocketStreamImpl::close(int code) {
 	Sync _(lock);
+	if (closed) return;
 	closed = true;
 	stream.write(serializer.forgeCloseFrame(code),writeAndFlush);
 }
@@ -253,7 +254,7 @@ public:
 	 * the current frame. In such situation, program can mistakenly process previous
 	 * frame again. You need to discardFrame before you start to read. However,
 	 * the calling of this function is optional. For blocking reads and for readFrame()
-	 * this is not necesery.
+	 * this is not necessary.
 	 */
 	void discardFrame() {
 		ptr->discardFrame();
@@ -363,6 +364,9 @@ public:
 	 *
 	 * @retval true message is complete
 	 * @retval false more data are needed
+	 *
+	 * @note when non blocking read is used, you should call discardFrame() to clear
+	 * completion status.
 	 */
 	bool isComplete() const {return ptr->isComplete();}
 
