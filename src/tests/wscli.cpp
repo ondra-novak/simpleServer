@@ -18,9 +18,10 @@ using ondra_shared::StrViewA;
 void showHelp(char *arg0) {
 	std::cerr << "Usage:" << std::endl
 			<< std::endl
-			<< arg0 << " [--separator <separator> | --hex_separator <hex>] \\"<<std::endl
-			<<"                 [--user_agent <name> ] \\" <<std::endl
-			<< "                [--proxy <addr:port> ] url" <<std::endl
+			<< arg0 << " <switches> <url> \\"<<std::endl
+			<< std::endl
+			<< "-H  <key:value> "			<< std::endl
+			<< "--header <key:value> specify custom header"<< std::endl
 			<< std::endl
 			<< "--separator          defines a sequence of characters which are used to separate" <<  std::endl
 			<< "                     each message. Every message must end with the separator to" <<  std::endl
@@ -103,6 +104,7 @@ int main(int argc, char **argv) {
 		std::string url;
 		std::string proxy;
 		std::string userAgent ("wscli (https://www.github.com/ondra-novak/simpleServer)");
+		SendHeaders hdrs;
 
 		for (int i = 1; i < argc; i++) {
 			StrViewA a(argv[i]);
@@ -114,6 +116,19 @@ int main(int argc, char **argv) {
 				if (++i < argc) userAgent = argv[i];
 			} else if (a == "--proxy" || a == "-p") {
 				if (++i < argc) proxy = argv[i];
+			} else if (a == "-H" || a == "--header") {
+				if (++i < argc) {
+					std::string hdr = argv[i];
+					auto sep = hdr.find(":");
+					if (sep != hdr.npos) {
+						StrViewA key(hdr.data(), sep);
+						StrViewA value(hdr.data()+ sep+1, hdr.size()-sep-1);
+						key = key.trim(isspace);
+						value = value.trim(isspace);
+						hdrs(key,value);
+					}
+				}
+
 			} else if (a == "-h" || a == "--help" || a == "-?" || a == "/?") {
 				showHelp(argv[0]);
 				return 1;
@@ -138,7 +153,7 @@ int main(int argc, char **argv) {
 		if (!proxy.empty()) proxyp = newBasicProxyProvider(proxy, false,false);
 
 		HttpClient client(userAgent,newHttpsProvider(), proxyp);
-		WebSocketStream ws = connectWebSocket(client, url, SendHeaders());
+		WebSocketStream ws = connectWebSocket(client, url, std::move(hdrs));
 
 		std::cout << msgseparator;
 		std::cout.flush();
