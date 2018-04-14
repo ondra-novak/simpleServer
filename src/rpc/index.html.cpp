@@ -161,6 +161,15 @@ function start() {
 
 	input.focus();
 	restoreContextFn();
+
+	var wsrpc = new WsRpcClient("");
+	wsrpc.connect().then(function() {
+		rpc = wsrpc;
+		systemMessage("WebSocket enabled", "Successfully connected to websocket",false);
+		rpc.onnotify = function(name, params) {
+			outputNotify(name,params);
+		}
+	});
 }
 
 
@@ -347,8 +356,7 @@ function addControls(rpc, root, cmd) {
     closeButton.classList.add("close");
 	closeButton.classList.add("bottombutt");
 	closeButton.appendChild(document.createTextNode("✖"));
-    closeButton.addEventListener("click", function(e) {
-    	e.stopPropagation();
+	res.close = function() {
     	var h = root.clientHeight;
     	root.style.opacity="1";
     	root.style.height=h+"px";	
@@ -361,7 +369,10 @@ function addControls(rpc, root, cmd) {
     	setTimeout(function() {
     		root.parentElement.removeChild(root);
     	},1000);
-    });
+    };
+    closeButton.addEventListener("click", function(e) {
+    	e.stopPropagation();
+		res.close();});
     ln.appendChild(closeButton);
     root.appendChild(res);
     return res;
@@ -392,6 +403,21 @@ function sendCommand(rpc, cmd) {
 		}
 
 	}
+}
+
+var notifyList = {};
+
+function outputNotify(name,result) {
+	var elm = notifyList[name];
+	if (elm) setTimeout(elm.close,10000);
+	var root = document.createElement("div");
+	var d = addControls(null,root, {method:"NOTIFY: ",args:name});
+	window.output.appendChild(root);
+	elm = notifyList[name] = d;
+	elm.classList.replace("pending","notify");
+	var json = formatJson(result);
+	elm.appendChild(json);
+	scroll();
 }
 	
 

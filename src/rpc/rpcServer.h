@@ -6,6 +6,7 @@
 #include "../simpleServer/http_parser.h"
 #include "../simpleServer/http_pathmapper.h"
 #include "../simpleServer/http_server.h"
+#include "../simpleServer/webSocketsHandler.h"
 #include <shared/logOutput.h>
 
 
@@ -24,6 +25,8 @@ public:
 	void operator()(simpleServer::HTTPRequest req) const;
 
 	bool operator()(simpleServer::HTTPRequest req, const simpleServer::StrViewA &vpath) const;
+
+	void operator()(simpleServer::HTTPRequest req, WebSocketStream wsstream) const;
 
 	void setMaxReqSize(std::size_t maxReqSize) {
 		this->maxReqSize=maxReqSize;

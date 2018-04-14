@@ -10,34 +10,36 @@ namespace simpleServer {
 
 
 
-WebSocketHandler::WebSocketHandler(const WebSocketObserver& hndl, const HTTPHandler& fallBack)
-	:hndl(hndl),fallback(fallBack)
+WebSocketHandler::WebSocketHandler(const WebSocketObserver& hndl)
+	:hndl(hndl)
 {
 }
 
 void WebSocketHandler::operator ()(const HTTPRequest&r) {
-	processRequest(r);
+	if (!processRequest(r)) {
+		r.sendErrorPage(400);
+	}
 
 }
 
-void WebSocketHandler::operator ()(const HTTPRequest&r, const StrViewA&) {
-	processRequest(r);
+bool WebSocketHandler::operator ()(const HTTPRequest&r, const StrViewA&p) {
+	return processRequest(r);
 }
 
 
-void WebSocketHandler::processRequest(const HTTPRequest &r) {
+bool WebSocketHandler::processRequest(const HTTPRequest &r) {
 
-	HeaderValue upgrade(r["upgrade"]),
-				connection(r["connection"]),
+	HeaderValue upgrade(r["Upgrade"]),
+				connection(r["Connection"]),
 				secKey(r["Sec-WebSocket-Key"]);
 
 
-	if (upgrade == "websocket" && connection == "upgrade" && secKey.defined()) {
+	if (upgrade == "websocket" && connection == "Upgrade" && secKey.defined()) {
 
 
 		HTTPResponse resp(101,"Switching Protocols");
-		resp("upgrade", upgrade)
-			("connection", connection);
+		resp("Upgrade", upgrade)
+			("Connection", connection);
 
 		Sha1 sha;
 		sha.update(BinaryView(secKey));
@@ -49,40 +51,45 @@ void WebSocketHandler::processRequest(const HTTPRequest &r) {
 		if (!protocolName.empty()) resp("Sec-WebSocket-Protocol", protocolName);
 
 		Stream sx = r.sendResponse(resp);
+		sx.flush();
 
 		WebSocketStream stream (new _details::WebSocketStreamImpl(sx));
 
-		hndl(stream);
+		hndl(r, stream);
 		if (sx.canRunAsync()) {
-			runAsyncCycle(hndl,stream);
+			runAsyncCycle(r,hndl,stream);
 		} else {
-			while (stream.read()) {
-				if (stream.isComplete()) {
-					hndl(stream);
-				}
+			while (stream.readFrame()) {
+				hndl(r, stream);
 			}
 		}
 
-
+		return true;
 
 	} else {
-		if (fallback!=nullptr)
-			fallback(r);
-		else
-			r.sendErrorPage(403);
+		return false;
 
 	}
 
 
 }
 
-void WebSocketHandler::runAsyncCycle(const WebSocketObserver &hndl, const WebSocketStream& wsstream) {
+void WebSocketHandler::runAsyncCycle(HTTPRequest r, const WebSocketObserver &hndl, const WebSocketStream& wsstream) {
 	WebSocketStream ws(wsstream);
 	WebSocketObserver h(hndl);
-	ws.readAsync([=](AsyncState st){
+	ws.readAsync([=](AsyncState st)  {
 		if (st == asyncOK) {
-			h(ws);
-			runAsyncCycle(h,ws);
+			h(r,ws);
+			runAsyncCycle(r,h,ws);
+		} else if (st == asyncTimeout) {
+			WebSocketStream ws2(ws);
+			ws2.ping(BinaryView());
+			ws2.readAsync([=](AsyncState st){
+				if (st == asyncOK) {
+					h(r,ws);
+					runAsyncCycle(r,h,ws);
+				}
+			});
 		}
 	});
 }

@@ -16,7 +16,7 @@ public:
 	void operator()(int b) {
 		if (b == -1) finish();
 		else  {
-			char c = (char)b;
+			int c = b & 0xFF;
 			switch (rdpos) {
 			case 0:
 				fn(chars[c >> 2]);
@@ -73,7 +73,8 @@ template<typename Fn> Base64Encode<Fn> base64encode(const Fn &output, const char
 std::string base64encode(BinaryView bin, const char *chars = base64_standard, bool notail = false) {
 	std::string s;
 	s.reserve((bin.length*4+2)/3);
-	base64encode([&](char c) {s.push_back(c);}, chars, notail);
+	auto enc = base64encode([&](char c) {s.push_back(c);}, chars, notail);
+	for(auto &&c:bin) enc(c);
 	return s;
 }
 

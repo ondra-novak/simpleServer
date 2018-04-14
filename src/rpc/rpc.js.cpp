@@ -187,9 +187,196 @@ var RpcClient = (function(){
 			return obj;
 		}.bind(this));		
 	};
-	
+
+
 	return RpcClient;
 
 })();
+
+var WsRpcClient  = (function(){
+	"use strict";
+
+	function fixUrl(url) {
+		var wsurl;
+		var httpurl;
+		if (url.substr(0,5) == "ws://") {
+			wsurl = url;
+			httpurl = "http://"+url.substr(5);
+		}
+		else if (url.substr(0,6) == "wss://") {
+			wsurl = url;
+			httpurl = "https://"+url.substr(6);
+		}
+		else if (url.substr(0,7) == "http://") {
+			wsurl = "ws://"+url.substr(7);
+			httpurl = url;
+		}
+		else if (url.substr(0,8) == "https://") {
+			wsurl = "wss://"+url.substr(8);
+			httpurl = url;
+		} else if (url.substr(0,1) == "/") {
+			return fixUrl(location.origin+url);
+		} else {
+			var x = location.pathname.lastIndexOf("/");
+			var path = location.pathname.substr(0,x+1);
+			return fixUrl(location.origin+path+url);			
+		}
+		
+		return {
+			wsurl:wsurl,
+			httpurl:httpurl
+		};
+
+	}
+	
+
+	function WsRpcClient(url) {
+		var u = fixUrl(url);
+		this.wsurl = u.wsurl;
+		RpcClient.call(this,u.httpurl);
+		this.socket = null;
+		this.waiting = {};
+		this.notify = {};
+		this.retryCnt = 0;
+	}
+	WsRpcClient.prototype = Object.create(RpcClient.prototype);
+	WsRpcClient.prototype.connect = function() {
+		if (this.socket == null) {
+			return (this.socket = new Promise(function(ok,error) {
+				var init = function() {
+					s.removeEventListener("open", init);
+					s.removeEventListener("error", e);	
+					s.addEventListener("close", this.onclose.bind(this));
+					s.addEventListener("message", this.onmessage.bind(this));
+					s.addEventListener("error", this.onerror.bind(this));
+					ok(s);
+				}.bind(this);
+				var e = function(x) {
+					s.removeEventListener("open", init);
+					s.removeEventListener("error", e);	
+					error(x);
+				}.bind(this);
+				var s = new WebSocket(this.wsurl);
+				s.addEventListener("open",init);
+				s.addEventListener("error",e);
+			}.bind(this))).then(function(){});	
+		}
+	} 
+
+	WsRpcClient.prototype.onclose = function() {	
+		this.socket = null;
+		if (Object.keys(this.waiting).length != 0) {
+			this.onConnectionError([-1,"WebSocket closed"],this.retryCnt++,
+				function(resp) {
+					var w = this.waiting;
+					this.waiting = {};
+					for (var x in w) {
+						var c = w[x];
+						if (resp) {
+							c.ok = this.call2(c.method, c.args);
+						} else {
+							c.error({"code":-1,"message":"connection lost"});
+						}
+					}					
+				}.bind(this));
+		}
+	}
+
+	WsRpcClient.prototype.onmessage = function(event) {
+
+
+		this.retryCnt = 0;
+		var data = event.data;
+		var jdata = JSON.parse(data);
+		if (jdata.result) {
+			var id = jdata.id;
+			var reg = this.waiting[id];
+			if (reg) reg.ok(jdata.result);
+			delete this.waiting[id];
+		} else if (jdata.error) {
+			var id = jdata.id;
+			var reg = this.waiting[id];
+			if (reg) reg.error(jdata.error);
+			delete this.waiting[id];
+		} else if (jdata.method) {
+			this.onnotify(jdata.method, jdata.params, jdata.jsonrpc, jdata.id)
+		}
+	}
+
+	WsRpcClient.prototype.onerror = function() {
+	
+	} 
+
+	WsRpcClient.prototype.onnotify = function(method,params,version,id) {
+
+		function sendSuccess(id, version, result) {
+			if (typeof result =="undefined") {
+				sendError(id,version,"Method didn't produce a result");
+			} else {
+				this.socket.send(JSON.stringify({"id":id, "jsonrpc":version, "result": result}));
+			}
+		}
+
+		function sendError(id, version, error) {
+			if (!(typeof error == "object" && "code" in error && "message" in error)) {
+				error = {"code":-32603,"message":"Internal error", "data":error.toString()};
+			}
+			this.socket.send(JSON.stringify({"id":id, "jsonrpc":version, "error": error}));	
+		}	
+
+
+		var n = this.notify[method];
+		if (typeof id != "undefined" && id != null) {
+			if (n) {
+				var resp = n(params);
+				if (typeof resp == "object" && resp instanceof Promise) {
+					resp.then(sendSuccess.bind(this,id, version),
+						sendError.bind(this,id, version));
+				} else {
+					sendSiccess.call(this,id, version, resp);
+				}
+			} else {
+				sendError.call(this, id,version,{
+					"code":-32601,
+					"message":"Method not found",
+					"data": method
+				})
+			}
+		} else if (n) {
+			n(params);
+		}					
+	} 
+
+	WsRpcClient.prototype.call2 = function(method,args) {
+		return new Promise(function(ok,error) {
+			var id = "ws"+(++this.nextId);
+			this.waiting[id] = {
+				method:method,
+				args:args,
+				ok:ok,
+				error,error};
+			var m = JSON.stringify({
+				"jsonrpc":"2.0",
+				"method":method,
+				"params":args,
+				"id":id});
+			function send() {
+				if (this.socket == null) {
+					this.connect()
+						.then(send.bind(this),this.onclose.bind(this));
+				} else {
+					this.socket.then(function(s) {
+						s.send(m);
+					});
+				}
+			}
+			send.call(this);
+		}.bind(this));
+	}
+	
+	return WsRpcClient;
+
+})();
+	 
 
 )javascript"};}

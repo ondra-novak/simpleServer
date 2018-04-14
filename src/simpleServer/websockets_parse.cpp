@@ -77,7 +77,7 @@ void WebSocketParser::afterSize() {
 		currentState = masking;
 		stateRemain = 4;
 	}
-	if (size == 0) {
+	else if (size == 0) {
 		epilog();
 	} else {
 		receivedData.reserve(receivedData.size()+ size);

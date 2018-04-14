@@ -7,7 +7,7 @@ namespace simpleServer {
 
 class WebSocketStream;
 
-typedef std::function<void(const WebSocketStream &wsstream)> WebSocketObserver;
+typedef std::function<void(HTTPRequest orgRequest, WebSocketStream wsstream)> WebSocketObserver;
 
 
 
@@ -15,21 +15,20 @@ class WebSocketHandler {
 public:
 
 
-	WebSocketHandler(const WebSocketObserver &hndl, const HTTPHandler &fallBack);
-	WebSocketHandler(const WebSocketObserver &hndl, const HTTPHandler &fallBack, const std::string &protocolName);
+	WebSocketHandler(const WebSocketObserver &hndl);
+	WebSocketHandler(const WebSocketObserver &hndl, const std::string &protocolName);
 
 	void operator()(const HTTPRequest &);
-	void operator()(const HTTPRequest &, const StrViewA &);
+	bool operator()(const HTTPRequest &, const StrViewA &);
 
 protected:
 
 	WebSocketObserver hndl;
-	HTTPHandler fallback;
 	std::string protocolName;
 
-	void processRequest(const HTTPRequest &r);
+	bool processRequest(const HTTPRequest &r);
 
-	static void runAsyncCycle(const WebSocketObserver &hndl, const WebSocketStream &wsstream);
+	static void runAsyncCycle(HTTPRequest r, const WebSocketObserver &hndl, const WebSocketStream &wsstream);
 };
 
 

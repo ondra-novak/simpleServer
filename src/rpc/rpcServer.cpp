@@ -8,6 +8,7 @@
 #include "rpcServer.h"
 #include <imtjson/serializer.h>
 #include <imtjson/parser.h>
+#include "../simpleServer/websockets_stream.h"
 #include "../simpleServer/asyncProvider.h"
 #include "../simpleServer/http_hostmapping.h"
 #include "../simpleServer/query_parser.h"
@@ -48,6 +49,27 @@ public:
 };
 
 
+static void handleLogging(const SharedLogObject logObj, const Value &v, const RpcRequest &req) noexcept {
+	if (logObj.isLogLevelEnabled(LogLevel::progress)) {
+		try {
+
+			Value diagData = req.getDiagData();
+			Value args = req.getArgs();
+			Value method = req.getMethodName();
+			Value context = req.getContext();
+			if (!diagData.defined() && req.isErrorSent()) {
+				diagData = v["error"];
+			}
+			if (!diagData.defined()) diagData = nullptr;
+			if (!context.defined()) context = nullptr;
+			Value output = {method,args,context,diagData};
+			logObj.progress("$1", output.toString());
+		} catch (...) {
+
+		}
+	}
+}
+
 
 
 
@@ -72,29 +94,13 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 				SharedLogObject logObj(*httpreq->log, "RPC");
 				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj](const Value &v, const RpcRequest &req){
 
-					if (logObj.isLogLevelEnabled(LogLevel::progress)) {
-
-						Value diagData = req.getDiagData();
-						Value args = req.getArgs();
-						Value method = req.getMethodName();
-						Value context = req.getContext();
-						if (!diagData.defined() && req.isErrorSent()) {
-							diagData = v["error"];
-						}
-						if (!diagData.defined()) diagData = nullptr;
-						if (!context.defined()) context = nullptr;
-						Value output = {method,args,context,diagData};
-						logObj.progress("$1", output.toString());
-					}
-
-
+					handleLogging(logObj,v,req);
 
 					try {
 
 						Stream out = httpreq.sendResponse("application/json");
 						v.serialize(out);
 						out.flush();
-
 
 					} catch (...) {
 						//nothing to do - we cannot handle this
@@ -137,7 +143,13 @@ void RpcHttpServer::addRPCPath(String path, const Config &cfg) {
 	RpcHandler h(*this);
 	if (cfg.maxReqSize) h.setMaxReqSize(cfg.maxReqSize);
 	h.enableConsole(cfg.enableConsole);
-	mapRecords.push_back(Item(path, h));
+	WebSocketHandler ws(h);
+	auto h2 = [=](HTTPRequest req, StrViewA vpath) mutable {
+		if (!ws(req,vpath)) return h(req,vpath);
+		else return true;
+	};
+
+	mapRecords.push_back(Item(path,HTTPMappedHandler(h2)));
 
 }
 
@@ -184,13 +196,17 @@ void RpcHttpServer::start() {
 	}
 	HttpStaticPathMapper hndl(std::move(reglist));
 	this->preHandler = [=](Stream s) {
-		int b = s.peek();
-		if (b == '{') {//starting with RPC protocol
+		try {
+			int b = s.peek();
+			if (b == '{') {//starting with RPC protocol
 
-			directRpcAsync(s);
+				directRpcAsync(s);
+				return true;
+			} else {
+				return false;
+			}
+		} catch (...) {
 			return true;
-		} else {
-			return false;
 		}
 	};
 	HostMappingHandler hostMap;
@@ -199,6 +215,33 @@ void RpcHttpServer::start() {
 	(*this)>>(hostMap>>HTTPMappedHandler(stHandler));
 }
 
-} /* namespace hflib */
+void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream wsstream) const {
 
+	if (wsstream.getFrameType() == WSFrameType::text) {
+		Value jreq;
+		try {
+			 jreq = Value::fromString(wsstream.getText());
+		} catch (std::exception &e) {
+			Value genError = Object("error",rpcserver.formatError(-32700,"Parse error",Value()));
+			wsstream.postText(genError.stringify());
+			return;
+		}
+
+		SharedLogObject logObj(*httpreq->log, "RPC");
+		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj](const Value &v, const RpcRequest &req){
+
+			handleLogging(logObj,v,req);
+			try {
+				WebSocketStream ws(wsstream);
+				ws.postText(v.stringify());
+			} catch (...) {
+
+			}
+		},RpcFlags::preResponseNotify|RpcFlags::postResponseNotify);
+		rpcserver(rrq);
+	}
+}
+
+
+} /* namespace hflib */
 
