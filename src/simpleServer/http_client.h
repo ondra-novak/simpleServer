@@ -219,7 +219,19 @@ public:
 	typedef std::function<void(ResponseCallback)> AsyncResponse;
 	typedef std::function<void(AsyncState, Stream, AsyncResponse)> RequestCallback;
 
-	virtual void request_async(const StrViewA &method, const StrViewA &url, SendHeaders &&headers, const RequestCallback &cb);
+	virtual void request_async(const StrViewA &method, const StrViewA &url, SendHeaders &&headers, RequestCallback cb);
+	///Performs asynchronous request
+	/**
+	 * @param method
+	 * @param url
+	 * @param headers
+	 * @param data - body data
+	 * @param cb callback.
+	 *
+	 * @note the request is still generated synchronously, however
+	 * the response is read asynchronously.
+	 */
+	virtual void request_async(const StrViewA &method, const StrViewA &url, SendHeaders &&headers, const BinaryView &data, ResponseCallback cb);
 
 	///Sets I/O timeout (default is infinite)
 	HttpClient &&setIOTimeout(int t_ms);

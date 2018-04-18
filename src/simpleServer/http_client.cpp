@@ -491,10 +491,33 @@ HttpResponse HttpClient::request(const StrViewA& method, const StrViewA& url, Se
 	});
 }
 
+void HttpClient::request_async(const StrViewA &method,
+		const StrViewA &url, SendHeaders &&headers, const BinaryView &data,
+		ResponseCallback cb) {
+
+	RefCntPtr<AbstractHttpConnPool> p = RefCntPtr<AbstractHttpConnPool>::staticCast(pool);
+
+	auto parsed = proxyProvider->translate(url);
+
+	forConnection(parsed,[&](PHttpConn conn){
+		send(conn,method,parsed,std::move(headers),data);
+		conn->readAsync([=](AsyncState st, Stream){
+			if (st == asyncOK) {
+				cb(st, HttpResponse(p, conn, parsed));
+			} else {
+				cb(st, HttpResponse(nullptr, conn, parsed));
+			}
+		});;
+	});
+
+
+}
+
+
 void HttpClient::request_async(const StrViewA& method,
 		const StrViewA& url,
 		SendHeaders&& headers,
-		const RequestCallback& cb) {
+		const RequestCallback cb) {
 
 	auto parsed = proxyProvider->translate(url);
 
@@ -502,7 +525,7 @@ void HttpClient::request_async(const StrViewA& method,
 	std::string u(url);
 	SendHeaders h(std::move(headers));
 	RequestCallback c(cb);
-	auto p = pool;
+	RefCntPtr<AbstractHttpConnPool> p = RefCntPtr<AbstractHttpConnPool>::staticCast(pool);
 
 	return forConnectionAsync(parsed,[m,u,h,c,p,parsed](PHttpConn conn)mutable{
 		if (conn == nullptr) {
@@ -512,7 +535,11 @@ void HttpClient::request_async(const StrViewA& method,
 				if (st == asyncOK) {
 					c(st,s,[conn,parsed,p](ResponseCallback rcb) {
 						conn->readAsync([conn,p,parsed,rcb](AsyncState st, Stream) {
-							rcb(st, HttpResponse(RefCntPtr<AbstractHttpConnPool>::staticCast(p),conn,parsed));
+							if (st == asyncOK)
+								rcb(st, HttpResponse(p,conn,parsed));
+							else {
+								rcb(st, HttpResponse(nullptr,conn,parsed));
+							}
 						});
 					});
 				} else {

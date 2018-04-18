@@ -9,12 +9,13 @@ include_directories(BEFORE src/simpleServer)
 
 add_subdirectory (src/simpleServer)
 add_subdirectory (src/tests)
+add_subdirectory (src/rpc EXCLUDE_FROM_ALL)
+add_compile_options(-std=c++14)
   # The 'test' target runs all but the future tests
   cmake_policy(PUSH)
   if(POLICY CMP0037)
     cmake_policy(SET CMP0037 OLD)
   endif()
-add_compile_options(-std=c++11)
 add_custom_target( test bin/simpleServer_test DEPENDS bin/simpleServer_test)
 cmake_policy(POP)  
 
