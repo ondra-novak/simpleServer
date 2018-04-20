@@ -22,7 +22,7 @@ void WebSocketHandler::operator ()(const HTTPRequest&r) {
 
 }
 
-bool WebSocketHandler::operator ()(const HTTPRequest&r, const StrViewA&p) {
+bool WebSocketHandler::operator ()(const HTTPRequest&r, const StrViewA&) {
 	return processRequest(r);
 }
 

@@ -70,7 +70,7 @@ template<typename Fn> Base64Encode<Fn> base64encode(const Fn &output, const char
 	return Base64Encode<Fn>(output, chars, notail);
 }
 
-std::string base64encode(BinaryView bin, const char *chars = base64_standard, bool notail = false) {
+inline static std::string base64encode(BinaryView bin, const char *chars = base64_standard, bool notail = false) {
 	std::string s;
 	s.reserve((bin.length*4+2)/3);
 	auto enc = base64encode([&](char c) {s.push_back(c);}, chars, notail);
