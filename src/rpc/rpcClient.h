@@ -54,8 +54,8 @@ public:
 
 protected:
 	PClient client;
-	bool async;
 	std::string url;
+	bool async;
 	std::vector<unsigned char> buffer;
 
 	void parseResponse(HttpResponse &&resp);
