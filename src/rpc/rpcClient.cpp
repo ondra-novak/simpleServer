@@ -104,8 +104,9 @@ void WebSocketJsonRpcClient::sendRequest(json::Value request) {
 	wsstream.postText(text);
 }
 
-void WebSocketJsonRpcClient::onRequest(const json::Value& request,
+static Value requestErrorResponse(const json::Value& request,
 		std::function<void(json::Value)> response) {
+
 
 	Object error;
 	error("jsonrpc", request["jsonrpc"])
@@ -113,6 +114,13 @@ void WebSocketJsonRpcClient::onRequest(const json::Value& request,
 		 ("error",Object("code",-32601)
 				       ("message","Method not foud"));
 	response(error);
+
+}
+
+void WebSocketJsonRpcClient::onRequest(const json::Value& request,
+		std::function<void(json::Value)> response) {
+	requestErrorResponse(request, response);
+
 }
 
 void WebSocketJsonRpcClient::parseFrame() {
@@ -185,6 +193,75 @@ void WebSocketJsonRpcClient::parseAllResponsesAsync(
 
 void WebSocketJsonRpcClient::parseAllResponsesAsync() {
 	parseAllResponsesAsync([](AsyncState){});
+}
+
+StreamJsonRpcClient::StreamJsonRpcClient(Stream stream,
+		json::RpcVersion::Type version)
+	:AbstractRpcClient(version),stream(stream)
+{
+}
+
+void StreamJsonRpcClient::sendRequest(json::Value request) {
+	request.serialize(stream);
+	stream << "\n";
+	stream.flush();
+}
+
+void StreamJsonRpcClient::onRequest(const json::Value& request,
+		std::function<void(json::Value)> response) {
+	requestErrorResponse(request, response);
+}
+
+bool StreamJsonRpcClient::parseResponse() {
+	BinaryView b = stream.read(false);
+	if (b.empty()) return false;
+	stream.putBack(b);
+	Value r = Value::parse(stream);
+	parseFrame(r);
+	return true;
+}
+
+void StreamJsonRpcClient::parseAllResponses() {
+	while (parseResponse()) {}
+}
+
+void StreamJsonRpcClient::parseResponseAsync(IAsyncProvider::CompletionFn compFn) {
+	stream.readAsync([=](AsyncState st, BinaryView b) {
+		if (st == asyncOK) {
+			stream.putBack(b);
+			parseResponse();
+		}
+		compFn(st);
+	});
+}
+
+void StreamJsonRpcClient::parseAllResponsesAsync(
+		IAsyncProvider::CompletionFn compFn) {
+	stream.readAsync([=](AsyncState st, BinaryView b) {
+		if (st == asyncOK) {
+			stream.putBack(b);
+			parseResponse();
+			parseAllResponsesAsync(compFn);
+		}
+		compFn(st);
+	});
+}
+
+void StreamJsonRpcClient::parseAllResponsesAsync() {
+	parseAllResponsesAsync([](AsyncState){});
+}
+
+void StreamJsonRpcClient::parseFrame(json::Value j) {
+	switch(processResponse(j)) {
+	case AbstractRpcClient::success: break;
+	case AbstractRpcClient::notification: onNotify(Notify(j));break;
+	case AbstractRpcClient::request: onRequest(j,
+			[=](Value v) {
+				Sync _(lock);
+				sendRequest(v);
+			});break;
+	case AbstractRpcClient::unexpected: onUnexpected(j);break;
+	}
 }
 
 }
