@@ -104,7 +104,7 @@ void WebSocketJsonRpcClient::sendRequest(json::Value request) {
 	wsstream.postText(text);
 }
 
-static Value requestErrorResponse(const json::Value& request,
+static void requestErrorResponse(const json::Value& request,
 		std::function<void(json::Value)> response) {
 
 
@@ -142,6 +142,7 @@ void WebSocketJsonRpcClient::parseFrame() {
 bool WebSocketJsonRpcClient::parseResponse() {
 	if (!wsstream.readFrame()) return false;
 	parseFrame();
+	return true;
 }
 
 void WebSocketJsonRpcClient::parseAllResponses() {
