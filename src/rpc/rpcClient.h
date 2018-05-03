@@ -59,7 +59,7 @@ protected:
 	std::vector<unsigned char> buffer;
 
 	void parseResponse(HttpResponse &&resp);
-	void cancelAllPending(json::RpcResult res);
+
 
 };
 
@@ -113,6 +113,10 @@ public:
 	void parseAllResponsesAsync(IAsyncProvider::CompletionFn compFn);
 	///Parses all responses asynchronously. Function will not block
 	void parseAllResponsesAsync();
+
+	const WebSocketStream &getStream() const {
+		return wsstream;
+	}
 
 protected:
 	WebSocketStream wsstream;

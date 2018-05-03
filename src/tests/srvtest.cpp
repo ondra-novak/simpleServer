@@ -2,7 +2,7 @@
 #include "../simpleServer/http_pathmapper.h"
 #include "../simpleServer/html_escape.h"
 #include "../simpleServer/http_server.h"
-#include "../simpleServer/shared/stdLogFile.h"
+#include "shared/stdLogFile.h"
 
 using namespace simpleServer;
 

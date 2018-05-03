@@ -32,7 +32,7 @@ void HttpJsonRpcClient::sendRequest(json::Value request) {
 				if (st == asyncOK) {
 					parseResponse(std::move(resp));
 				} else {
-					cancelAllPending(RpcResult(nullptr, true, nullptr));
+					cancelAllPendingCalls(RpcResult(nullptr, true, nullptr));
 				}
 		});
 	} else {
@@ -74,20 +74,10 @@ void HttpJsonRpcClient::parseResponse(HttpResponse&& resp) {
 			throw HTTPStatusException(resp.getStatus(), resp.getMessage());
 		}
 	} catch (...) {
-		cancelAllPending(RpcResult(nullptr,true,nullptr));
+		cancelAllPendingCalls(RpcResult(nullptr,true,nullptr));
 	}
 }
 
-void HttpJsonRpcClient::cancelAllPending(json::RpcResult res) {
-	std::vector<unsigned int> allIds;
-	{
-		Sync _(lock);
-		for(auto &&x:callMap) allIds.push_back(x.first);
-	}
-	for(auto &&x: allIds) {
-		cancelAsyncCall(x,res);
-	}
-}
 
 WebSocketJsonRpcClient::WebSocketJsonRpcClient(
 		WebSocketStream wsstream, json::RpcVersion::Type version)

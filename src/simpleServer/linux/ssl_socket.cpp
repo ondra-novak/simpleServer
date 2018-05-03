@@ -372,7 +372,7 @@ Stream SSLServerFactory::convert_to_ssl(Stream stream) {
 
 
 	SSL_CTX *ctx;
-	ctx = SSL_CTX_new(TLSv1_2_server_method());
+	ctx = SSL_CTX_new(TLS_server_method());
 	try {
 		setup(ctx);
 
@@ -394,7 +394,7 @@ Stream SSLServerFactory::convert_to_ssl(Stream stream) {
 
 Stream SSLClientFactory::convert_to_ssl(Stream stream, const std::string &host) {
 	SSL_CTX *ctx;
-	ctx = SSL_CTX_new(TLSv1_2_client_method());
+	ctx = SSL_CTX_new(TLS_client_method());
 	try {
 		setup(ctx);
 	} catch (...) {
@@ -533,7 +533,9 @@ SSLCertError::SSLCertError(X509* cert, long err)
 
 std::string SSLCertError::getMessage() const {
 	std::ostringstream b;
-	b << "Error in certificate '" << cert->name << "': ";
+	char name[257];
+	X509_NAME_oneline(X509_get_subject_name(cert.get()), name, 256);
+	b << "Error in certificate '" << name << "': ";
 	switch (err) {
 	case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT  : b << "Unable to get issuer of cert.";break;
 	case X509_V_ERR_UNABLE_TO_GET_CRL  : b << "Unable to get CRL";break;

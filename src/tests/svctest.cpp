@@ -2,7 +2,7 @@
 
 #include "../simpleServer/abstractStream.h"
 #include "../simpleServer/abstractService.h"
-#include "../simpleServer/shared/stdLogOutput.h"
+#include "shared/stdLogOutput.h"
 
 
 using namespace simpleServer;

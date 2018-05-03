@@ -5,7 +5,6 @@
  *      Author: ondra
  */
 
-#include "http_client.h"
 #include <unistd.h>
 
 #include "../simpleServer/mt.h"
@@ -21,7 +20,7 @@
 
 #include "../simpleServer/http_client.h"
 #include "../simpleServer/linux/ssl_exceptions.h"
-#include "../simpleServer/shared/mtcounter.h"
+#include "shared/mtcounter.h"
 #include "../simpleServer/websockets_stream.h"
 
 
