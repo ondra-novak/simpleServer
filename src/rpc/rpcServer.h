@@ -7,7 +7,7 @@
 #include "../simpleServer/http_pathmapper.h"
 #include "../simpleServer/http_server.h"
 #include "../simpleServer/webSocketsHandler.h"
-#include <shared/logOutput.h>
+#include "../simpleServer/logOutput.h"
 
 
 namespace simpleServer {

@@ -11,7 +11,7 @@
 #include "ssl_socket.h"
 #include <poll.h>
 #include "async.h"
-#include <shared/dispatcher.h>
+#include "../dispatcher.h"
 #include <openssl/err.h>
 #include <sstream>
 

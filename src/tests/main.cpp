@@ -20,7 +20,7 @@
 
 #include "../simpleServer/http_client.h"
 #include "../simpleServer/linux/ssl_exceptions.h"
-#include "shared/mtcounter.h"
+#include "../simpleServer/shared/mtcounter.h"
 #include "../simpleServer/websockets_stream.h"
 
 

@@ -13,7 +13,6 @@
 #include "../simpleServer/http_hostmapping.h"
 #include "../simpleServer/query_parser.h"
 
-#include "shared/logOutput.h"
 #include "resources.h"
 
 namespace simpleServer {
