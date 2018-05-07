@@ -36,7 +36,7 @@ public:
 			SSL_CTX_free(ctx);
 			throw SSLError();
 		}
-
+		setAsyncProvider(srcStream->getAsyncProvider());
 	}
 
 	~SSLTcpStream() {
@@ -275,16 +275,22 @@ inline void SSLTcpStream::implReadAsyncTicket(unsigned int ticket,const MutableB
 		try {
 			bool rt = handleSSLErrorAsync(r,RepeatAsyncRead(this,ticket, buffer,cb));
 			if (!rt) {
+				_.unlock();
 				cb(asyncEOF,eofConst);
+				_.lock();
 			} else {
 				lockTicket = ticket;
 				return;
 			}
 		} catch (...) {
+			_.unlock();
 			cb(asyncError,BinaryView());
+			_.lock();
 		}
 	} else  {
+		_.unlock();
 		cb(asyncOK,BinaryView(buffer.data, r));
+		_.lock();
 	}
 	if (lockTicket) {
 		lockTicket = 0;
