@@ -88,6 +88,8 @@ void WebSocketHandler::runAsyncCycle(HTTPRequest r, const WebSocketObserver &hnd
 				if (st == asyncOK) {
 					h(r,ws);
 					runAsyncCycle(r,h,ws);
+				} else {
+
 				}
 			});
 		}

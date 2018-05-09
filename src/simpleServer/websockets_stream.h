@@ -48,6 +48,7 @@ public:
 	void postBinaryAsync(const BinaryView &data, const Fn &fn);
 
 	const Stream getStream() const {return stream;}
+	bool isClosed() const {return closed;}
 
 protected:
 	Stream stream;
@@ -393,6 +394,8 @@ public:
 	///Get code (for opcodeConnClose)
 	unsigned int getCode() const {return ptr->getCode();}
 
+	///Returns true, if the websocket is already closed
+	bool isClosed() const {return ptr->isClosed();}
 };
 
 

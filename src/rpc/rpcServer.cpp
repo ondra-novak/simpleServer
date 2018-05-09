@@ -13,6 +13,7 @@
 #include "../simpleServer/http_hostmapping.h"
 #include "../simpleServer/query_parser.h"
 
+#include "../simpleServer/shared/logOutput.h"
 #include "resources.h"
 
 namespace simpleServer {
@@ -100,9 +101,10 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 						Stream out = httpreq.sendResponse("application/json");
 						v.serialize(out);
 						out.flush();
+						return true;
 
 					} catch (...) {
-						//nothing to do - we cannot handle this
+						return false;
 					}
 				}, RpcFlags::preResponseNotify);
 				srv(rrq);
@@ -167,9 +169,14 @@ void RpcHttpServer::directRpcAsync(Stream s) {
 		s.setIOTimeout(-1);
 		Value jsonReq = Value::parse(s);
 		RpcRequest req = RpcRequest::create(jsonReq,[=](Value v) {
-			v.serialize(s);
-			s << "\n";
-			s.flush();
+			try {
+				v.serialize(s);
+				s << "\n";
+				s.flush();
+				return true;
+			} catch (...) {
+				return false;
+			}
 
 		}, RpcFlags::notify);
 		this->operator ()(req);
@@ -228,13 +235,23 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 
 		SharedLogObject logObj(*httpreq->log, "RPC");
 		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj](const Value &v, const RpcRequest &req){
+			WebSocketStream ws(wsstream);
+			if (!v.defined()) {
+				if (ws.isClosed()) return false;
+				try {
+					ws.ping(BinaryView());
+					return true;
+				} catch (...) {
+					return false;
+				}
+			}
 
 			handleLogging(logObj,v,req);
 			try {
-				WebSocketStream ws(wsstream);
 				ws.postText(v.stringify());
+				return true;
 			} catch (...) {
-
+				return false;
 			}
 		},RpcFlags::preResponseNotify|RpcFlags::postResponseNotify);
 		rpcserver(rrq);
