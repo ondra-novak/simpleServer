@@ -41,7 +41,7 @@ public:
 	 */
 	HttpJsonRpcClient(PClient client, std::string url,
 			bool async = false,
-			json::RpcVersion::Type version = json::RpcVersion::ver2);
+			json::RpcVersion version = json::RpcVersion::ver2);
 
 
 	virtual void sendRequest(json::Value request);
@@ -49,7 +49,7 @@ public:
 	///Headers template
 	SendHeaders headers;
 
-	virtual void onNotify(const json::Notify &) {}
+	virtual void onNotify(const json::RpcNotify &) {}
 	virtual void onUnexpected(const json::Value &) {}
 
 protected:
@@ -68,12 +68,12 @@ protected:
 class WebSocketJsonRpcClient: public json::AbstractRpcClient {
 public:
 
-	WebSocketJsonRpcClient(WebSocketStream wsstream, json::RpcVersion::Type version = json::RpcVersion::ver2);
+	WebSocketJsonRpcClient(WebSocketStream wsstream, json::RpcVersion version = json::RpcVersion::ver2);
 
 	virtual void sendRequest(json::Value request);
 
 	///Called when notification is received
-	virtual void onNotify(const json::Notify &) {}
+	virtual void onNotify(const json::RpcNotify &) {}
 	virtual void onUnexpected(const json::Value &) {}
 	///Override this function to handle server's requests
 	/**
@@ -134,12 +134,12 @@ protected:
 class StreamJsonRpcClient: public json::AbstractRpcClient {
 public:
 
-	StreamJsonRpcClient(Stream stream, json::RpcVersion::Type version = json::RpcVersion::ver2);
+	StreamJsonRpcClient(Stream stream, json::RpcVersion version = json::RpcVersion::ver2);
 
 	virtual void sendRequest(json::Value request);
 
 	///Called when notification is received
-	virtual void onNotify(const json::Notify &) {}
+	virtual void onNotify(const json::RpcNotify &) {}
 	virtual void onUnexpected(const json::Value &) {}
 	///Override this function to handle server's requests
 	/**

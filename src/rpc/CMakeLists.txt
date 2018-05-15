@@ -4,3 +4,4 @@ file(GLOB simpleRpcServer_SRC "*.cpp" )
 file(GLOB simpleRpcServer_HDR "*.h" "*.tcc" )
 add_library (simpleRpcServer ${simpleRpcServer_SRC})
 
+ 

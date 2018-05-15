@@ -10,7 +10,7 @@ using namespace json;
 using ondra_shared::BinaryView;
 
 HttpJsonRpcClient::HttpJsonRpcClient(
-		PClient client, std::string url, bool async,json::RpcVersion::Type version)
+		PClient client, std::string url, bool async,json::RpcVersion version)
 	:AbstractRpcClient(version)
 	,client(std::move(client))
 	,url(std::move(url))
@@ -62,7 +62,7 @@ void HttpJsonRpcClient::parseResponse(HttpResponse&& resp) {
 						break;
 					case AbstractRpcClient::request:
 					case AbstractRpcClient::notification:
-						onNotify(Notify(r));
+						onNotify(RpcNotify(r));
 						break;
 					case AbstractRpcClient::unexpected:
 						onUnexpected(r);
@@ -80,7 +80,7 @@ void HttpJsonRpcClient::parseResponse(HttpResponse&& resp) {
 
 
 WebSocketJsonRpcClient::WebSocketJsonRpcClient(
-		WebSocketStream wsstream, json::RpcVersion::Type version)
+		WebSocketStream wsstream, json::RpcVersion version)
 	:AbstractRpcClient(version),wsstream(wsstream)
 {
 }
@@ -118,7 +118,7 @@ void WebSocketJsonRpcClient::parseFrame() {
 		Value j(Value::fromString(wsstream.getText()));
 		switch(processResponse(j)) {
 		case AbstractRpcClient::success: break;
-		case AbstractRpcClient::notification: onNotify(Notify(j));break;
+		case AbstractRpcClient::notification: onNotify(RpcNotify(j));break;
 		case AbstractRpcClient::request: onRequest(j,
 				[=](Value v) {
 					wsstream.postText(v.toString());
@@ -186,8 +186,7 @@ void WebSocketJsonRpcClient::parseAllResponsesAsync() {
 	parseAllResponsesAsync([](AsyncState){});
 }
 
-StreamJsonRpcClient::StreamJsonRpcClient(Stream stream,
-		json::RpcVersion::Type version)
+StreamJsonRpcClient::StreamJsonRpcClient(Stream stream, json::RpcVersion version)
 	:AbstractRpcClient(version),stream(stream)
 {
 }
@@ -245,7 +244,7 @@ void StreamJsonRpcClient::parseAllResponsesAsync() {
 void StreamJsonRpcClient::parseFrame(json::Value j) {
 	switch(processResponse(j)) {
 	case AbstractRpcClient::success: break;
-	case AbstractRpcClient::notification: onNotify(Notify(j));break;
+	case AbstractRpcClient::notification: onNotify(RpcNotify(j));break;
 	case AbstractRpcClient::request: onRequest(j,
 			[=](Value v) {
 				Sync _(lock);

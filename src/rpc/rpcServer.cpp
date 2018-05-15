@@ -165,6 +165,8 @@ void RpcHttpServer::setHostMapping(const String &mapping) {
 
 void RpcHttpServer::directRpcAsync(Stream s) {
 
+
+
 	try {
 		s.setIOTimeout(-1);
 		Value jsonReq = Value::parse(s);

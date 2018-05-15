@@ -18,7 +18,13 @@
 #include "../http_client.h"
 #include "ssl_exceptions.h"
 
+
 namespace simpleServer {
+
+#ifndef SSLv23_method
+#define TLS_server_method TLSv1_2_server_method
+#define TLS_client_method TLSv1_2_client_method
+#endif
 
 class SSLTcpStream: public TCPStream {
 public:
@@ -96,6 +102,8 @@ Stream convert_to_ssl(SSLMode mode, SSL_CTX *sslctx, Stream stream) {
 
 
 bool SSLTcpStream::handleSSLError(int errCode) {
+
+
 	int ern = errno;
 	int err = SSL_get_error(ssl, errCode);
 	switch (err) {
