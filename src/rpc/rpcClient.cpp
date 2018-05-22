@@ -232,8 +232,9 @@ void StreamJsonRpcClient::parseAllResponsesAsync(
 			stream.putBack(b);
 			parseResponse();
 			parseAllResponsesAsync(compFn);
+		} else {
+			compFn(st);
 		}
-		compFn(st);
 	});
 }
 

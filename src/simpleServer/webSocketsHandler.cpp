@@ -53,7 +53,7 @@ bool WebSocketHandler::processRequest(const HTTPRequest &r) {
 		Stream sx = r.sendResponse(resp);
 		sx.flush();
 
-		WebSocketStream stream (new _details::WebSocketStreamImpl(sx));
+		WebSocketStream stream (createStream(sx));
 
 		hndl(r, stream);
 		if (sx.canRunAsync()) {
@@ -96,4 +96,7 @@ void WebSocketHandler::runAsyncCycle(HTTPRequest r, const WebSocketObserver &hnd
 	});
 }
 
+WebSocketStream WebSocketHandler::createStream(Stream sx) const {
+	return WebSocketStream (new _details::WebSocketStreamImpl(sx));
+}
 }

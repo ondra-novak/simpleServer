@@ -11,6 +11,7 @@
 #include "../simpleServer/websockets_stream.h"
 #include "../simpleServer/asyncProvider.h"
 #include "../simpleServer/http_hostmapping.h"
+#include "../simpleServer/websockets_stream.h"
 #include "../simpleServer/query_parser.h"
 
 #include "../simpleServer/logOutput.h"
@@ -23,7 +24,27 @@ using ondra_shared::SharedLogObject;
 using ondra_shared::AbstractLogProvider;
 
 
+class WSStreamWithContext: public _details::WebSocketStreamImpl {
+public:
 
+	typedef _details::WebSocketStreamImpl Super;
+	using Super::WebSocketStreamImpl;
+
+	auto getConnContext() const {return ctx;}
+
+protected:
+	PRpcConnContext ctx = new RpcConnContext;
+};
+
+class WebSocketHandlerWithContext: public WebSocketHandler{
+public:
+	using WebSocketHandler::WebSocketHandler ;
+
+	virtual WebSocketStream createStream(Stream sx) const {
+		return new WSStreamWithContext(sx);
+	}
+	virtual ~WebSocketHandlerWithContext() {}
+};
 
 
 
@@ -144,7 +165,7 @@ void RpcHttpServer::addRPCPath(String path, const Config &cfg) {
 	RpcHandler h(*this);
 	if (cfg.maxReqSize) h.setMaxReqSize(cfg.maxReqSize);
 	h.enableConsole(cfg.enableConsole);
-	WebSocketHandler ws(h);
+	WebSocketHandlerWithContext ws(h);
 	auto h2 = [=](HTTPRequest req, StrViewA vpath) mutable {
 		if (!ws(req,vpath)) return h(req,vpath);
 		else return true;
@@ -166,6 +187,7 @@ void RpcHttpServer::setHostMapping(const String &mapping) {
 void RpcHttpServer::directRpcAsync(Stream s) {
 
 
+	PRpcConnContext ctx = new RpcConnContext;
 
 	try {
 		s.setIOTimeout(-1);
@@ -180,7 +202,7 @@ void RpcHttpServer::directRpcAsync(Stream s) {
 				return false;
 			}
 
-		}, RpcFlags::notify);
+		}, RpcFlags::notify, ctx);
 		this->operator ()(req);
 		s.readAsync([=](simpleServer::AsyncState, const ondra_shared::BinaryView &b) {
 			s.putBack(b);
@@ -235,7 +257,13 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 			return;
 		}
 
+		WSStreamWithContext::Super *wsx = wsstream;
+		WSStreamWithContext *wswc = static_cast<WSStreamWithContext *>(wsx);
+		PRpcConnContext connctx;
+		if (wswc) connctx = wswc->getConnContext();
+
 		SharedLogObject logObj(*httpreq->log, "RPC");
+
 		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj](const Value &v, const RpcRequest &req){
 			WebSocketStream ws(wsstream);
 			if (!v.defined()) {
@@ -255,7 +283,7 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 			} catch (...) {
 				return false;
 			}
-		},RpcFlags::preResponseNotify|RpcFlags::postResponseNotify);
+		},RpcFlags::notify, connctx);
 		rpcserver(rrq);
 	}
 }

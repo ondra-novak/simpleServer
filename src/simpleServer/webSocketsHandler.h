@@ -28,6 +28,8 @@ protected:
 
 	bool processRequest(const HTTPRequest &r);
 
+	virtual WebSocketStream createStream(Stream sx) const;
+
 	static void runAsyncCycle(HTTPRequest r, const WebSocketObserver &hndl, const WebSocketStream &wsstream);
 };
 
