@@ -171,7 +171,7 @@ public:
 	Fn fn;
 };
 
-static StrViewA getStatuCodeMsg(int code) {
+static StrViewA getStatusCodeMsg(int code) {
 	char num[100];
 	sprintf(num,"%d",code);
 	StrViewA codestr(num);
@@ -315,7 +315,7 @@ void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body) {
 
 void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
 		int statusCode) {
-	sendResponse(contentType, body, statusCode, getStatuCodeMsg(statusCode));
+	sendResponse(contentType, body, statusCode, getStatusCodeMsg(statusCode));
 }
 
 void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
@@ -334,10 +334,12 @@ void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode) {
-	sendErrorPage(statusCode, getStatuCodeMsg(statusCode), StrViewA());
+	sendErrorPage(statusCode, getStatusCodeMsg(statusCode), StrViewA());
 }
 
 void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc) {
+
+	if (statusMessage.empty()) statusMessage = getStatusCodeMsg(statusCode);
 
 	std::ostringstream body;
 	body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -362,7 +364,7 @@ Stream HTTPRequestData::sendResponse(StrViewA contentType) {
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType, int statusCode) {
-	return sendResponse(contentType, statusCode,getStatuCodeMsg(statusCode));
+	return sendResponse(contentType, statusCode,getStatusCodeMsg(statusCode));
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType, int statusCode,
@@ -424,7 +426,7 @@ Stream HTTPRequestData::prepareStream(const Stream& stream) {
 }
 
 
-HTTPResponse::HTTPResponse(int code):code(code), message(pool.add(getStatuCodeMsg(code)))
+HTTPResponse::HTTPResponse(int code):code(code), message(pool.add(getStatusCodeMsg(code)))
 {
 }
 
