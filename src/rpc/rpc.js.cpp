@@ -3,7 +3,7 @@
 namespace simpleServer {
 Resource client_rpc_js = {
 		"text/javascript",
-		R"javascript(
+		R"javascript(  //"
 
 var RpcClient = (function(){
 	"use strict";
@@ -355,11 +355,19 @@ var WsRpcClient  = (function(){
 				args:args,
 				ok:ok,
 				error,error};
-			var m = JSON.stringify({
-				"jsonrpc":"2.0",
-				"method":method,
-				"params":args,
-				"id":id});
+			var req = {
+					"jsonrpc":"2.0",
+					"method":method,
+					"params":args,
+					"id":id};
+
+			if (Object.keys(this.context).length) {
+				req.context = this.context;
+			}
+			
+			var m = JSON.stringify(req);
+
+			
 			function send() {
 				if (this.socket == null) {
 					this.connect()
@@ -379,4 +387,6 @@ var WsRpcClient  = (function(){
 })();
 	 
 
-)javascript"};}
+//)javascript"
+};
+}

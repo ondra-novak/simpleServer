@@ -455,9 +455,10 @@ function outputResult(d,result) {
 
 function outputError(d,result) {
 	d.classList.replace("pending","error");
-	var rejections = Array.isArray(result.rejections)?result.rejections:null;
-	if (rejections) {
-		delete result.rejections;
+	var rejections ;
+	if (result.code == -32602) {
+		rejections = result.data;
+		delete result.data;
 	}
 	var json = formatJson(result);
 	d.appendChild(json);
