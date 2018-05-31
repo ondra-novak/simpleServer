@@ -19,7 +19,6 @@ body {
 	position:sticky;
 	bottom: 0px;
 	overflow: hidden;
-	position: relative;
 	min-height:0px;
 	transition: all 0.5s;
 	}

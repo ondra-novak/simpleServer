@@ -53,6 +53,16 @@ function start() {
 	var tabpressed = false;
 	var ctxHint = false;	
 	themeToggle.setAttribute("class",localStorage["theme"]);
+
+	var wsrpc = new WsRpcClient("");
+	wsrpc.connect().then(function() {		
+		rpc = wsrpc;
+		systemMessage("WebSocket enabled", "Successfully connected to websocket",false);
+		rpc.onnotify = function(name, params) {
+			outputNotify(name,params);
+		}
+	});
+
 	
 	function setInput(z) {
         input.innerText = z;
@@ -64,6 +74,7 @@ function start() {
      	if (x) {
      		try {
      			rpc.context = JSON.parse(x);
+				wsrpc.context = rpc.context;
      			updateContextView(rpc);
      		} catch (e) {
      			systemMessage("Failed to restore context","Error:"+e.toString(), true);
@@ -162,14 +173,6 @@ function start() {
 	input.focus();
 	restoreContextFn();
 
-	var wsrpc = new WsRpcClient("");
-	wsrpc.connect().then(function() {
-		rpc = wsrpc;
-		systemMessage("WebSocket enabled", "Successfully connected to websocket",false);
-		rpc.onnotify = function(name, params) {
-			outputNotify(name,params);
-		}
-	});
 }
 
 
