@@ -18,7 +18,7 @@ using ondra_shared::StrViewA;
 void showHelp(char *arg0) {
 	std::cerr << "Usage:" << std::endl
 			<< std::endl
-			<< arg0 << " <switches> <url> \\"<<std::endl
+			<< arg0 << " <switches> <url> "<<std::endl
 			<< std::endl
 			<< "-H  <key:value> "			<< std::endl
 			<< "--header <key:value> specify custom header"<< std::endl
