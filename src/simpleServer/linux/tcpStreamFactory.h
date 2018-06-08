@@ -31,8 +31,7 @@ public:
 		stopped = true;
 	}
 
-	TCPStreamFactory(NetAddr target,int ioTimeout)
-		:target(target),ioTimeout(ioTimeout),stopped(false) {}
+	TCPStreamFactory(NetAddr target,int ioTimeout);
 	~TCPStreamFactory() noexcept {}
 protected:
 

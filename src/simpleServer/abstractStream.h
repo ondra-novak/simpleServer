@@ -1,3 +1,4 @@
+
 #pragma once
 #include "shared/refcnt.h"
 #include "shared/stringview.h"
@@ -148,7 +149,7 @@ protected:
 	 * @param writeMode choose one of write mode. Function updates this structure
 	 *
 	 */
-	virtual void implWrite(WrBuffer &curBuffer, bool nonblock) = 0;
+	virtual bool implWrite(WrBuffer &curBuffer, bool nonblock) = 0;
 
 	///Read to the buffer asynchronoysly
 	/**
@@ -201,7 +202,7 @@ protected:
 	virtual void implCloseOutput() = 0;
 
 
-	virtual void implFlush() = 0;
+	virtual bool implFlush() = 0;
 
 
 	virtual ~IGeneralStream() {}
@@ -216,8 +217,8 @@ protected:
 		DirectWrite(IGeneralStream &owner):owner(owner) {}
 		IGeneralStream &owner;
 	public:
-		void write(WrBuffer &curBuffer, bool nonblock) {
-			owner.implWrite(curBuffer, nonblock);
+		bool write(WrBuffer &curBuffer, bool nonblock) {
+			return owner.implWrite(curBuffer, nonblock);
 		}
 		BinaryView write(BinaryView buffer, bool nonblock) {
 			return owner.implWrite(buffer,nonblock);
@@ -225,8 +226,8 @@ protected:
 		void writeAsync(const BinaryView &data, const Callback &cb) {
 			return owner.implWriteAsync(data,cb);
 		}
-		void flush() {
-			owner.implFlush();
+		bool flush() {
+			return owner.implFlush();
 		}
 
 
@@ -326,19 +327,22 @@ public:
 	/**
 	 * @param buffer buffer to write
 	 * @param wrmode specify write mode
-	 * @return part of buffer not written
+	 * @return part of buffer not written. Exception: If the function returns empty buffer, which is positive on isEof(),
+	 * it does mean, that peer connection has been reset, and data has not been send. Because the return value
+	 * is also empty, not-checking it causes, that writting continues without any reported error but into /dev/null
 	 *
 	 * Function uses buffer to collect small writes into single brust write.
 	 */
 	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) {
-		if (buffer.empty()) return buffer;
+		if (buffer.empty()) return BinaryView(0,0);
 		if (buffer.data == wrBuff.ptr+wrBuff.wrpos) {
 			wrBuff.wrpos+=buffer.length;
 			return BinaryView(0,0);
 		}
 
 		if (wrBuff.remain() == 0) {
-			implWrite(wrBuff,wrmode == writeNonBlock);
+			auto res = implWrite(wrBuff,wrmode == writeNonBlock);
+			if (!res) return eofConst;
 			if (wrBuff.remain() == 0)
 				return buffer;
 		}
@@ -367,30 +371,43 @@ public:
 	/**
 	 * @param b byte to write. note that writes are buffered, so you will need to call flush()
 	 * to force to send everything in the stream.
+	 *
+	 * @retval true success
+	 * @retval false connection lost
 	 */
-	void writeByte(unsigned char b) {
+	bool writeByte(unsigned char b) {
 		if (wrBuff.remain() == 0) {
-			implWrite(wrBuff, false);
+			if (!implWrite(wrBuff, false)) return false;
 		}
 		wrBuff.ptr[wrBuff.wrpos] = b;
 		wrBuff.wrpos++;
+		return true;
 	}
 
 
 
 	///Flush output buffer to the stream
-	void flush(WriteMode wrmode = writeAndFlush) {
+	/**
+	 *
+	 * @param wrmode write mode
+	 *
+	 * @retval true flushed
+	 * @retval false connection lost (EPIPE)
+	 */
+	bool flush(WriteMode wrmode = writeAndFlush) {
+		bool ok = true;
 		if (wrBuff.wrpos) {
 			bool rep = (wrmode == writeWholeBuffer || wrmode == writeAndFlush);
 			do {
-				implWrite(wrBuff, wrmode == writeNonBlock);
-			} while (wrBuff.wrpos != 0 && rep);
+				ok = ok && implWrite(wrBuff, wrmode == writeNonBlock);
+			} while (wrBuff.wrpos != 0 && rep && ok);
 			if (wrmode == writeAndFlush) {
-				implFlush();
+				ok = ok && implFlush();
 			}
 		} else if (wrmode == writeAndFlush) {
-			implFlush();
+			return implFlush();
 		}
+		return ok;
 	}
 
 
@@ -710,8 +727,8 @@ public:
 	 * any transparent buffers on the way, request the sync with filesystem and doesn't
 	 * return until operation completes
 	 */
-	void flush(WriteMode wr = writeAndFlush) const {
-		ptr->flush(wr);
+	bool flush(WriteMode wr = writeAndFlush) const {
+		return ptr->flush(wr);
 	}
 	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) const {
 		return ptr->write(buffer, wrmode);

@@ -19,9 +19,12 @@ BinaryView TCPStream::implRead(bool nonblock) {
 
 BinaryView TCPStream::implWrite(BinaryView buffer, bool nonblock) {
 	do {
-		int r = send(sck, buffer.data, buffer.length, MSG_DONTWAIT);
+		int r = send(sck, buffer.data, buffer.length, MSG_DONTWAIT|MSG_NOSIGNAL);
 		if (r < 0) {
 			int e = errno;
+			if (e == EPIPE) {
+				return eofConst;
+			}
 			if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN)
 				throw SystemException(e,__FUNCTION__);
 			if (nonblock) return buffer;
@@ -78,7 +81,7 @@ TCPStream::TCPStream(int sck, int iotimeout, const NetAddr& peer)
 
 BinaryView TCPStream::implRead(MutableBinaryView buffer, bool nonblock) {
 	do {
-		int r = recv(sck,buffer.data, buffer.length, MSG_DONTWAIT);
+		int r = recv(sck,buffer.data, buffer.length, MSG_DONTWAIT|MSG_NOSIGNAL);
 		if (r < 0) {
 			int e = errno;
 			if (e == ECONNRESET) {
@@ -100,12 +103,13 @@ BinaryView TCPStream::implRead(MutableBinaryView buffer, bool nonblock) {
 }
 
 
-void TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
+bool TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
  if (curBuffer.wrpos == 0) {
 	 curBuffer = WrBuffer(outputBuffer,outputBufferSize,0);
  } else {
 	 BinaryView v = curBuffer.getView();
 	 BinaryView w = implWrite(v, nonblock);
+	 if (isEof(w)) return false;
 	 if (w.empty()) {
 		 curBuffer = WrBuffer(outputBuffer,outputBufferSize,0);
 	 } else if (curBuffer.remain()>16) {
@@ -115,6 +119,7 @@ void TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
 		 curBuffer.wrpos = w.length;
 	 }
  }
+ return true;
 }
 
 void TCPStream::asyncReadCallback(const MutableBinaryView& b, const Callback& cbc, AsyncState state) {
@@ -136,6 +141,8 @@ void TCPStream::asyncWriteCallback(const BinaryView& b, const Callback& cbc, Asy
 		BinaryView r = implWrite(b, true);
 		if (r.length == b.length) {
 			implWriteAsync(b, cbc);
+		} else if (isEof(r)) {
+			cbc(asyncEOF, r);
 		}else {
 			cbc(state, r);
 		}
@@ -174,7 +181,8 @@ void TCPStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
 	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
 }
 
-void TCPStream::implFlush() {
+bool TCPStream::implFlush() {
+	return true;
 	//not implemented
 }
 

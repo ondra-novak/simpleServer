@@ -38,7 +38,7 @@ protected:
 	virtual BinaryView implRead(bool nonblock) override;
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
 	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
-	virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override;
+	virtual bool implWrite(WrBuffer &curBuffer, bool nonblock) override;
 
 	virtual void implReadAsync(const Callback &cb) override;
 	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb) override ;
@@ -48,7 +48,7 @@ protected:
 	virtual bool implWaitForWrite(int timeoutms) override;
 	virtual void implCloseInput() override;
 	virtual void implCloseOutput() override;
-	virtual void implFlush() override;
+	virtual bool implFlush() override;
 
 
 
@@ -206,8 +206,8 @@ void ChunkedStream<chunkSize>::implCloseOutput() {
 }
 
 template<std::size_t chunkSize>
-void ChunkedStream<chunkSize>::implFlush() {
-	source.flush(writeWholeBuffer);
+bool ChunkedStream<chunkSize>::implFlush() {
+	return source.flush(writeWholeBuffer);
 }
 
 template<std::size_t chunkSize>
@@ -250,19 +250,21 @@ inline BinaryView ChunkedStream<chunkSize>::implRead(MutableBinaryView buffer,bo
 
 template<std::size_t chunkSize>
 inline BinaryView ChunkedStream<chunkSize>::implWrite(BinaryView buffer, bool ) {
-	source.write(makeHdr(buffer.length),writeWholeBuffer);
-	source.write(buffer,writeWholeBuffer);
-	source.write(BinaryView(StrViewA("\r\n")),writeWholeBuffer);
-	return BinaryView(0,0);
+	auto a = source.write(makeHdr(buffer.length),writeWholeBuffer);
+	auto b = source.write(buffer,writeWholeBuffer);
+	auto c = source.write(BinaryView(StrViewA("\r\n")),writeWholeBuffer);
+	return isEof(a) || isEof(b) || isEof(c)?eofConst:BinaryView(0,0);
 }
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool ) {
+inline bool ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool ) {
 	if (curBuffer.size == 0) {
 		curBuffer = WrBuffer(chunkBuffer,chunkSize);
+		return true;
 	} else {
 		//we know, that function is always write whole buffer
-		implWrite(curBuffer.getView(), false);
+		bool r = !isEof(implWrite(curBuffer.getView(), false));
 		curBuffer.wrpos = 0;
+		return r;
 	}
 }
 

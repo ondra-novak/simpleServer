@@ -21,8 +21,19 @@
 
 #include "tcpStream.h"
 #include "localAddr.h"
+#include <csignal>
 
 namespace simpleServer {
+
+
+TCPStreamFactory::TCPStreamFactory(NetAddr target,int ioTimeout)
+	:target(target),ioTimeout(ioTimeout),stopped(false) {
+
+	//Ignore SIGPIPE as it is best and very compatible option to handle sending errors
+
+	signal(SIGPIPE, SIG_IGN);
+
+}
 
 
 NetAddr TCPStreamFactory::getLocalAddress(const StreamFactory& sf) {

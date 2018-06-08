@@ -52,12 +52,13 @@ protected:
 			writeLimit-=b.length - r.length;
 			return r;
 		}
-		virtual void implWrite(WrBuffer &curBuffer, bool nonblock) override {
+		virtual bool implWrite(WrBuffer &curBuffer, bool nonblock) override {
 			if (writeLimit < curBuffer.wrpos)
 				curBuffer.wrpos = writeLimit;
 			writeLimit -= curBuffer.wrpos;
-			source->getDirectWrite().write(curBuffer,nonblock);
+			bool r = source->getDirectWrite().write(curBuffer,nonblock);
 			writeLimit += curBuffer.wrpos;
+			return r;
 		}
 		virtual void implReadAsync(const Callback &cb)  override {
 			if (readLimit == 0) {
@@ -114,8 +115,8 @@ protected:
 		virtual void implCloseOutput()  override {
 			padding();
 		}
-		virtual void implFlush()  override {
-			source->getDirectWrite().flush();
+		virtual bool implFlush()  override {
+			return source->getDirectWrite().flush();
 		}
 		virtual bool canRunAsync() const override {
 			return source->canRunAsync();
