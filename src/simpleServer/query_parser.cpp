@@ -32,12 +32,21 @@ void QueryParser::clear() {
 typedef std::pair<std::size_t, std::size_t> Part;
 typedef std::pair<Part, Part> KeyValuePart;
 
+static inline int fromHexDigit(char c) {
+	return c>='A' && c <='F'?c-'A'+10
+			:c>='a' && c <='f'?c-'a'+10
+			:c>='0' && c <= '9'?c-'0'
+			:0;
+}
+
 void QueryParser::parse(StrViewA vpath) {
 
 	enum State {
 		readingPath,
 		readingKey,
-		readingValue
+		readingValue,
+		readingSpecChar1,
+		readingSpecChar2
 	};
 
 
@@ -48,11 +57,13 @@ void QueryParser::parse(StrViewA vpath) {
 	Part pathPart;
 	Part keyPart;
 	State state =readingPath;
+	State nxstate = readingPath;
 
 
 	auto iter = vpath.begin();
 	auto e = vpath.end();
 	std::size_t mark = data.size();
+	int specCharBuff;
 
 	auto wrfn = [&](char c) {
 		data.push_back(c);
@@ -70,36 +81,57 @@ void QueryParser::parse(StrViewA vpath) {
 	while (iter != e) {
 		char c = *iter++;
 
-		switch (state) {
-		case readingPath:
-			if (c == '?') {
-				pathPart = commitData();
-				state = readingKey;
-			} else{
-				wrfn(c);
+		if (c == '+') {
+			wrfn(' ');
+		} else if (c == '%') {
+			nxstate = state;
+			state = readingSpecChar1;
+		} else {
+			switch (state) {
+			case readingPath:
+				if (c == '?') {
+					pathPart = commitData();
+					state = readingKey;
+				} else{
+					wrfn(c);
+				}
+				break;
+			case readingKey:
+				if (c == '&') {
+					keyPart = commitData();
+					parts.push_back(KeyValuePart(keyPart,Part(0,0)));
+				} else if (c == '=') {
+					keyPart = commitData();
+					state = readingValue;
+				} else {
+					wrfn(c);
+				}
+				break;
+			case readingValue:
+				if (c == '&') {
+					Part v = commitData();
+					parts.push_back(KeyValuePart(keyPart, v));
+					state = readingKey;
+				} else {
+					wrfn(c);
+				}
+				break;
+			case readingSpecChar1:
+				specCharBuff = fromHexDigit(c) * 16;
+				state = readingSpecChar2;
+				break;
+			case readingSpecChar2:
+				specCharBuff |= fromHexDigit(c) ;
+				wrfn((char)specCharBuff);
+				state = nxstate;
+				break;
 			}
-			break;
-		case readingKey:
-			if (c == '&') {
-				keyPart = commitData();
-				parts.push_back(KeyValuePart(keyPart,Part(0,0)));
-			} else if (c == '=') {
-				keyPart = commitData();
-				state = readingValue;
-			} else {
-				wrfn(c);
-			}
-			break;
-		case readingValue:
-			if (c == '&') {
-				Part v = commitData();
-				parts.push_back(KeyValuePart(keyPart, v));
-				state = readingKey;
-			} else {
-				wrfn(c);
-			}
-			break;
+
 		}
+	}
+
+	if (state == readingSpecChar1 || state == readingSpecChar2) {
+		state = nxstate;
 	}
 
 	switch (state) {
@@ -110,9 +142,13 @@ void QueryParser::parse(StrViewA vpath) {
 		keyPart = commitData();
 		parts.push_back(KeyValuePart(keyPart,Part(0,0)));
 		break;
-	case readingValue:
-		Part v = commitData();
-		parts.push_back(KeyValuePart(keyPart, v));
+	case readingValue: {
+			Part v = commitData();
+			parts.push_back(KeyValuePart(keyPart, v));
+		}
+		break;
+
+	default:
 		break;
 	}
 
