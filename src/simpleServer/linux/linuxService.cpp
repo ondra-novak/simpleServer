@@ -24,6 +24,7 @@ namespace simpleServer {
 
 using ondra_shared::AbstractLogProviderFactory;
 using ondra_shared::VLA;
+using ondra_shared::logInfo;
 
 int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
 	bool handleExcept = false;
@@ -113,10 +114,11 @@ void LinuxService::dispatch() {
 		umbilicalCord = 0;
 	}
 
+	logInfo("The service started, pid= $1",getpid());
+
 
 	 s = mother();
 
-	 logProgress("The service started, pid= $1",getpid);
 
 	while (s != nullptr) {
 		processRequest(s);
@@ -125,7 +127,7 @@ void LinuxService::dispatch() {
 		 cleanWaitings();
 	}
 
-	logProgress("The service is exiting");
+	logInfo("The service is exiting");
 }
 
 typedef StringPool<char> Pool;
