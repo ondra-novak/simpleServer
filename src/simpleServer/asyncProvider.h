@@ -5,10 +5,15 @@
 #include "shared/refcnt.h"
 
 
+namespace ondra_shared {
+	class Worker;
+}
+
 namespace simpleServer {
 
 using ondra_shared::RefCntObj;
 using ondra_shared::RefCntPtr;
+using ondra_shared::Worker;
 
 
 class AsyncResource;
@@ -32,11 +37,12 @@ class IAsyncProvider {
 public:
 
 	typedef std::function<void(AsyncState)> CompletionFn;
+	typedef std::function<void()> CustomFn;
 
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) = 0;
 
-	virtual void runAsync(const CompletionFn &completion) = 0;
+	virtual void runAsync(const CustomFn &completion) = 0;
 
 
 	virtual void stop() = 0;
@@ -64,13 +70,20 @@ public:
 
 	template<typename Fn>
 	void runAsync(const Fn &completion) const {
-		Fn ccpy(completion);
-		ptr->runAsync([ccpy](AsyncState){ccpy();});
+		ptr->runAsync(completion);
 	}
 
 	void stop() const {
 		ptr->stop();
 	}
+
+	template<typename Fn>
+	void operator>>(const Fn &completion) const {
+		ptr->runAsync(completion);
+	}
+
+	///Converts AsyncProvider to Worker
+	operator Worker() const;
 
 };
 
@@ -84,13 +97,6 @@ public:
 
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const = 0;
-	///Move all asynchronous tasks to different listener
-	/** @param target target provider
-	 *
-	 *  @note function also calls stop(). This is the only way how to destroy
-	 *  dispatcher without interrupting async. operation
-	 */
-	virtual void moveTo(AsyncProvider target) = 0;
 
 	///Returns count of pending asynchronous tasks
 	/**

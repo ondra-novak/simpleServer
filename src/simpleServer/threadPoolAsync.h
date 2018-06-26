@@ -3,12 +3,16 @@
 
 #include "asyncProvider.h"
 #include "shared/msgqueue.h"
-#include "shared/mtcounter.h"
+#include "shared/countdown.h"
+#include "shared/dispatcher.h"
+#include "shared/defer.h"
 
 namespace simpleServer {
 
 using ondra_shared::MsgQueue;
-using ondra_shared::MTCounter;
+using ondra_shared::Countdown;
+using ondra_shared::Dispatcher;
+using ondra_shared::DeferContext;
 
 
 
@@ -17,13 +21,9 @@ public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
-	virtual void runAsync(const CompletionFn &completion) override;
-
+	virtual void runAsync(const CustomFn &completion) override;
 
 	virtual void stop() override;
-
-
-
 
 
 public:
@@ -38,11 +38,13 @@ public:
 
 
 protected:
-	MsgQueue<PStreamEventDispatcher> tQueue;
+
+	Dispatcher dQueue;
+//	MsgQueue<PStreamEventDispatcher> tQueue;
 	unsigned int reqDispatcherCount = 1;
 	unsigned int reqThreadCount = 1;
 	unsigned int taskLimit = -1;
-	MTCounter threadCount;
+	Countdown threadCount;
 	std::queue<PStreamEventDispatcher> cQueue;
 	std::mutex lock;
 	typedef std::lock_guard<std::mutex> Sync;
@@ -51,8 +53,11 @@ protected:
 	PStreamEventDispatcher getListener();
 
 	void worker() noexcept;
+	class InvokeNetworkDispatcher;
+	void waitForTask(const PStreamEventDispatcher &sed) noexcept;
 
-
+private:
+	void checkThreadCount();
 };
 
 

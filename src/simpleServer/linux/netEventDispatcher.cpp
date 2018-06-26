@@ -168,26 +168,8 @@ unsigned int LinuxEventDispatcher::getPendingCount() const {
 
 void LinuxEventDispatcher::epilog() {
 	std::lock_guard<std::mutex> _(queueLock);
-	if (moveToProvider) {
-
-		auto e = taskMap.end();
-		for (auto &&f: fdmap) {
-			auto itr = taskMap.find(RKey(f.fd,f.events));
-			if (itr != e) {
-				moveToProvider.runAsync(AsyncResource(f.fd, f.events), itr->second.org_timeout, itr->second.taskFn);
-			}
-		}
-		moveToProvider = nullptr;
-	}
-
 	taskMap.clear();
 	fdmap.clear();
-}
-
-void LinuxEventDispatcher::moveTo(AsyncProvider target) {
-	std::lock_guard<std::mutex> _(queueLock);
-	moveToProvider = target;
-	stop();
 }
 
 LinuxEventDispatcher::Task LinuxEventDispatcher::addTask(const TaskAddRequest& req) {
@@ -217,7 +199,8 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::addTask(const TaskAddRequest& r
 	}
 }
 
-void LinuxEventDispatcher::runAsync(const CompletionFn& completion) {
+void LinuxEventDispatcher::runAsync(const CustomFn& customFn) {
+	CompletionFn completion([customFn=CustomFn(customFn)](AsyncState){customFn();});
 	addTaskToQueue(-1, completion,0,0);
 }
 

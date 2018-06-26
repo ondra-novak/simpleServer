@@ -24,7 +24,7 @@ public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
-	virtual void runAsync(const CompletionFn &completion) override;
+	virtual void runAsync(const CustomFn &completion) override;
 
 
 	virtual Task waitForEvent() override;
@@ -32,8 +32,6 @@ public:
 
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const override;
-	///Move all asynchronous tasks to different listener (must be the same type)
-	virtual void moveTo(AsyncProvider target) override;
 
 	virtual void stop() override;
 
@@ -71,7 +69,6 @@ protected:
 	FDMap fdmap;
 	TaskMap taskMap;
 	TimePoint nextTimeout =  TimePoint::max();
-	AsyncProvider moveToProvider;;
 	bool exitFlag;
 
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8) 
-add_compile_options(-std=c++11 -fPIC)
+add_compile_options(-std=c++14 -fPIC)
 file(GLOB simpleServer_SRC "*.cpp" "linux/*.cpp")
 file(GLOB simpleServer_HDR "*.h" "*.tcc" "linux/*.h" "linux/*.tcc")
 add_library (simpleServer ${simpleServer_SRC})
@@ -10,4 +10,4 @@ install(TARGETS simpleServer
         ) 
 INSTALL(FILES ${simpleServer_HDR}
         DESTINATION "include/simpleServer" 
-        )             
+        )              

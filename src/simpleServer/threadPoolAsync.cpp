@@ -1,4 +1,5 @@
 #include "threadPoolAsync.h"
+#include "shared/defer.tcc"
 
 #include <thread>
 
@@ -13,19 +14,62 @@ ThreadPoolAsyncImpl::~ThreadPoolAsyncImpl() {
 	stop();
 }
 
+void ThreadPoolAsyncImpl::checkThreadCount() {
+	while (static_cast<unsigned int>(threadCount.getCounter()) < reqThreadCount) {
+		RefCntPtr<ThreadPoolAsyncImpl> me(this);
+		runThread([me] {
+			me->worker();
+		});
+		threadCount.inc();
+	}
+}
+
+class ThreadPoolAsyncImpl::InvokeNetworkDispatcher {
+public:
+	InvokeNetworkDispatcher(ThreadPoolAsyncImpl &owner, const PStreamEventDispatcher &sed)
+		:owner(owner)
+		,sed(sed) {}
+	void operator()() const {
+/*		auto t = sed->waitForEvent();
+		if (t == nullptr) {
+			disp.quit();
+		} else {
+			disp.dispatch(*this);
+		}
+		t();*/
+		owner.waitForTask(sed);
+	}
+protected:
+	ThreadPoolAsyncImpl &owner;
+	PStreamEventDispatcher sed;
+};
+
+
+void ThreadPoolAsyncImpl::waitForTask(const PStreamEventDispatcher &sed) noexcept {
+			auto t = sed->waitForEvent();
+			if (t == nullptr) {
+				dQueue.quit();
+				return;
+			} else if (!sed->empty() || sed->isShared()) {
+				dQueue.dispatch(InvokeNetworkDispatcher(*this, sed));
+			}
+			t();
+}
+
 PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 	Sync _(lock);
-	PStreamEventDispatcher lst;
+	PStreamEventDispatcher lst,lst2;
 	while (cQueue.size() < reqDispatcherCount) {
 		lst = AbstractStreamEventDispatcher::create();
 		cQueue.push(lst);
-		tQueue.push(lst);
+		dQueue.dispatch(InvokeNetworkDispatcher(*this, lst));
 	}
-	while (threadCount.getCounter() < reqThreadCount) {
-		RefCntPtr<ThreadPoolAsyncImpl> me (this);
-		runThread([me]{me->worker();});
-		threadCount.inc();
+	while (cQueue.size() > reqDispatcherCount) {
+		//pop extra dispatcher
+		//they are still in queue, but eventually disappear because they no longer receive a work
+		cQueue.pop();
 	}
+	checkThreadCount();
 	lst = cQueue.front();
 	cQueue.pop();
 	cQueue.push(lst);
@@ -71,7 +115,7 @@ void ThreadPoolAsyncImpl::setCountOfThreads(unsigned int count) {
 
 void ThreadPoolAsyncImpl::stop() {
 
-	tQueue.push(nullptr);
+	dQueue.quit();
 	{
 		Sync _(lock);
 		while (!cQueue.empty()) {
@@ -80,7 +124,7 @@ void ThreadPoolAsyncImpl::stop() {
 			l->stop();
 		}
 	}
-	threadCount.zeroWait();
+	threadCount.wait();
 
 }
 
@@ -91,19 +135,23 @@ void ThreadPoolAsyncImpl::setTasksPerDispLimit(unsigned int count) {
 }
 
 void ThreadPoolAsyncImpl::worker() noexcept {
+
+
+	using namespace ondra_shared;
+
+	DeferContext defer(ondra_shared::defer_root);
+
 	for(;;) {
 
-		if (cQueue.size() > reqDispatcherCount) {
-			Sync _(lock);
-			if (cQueue.size() > reqDispatcherCount) {
-				PStreamEventDispatcher lst = cQueue.front();
-				cQueue.pop();
-				lst->moveTo(this);
-			}
+
+		if (!dQueue.pump()) {
+			dQueue.quit();
+			threadCount.dec();
+			return;
 		}
 
-
-		PStreamEventDispatcher lst = tQueue.pop();
+		defer_yield();
+/*		PStreamEventDispatcher lst = tQueue.pop();
 		if (lst == nullptr) {
 			tQueue.push(nullptr);
 			threadCount.dec();
@@ -119,10 +167,10 @@ void ThreadPoolAsyncImpl::worker() noexcept {
 		}
 
 		t();
-
-		if (threadCount.getCounter() > reqThreadCount) {
+*/
+		if (static_cast<unsigned int>(threadCount.getCounter()) > reqThreadCount) {
 			Sync _(lock);
-			if (threadCount.getCounter() > reqThreadCount) {
+			if (static_cast<unsigned int>(threadCount.getCounter()) > reqThreadCount) {
 				threadCount.dec();
 				return;
 			}
@@ -156,9 +204,14 @@ ThreadPoolAsync::~ThreadPoolAsync() {
 	}
 }
 
-void ThreadPoolAsyncImpl::runAsync(const CompletionFn& completion) {
-	auto lst = getListener();
-	lst->runAsync(completion);
+void ThreadPoolAsyncImpl::runAsync(const CustomFn& completion) {
+	if (reqThreadCount > reqDispatcherCount) {
+		checkThreadCount();
+		dQueue.dispatch(completion);
+	} else {
+		auto lst = getListener();
+		lst->runAsync(completion);
+	}
 }
 
 void ThreadPoolAsync::setTasksPerDispLimit(unsigned int count) {
