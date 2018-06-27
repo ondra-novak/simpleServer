@@ -49,15 +49,11 @@ void LinuxEventDispatcher::addTaskToQueue(int s, const CompletionFn &fn, int tim
 	fd.events = event;
 	fd.revents = 0;
 
-	bool sintr;
 
-	{
-		std::lock_guard<std::mutex> _(queueLock);
-		sintr = queue.empty();
-		queue.push(TaskAddRequest(fd, nfo));
-	}
-	if (sintr)
-		sendIntr();
+	std::lock_guard<std::mutex> _(queueLock);
+	queue.push(TaskAddRequest(fd, nfo));
+	sendIntr();
+
 
 }
 
@@ -69,8 +65,7 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 		epilog();
 		return nullptr;
 	}
-	Task ret = runQueue();
-	if (ret != nullptr) return ret;
+	Task ret;
 
 	TimePoint n = std::chrono::steady_clock::now();
 	auto tme = taskMap.end();
@@ -223,16 +218,12 @@ std::size_t LinuxEventDispatcher::HashRKey::operator ()(const RKey& key) const {
 
 LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 
-	Task s;
 	std::lock_guard<std::mutex> _(queueLock);
-	while (!queue.empty() && s==nullptr) {
-		auto &&x = queue.front();
-		 s = addTask(x);
-		if (x.second.timeout < nextTimeout) {
-			nextTimeout = x.second.timeout;
-		}
-		queue.pop();
+	if (queue.empty()) {
+		return nullptr;
 	}
+	Task s = addTask(queue.front());
+	queue.pop();
 	return s;
 }
 
