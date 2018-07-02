@@ -25,11 +25,8 @@ LinuxEventDispatcher::LinuxEventDispatcher() {
 	intrHandle = fds[1];
 	intrWaitHandle = fds[0];
 
-	pollfd xfd;
-	xfd.fd = intrWaitHandle;
-	xfd.events = POLLIN;
-	xfd.revents = 0;
-	fdmap.push_back(xfd);
+
+	addIntrWaitHandle();
 
 	exitFlag = false;
 }
@@ -39,164 +36,156 @@ LinuxEventDispatcher::~LinuxEventDispatcher() noexcept {
 	close(intrWaitHandle);
 }
 
-void LinuxEventDispatcher::addTaskToQueue(int s, const CompletionFn &fn, int timeout, int event) {
-	TaskInfo nfo;
-	nfo.taskFn = fn;
-	nfo.timeout = timeout == -1?TimePoint::max():std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
-	nfo.org_timeout = timeout;
-	pollfd fd;
-	fd.fd = s;
-	fd.events = event;
-	fd.revents = 0;
+void LinuxEventDispatcher::addIntrWaitHandle() {
 
+	RefCntPtr<LinuxEventDispatcher> me(this);
+	auto completionFn = [me](AsyncState) {
+		char b;
+		::read(me->intrWaitHandle, &b, 1);
+
+		std::lock_guard<std::mutex> _(me->queueLock);
+		if (!me->queue.empty()) {
+			const RegReq &r = me->queue.front();
+			if (r.ares.socket == 0 && r.ares.socket == 0) {
+				r.extra.completionFn(asyncOK);
+			} else {
+				me->addResource(r);
+				me->queue.pop();
+			}
+		}
+		me->addIntrWaitHandle();
+	};
+
+	RegReq rq;
+	rq.ares = AsyncResource(intrWaitHandle, POLLIN);
+	rq.extra.completionFn = completionFn;
+	rq.extra.timeout = TimePoint::clock::now();
+
+}
+
+void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) {
+	RegReq req;
+	req.ares = resource;
+	req.extra.completionFn = complfn;
+	if (timeout < 0) req.extra.timeout = TimePoint::max();
+	else req.extra.timeout = TimePoint::clock::now() + std::chrono::milliseconds(timeout);
 
 	std::lock_guard<std::mutex> _(queueLock);
-	queue.push(TaskAddRequest(fd, nfo));
+	queue.push(req);
 	sendIntr();
 
-
 }
 
+void LinuxEventDispatcher::runAsync(const CustomFn &completion)  {
+	RegReq req;
+	req.extra.completionFn = [fn=CustomFn(completion)](AsyncState){fn();};
 
-LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
+	std::lock_guard<std::mutex> _(queueLock);
+	queue.push(req);
+	sendIntr();
+}
 
+void LinuxEventDispatcher::addResource(const RegReq &req) {
 
-	if (exitFlag) {
-		epilog();
-		return nullptr;
+	pollfd pfd;
+	pfd.events = req.ares.op;
+	pfd.fd = req.ares.socket;
+	pfd.revents = 0;
+	fdmap.push_back(pfd);
+	fdextramap.push_back(req.extra);
+	if (req.extra.timeout < nextTimeout) nextTimeout = req.extra.timeout;
+}
+void LinuxEventDispatcher::deleteResource(int index) {
+	int last = fdmap.size()-1;
+	if (index < last) {
+		std::swap(fdmap[index],fdmap[last]);
+		std::swap(fdextramap[index],fdextramap[last]);
 	}
-	Task ret;
+	fdmap.resize(last);
+	fdextramap.resize(last);
+}
 
-	TimePoint n = std::chrono::steady_clock::now();
-	auto tme = taskMap.end();
+static LinuxEventDispatcher::Task empty_task([](AsyncState){},asyncOK);
 
-	if (n > nextTimeout) {
+LinuxEventDispatcher::Task LinuxEventDispatcher::checkEvents(const TimePoint &now) {
+	if (last_checked >= static_cast<int>(fdmap.size())) {
+		last_checked = 0;
 		nextTimeout = TimePoint::max();
-		for (auto &&x : taskMap)
-			if (x.second.timeout < nextTimeout) nextTimeout = x.second.timeout;
 	}
 
-	auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - n);
-
-	int r = poll(fdmap.data(),fdmap.size(),int_ms.count());
-	if (r < 0) {
-		int e = errno;
-		if (e != EINTR && e != EAGAIN)
-			throw SystemException(e, "Failed to call poll()");
-	} else if (r == 0) {
-		n = std::chrono::steady_clock::now();
-		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; i++) {
-			auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
-			if (tmi != tme) {
-				if (n >= tmi->second.timeout) {
-					Task t = std::bind(tmi->second.taskFn,asyncTimeout);
-					removeTask(i,tmi);
-					return t;
-				}
-			}
-		}
-		return []{};
-	} else {
-		for (std::size_t i = 0, cnt = fdmap.size(); i < cnt; ++i) {
-			pollfd &fd = fdmap[i];
-			if (fd.revents) {
-				if (fd.fd == intrWaitHandle) {
-					fd.revents = 0;
-					unsigned char b;
-					int r = ::read(fd.fd,&b,1);
-					if (r==1) {
-						if (exitFlag) {
-							epilog();
-							return nullptr;
-						}
-						ret = runQueue();
-						if (ret == nullptr) return []{};
-						return ret;
-					}
-				} else {
-					auto tmi = taskMap.find(RKey(fdmap[i].fd,fdmap[i].events));
-					if (tmi != tme) {
-						Task t (std::bind(tmi->second.taskFn,asyncOK));
-						removeTask(i,tmi);
-						return t;
-					}
-				}
-			}
+	while (last_checked < static_cast<int>(fdmap.size())) {
+		int idx = last_checked++;
+		if (fdmap[idx].revents) {
+			Task t(fdextramap[idx].completionFn, asyncOK);
+			deleteResource(idx);
+			--last_checked;
+			return t;
+		} else if (fdextramap[idx].timeout<=now) {
+			Task t(fdextramap[idx].completionFn, asyncTimeout);
+			deleteResource(idx);
+			--last_checked;
+			return t;
+		} else if (fdextramap[idx].timeout<nextTimeout) {
+			nextTimeout = fdextramap[idx].timeout;
 		}
 	}
-	return []{};
+	return Task();
 }
 
+///returns true, if the listener doesn't contain any asynchronous task
+bool LinuxEventDispatcher::empty() const {
+	return fdmap.empty();
+}
 
 void LinuxEventDispatcher::stop() {
 	exitFlag = true;
 	sendIntr();
 }
 
-
-void LinuxEventDispatcher::removeTask(int index, TaskMap::iterator &iter) {
-	std::size_t end = fdmap.size()-1;
-	if ((unsigned int)index < fdmap.size()-1) {
-		std::swap(fdmap[index],fdmap[end]);
-	}
-	fdmap.resize(end);
-	taskMap.erase(iter);
-}
-
-void LinuxEventDispatcher::runAsync(const AsyncResource& resource, int timeout,const CompletionFn &complfn) {
-
-	int s = resource.socket;
-	int op = resource.op;
-	addTaskToQueue(s,complfn,timeout,op);
-
-}
-
-bool LinuxEventDispatcher::empty() const {
-	return taskMap.empty();
-}
-
 unsigned int LinuxEventDispatcher::getPendingCount() const {
-	std::lock_guard<std::mutex> _(queueLock);
-	return fdmap.size()-1;
-
+	return fdmap.size();
 }
 
-void LinuxEventDispatcher::epilog() {
-	std::lock_guard<std::mutex> _(queueLock);
-	taskMap.clear();
-	fdmap.clear();
-}
 
-LinuxEventDispatcher::Task LinuxEventDispatcher::addTask(const TaskAddRequest& req) {
-	if (req.first.fd == -1) {
-		CompletionFn fn(req.second.taskFn);
-		return [fn] {fn(asyncOK);};
+LinuxEventDispatcher::Task LinuxEventDispatcher::cleanup() {
+	if (!fdmap.empty()) {
+		int idx = fdmap.size()-1;
+		Task t(fdextramap[idx].completionFn, asyncError);
+		deleteResource(idx);
+		return t;
 	} else {
-		RKey kk(req.first.fd, req.first.events);
-		auto itr = taskMap.find(kk);
-		if (itr != taskMap.end()) {
-			//if task already exists
-			//update timeout to longest
-			itr->second.org_timeout = std::max(itr->second.org_timeout, req.second.org_timeout);
-			itr->second.timeout = std::max(itr->second.timeout, req.second.timeout);
-			//combine two functions into one
-			CompletionFn oldfn = itr->second.taskFn;
-			CompletionFn newfn = req.second.taskFn;
-			itr->second.taskFn = [=](AsyncState st) {
-				oldfn(st);
-				newfn(st);
-			};
-		} else {
-			fdmap.push_back(req.first);
-			taskMap.insert(std::make_pair(kk, req.second));
-		}
-		return nullptr;
+		return Task();
 	}
+
 }
 
-void LinuxEventDispatcher::runAsync(const CustomFn& customFn) {
-	CompletionFn completion([customFn=CustomFn(customFn)](AsyncState){customFn();});
-	addTaskToQueue(-1, completion,0,0);
+LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
+
+
+	if (exitFlag) {
+		return cleanup();
+	}
+
+	TimePoint now = std::chrono::steady_clock::now();
+	if (last_checked >= 0 || now > nextTimeout) {
+		Task x = checkEvents(now);
+		if (x != nullptr) return x;
+	}
+
+	auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - now);
+	int r = poll(fdmap.data(),fdmap.size(),int_ms.count());
+
+
+	if (r < 0) {
+		int e = errno;
+		if (e != EINTR && e != EAGAIN)
+			throw SystemException(e, "Failed to call poll()");
+	} else {
+		now = std::chrono::steady_clock::now();
+		Task x = checkEvents(now);
+		if (x != nullptr) return x;
+	}
+	return empty_task;
 }
 
 
@@ -210,21 +199,6 @@ void LinuxEventDispatcher::sendIntr() {
 
 PStreamEventDispatcher AbstractStreamEventDispatcher::create() {
 	return new LinuxEventDispatcher;
-}
-
-std::size_t LinuxEventDispatcher::HashRKey::operator ()(const RKey& key) const {
-	return key.first*16+key.second;
-}
-
-LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
-
-	std::lock_guard<std::mutex> _(queueLock);
-	if (queue.empty()) {
-		return nullptr;
-	}
-	Task s = addTask(queue.front());
-	queue.pop();
-	return s;
 }
 
 

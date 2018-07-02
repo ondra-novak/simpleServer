@@ -40,8 +40,45 @@ public:
 protected:
 
 	typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
-
 	typedef AsyncState WaitResult;
+	typedef std::vector<pollfd> FDMap;
+
+
+	struct FDExtra {
+		CompletionFn completionFn;
+		TimePoint timeout;
+	};
+
+	struct RegReq {
+		AsyncResource ares;
+		FDExtra extra;
+	};
+
+	typedef std::vector<FDExtra> FDExtraMap;
+	FDMap fdmap;
+	FDExtraMap fdextramap;
+
+
+	void addResource(const RegReq &req);
+	void deleteResource(int index);
+	void addIntrWaitHandle();
+	Task checkEvents(const TimePoint &now);
+
+	int intrHandle;
+	int intrWaitHandle;
+
+	bool exitFlag;
+	TimePoint nextTimeout =  TimePoint::max();
+	int last_checked = 0;
+
+
+	mutable std::mutex queueLock;
+	std::queue<RegReq> queue;
+	void sendIntr();
+
+	Task cleanup();
+
+/*
 
 
 
@@ -58,13 +95,12 @@ protected:
 	};
 
 
-	typedef std::vector<pollfd> FDMap;
-	typedef std::pair<int,int> RKey;
 	struct HashRKey {
 	public:
 		std::size_t operator()(const RKey &key) const;
+		bool operator()(const RKey &key,const RKey &key) const;
 	};
-	typedef std::unordered_map<RKey, TaskInfo, HashRKey> TaskMap;
+	typedef std::unordered_map<AsyncResource, TaskInfo, HashRKey, HashRKey> TaskMap;
 
 	FDMap fdmap;
 	TaskMap taskMap;
@@ -74,8 +110,6 @@ protected:
 
 	void removeTask(int index, TaskMap::iterator &it);
 
-	int intrHandle;
-	int intrWaitHandle;
 
 
 	typedef std::pair<pollfd, TaskInfo> TaskAddRequest;
@@ -87,7 +121,6 @@ protected:
 	std::queue<TaskAddRequest> queue;
 
 
-	void sendIntr();
 
 	void addTaskToQueue(int fd, const CompletionFn &fn, int timeout, int event);
 
@@ -98,7 +131,7 @@ protected:
 
 	Task runQueue();
 
-
+*/
 };
 
 } /* namespace simpleServer */

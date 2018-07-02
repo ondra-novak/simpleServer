@@ -90,7 +90,16 @@ public:
 class AbstractStreamEventDispatcher: public AbstractAsyncProvider {
 public:
 
-	typedef std::function<void()> Task;
+	class Task: public CompletionFn {
+	public:
+		Task() {}
+		Task(CompletionFn fn, AsyncState state):CompletionFn(fn),state(state) {}
+		void operator()() noexcept {
+			if (*this != nullptr) CompletionFn::operator ()(state);
+		}
+	protected:
+		AsyncState state;
+	};
 
 	virtual Task waitForEvent() = 0;
 
