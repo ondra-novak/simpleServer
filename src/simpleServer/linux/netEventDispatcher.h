@@ -62,7 +62,7 @@ protected:
 	void addResource(const RegReq &req);
 	void deleteResource(int index);
 	void addIntrWaitHandle();
-	Task checkEvents(const TimePoint &now);
+	Task checkEvents(const TimePoint &now, bool finish);
 
 	int intrHandle;
 	int intrWaitHandle;
@@ -77,6 +77,7 @@ protected:
 	void sendIntr();
 
 	Task cleanup();
+	Task runQueue();
 
 /*
 

@@ -16,6 +16,9 @@
 
 namespace simpleServer {
 
+static LinuxEventDispatcher::Task empty_task([](AsyncState){},asyncOK);
+
+
 LinuxEventDispatcher::LinuxEventDispatcher() {
 	int fds[2];
 	if (pipe2(fds, O_CLOEXEC)!=0) {
@@ -36,30 +39,30 @@ LinuxEventDispatcher::~LinuxEventDispatcher() noexcept {
 	close(intrWaitHandle);
 }
 
-void LinuxEventDispatcher::addIntrWaitHandle() {
+LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
+	std::lock_guard<std::mutex> _(queueLock);
+	char b;
+	::read(intrWaitHandle, &b, 1);
 
-	RefCntPtr<LinuxEventDispatcher> me(this);
-	auto completionFn = [me](AsyncState) {
-		char b;
-		::read(me->intrWaitHandle, &b, 1);
-
-		std::lock_guard<std::mutex> _(me->queueLock);
-		if (!me->queue.empty()) {
-			const RegReq &r = me->queue.front();
-			if (r.ares.socket == 0 && r.ares.socket == 0) {
-				r.extra.completionFn(asyncOK);
-			} else {
-				me->addResource(r);
-				me->queue.pop();
-			}
+	if (!queue.empty()) {
+		const RegReq &r = queue.front();
+		if (r.ares.socket == 0 && r.ares.socket == 0) {
+			return Task(r.extra.completionFn,asyncOK);
+		} else {
+			addResource(r);
+			queue.pop();
 		}
-		me->addIntrWaitHandle();
-	};
+	}
+	return Task();
+}
+
+void LinuxEventDispatcher::addIntrWaitHandle() {
 
 	RegReq rq;
 	rq.ares = AsyncResource(intrWaitHandle, POLLIN);
-	rq.extra.completionFn = completionFn;
-	rq.extra.timeout = TimePoint::clock::now();
+	rq.extra.completionFn = empty_task;
+	rq.extra.timeout = TimePoint::max();
+	addResource(rq);
 
 }
 
@@ -105,21 +108,28 @@ void LinuxEventDispatcher::deleteResource(int index) {
 	fdextramap.resize(last);
 }
 
-static LinuxEventDispatcher::Task empty_task([](AsyncState){},asyncOK);
 
-LinuxEventDispatcher::Task LinuxEventDispatcher::checkEvents(const TimePoint &now) {
-	if (last_checked >= static_cast<int>(fdmap.size())) {
+LinuxEventDispatcher::Task LinuxEventDispatcher::checkEvents(const TimePoint &now, bool finish) {
+	int sz = static_cast<int>(fdmap.size());
+	if (last_checked >= sz) {
+		if (finish) return Task();
 		last_checked = 0;
 		nextTimeout = TimePoint::max();
 	}
 
-	while (last_checked < static_cast<int>(fdmap.size())) {
+	while (last_checked < sz) {
 		int idx = last_checked++;
 		if (fdmap[idx].revents) {
-			Task t(fdextramap[idx].completionFn, asyncOK);
-			deleteResource(idx);
-			--last_checked;
-			return t;
+			if (fdmap[idx].fd == intrWaitHandle) {
+				Task t = runQueue();
+				fdmap[idx].revents = 0;
+				if (t != nullptr) return t;
+			} else {
+				Task t(fdextramap[idx].completionFn, asyncOK);
+				deleteResource(idx);
+				--last_checked;
+				return t;
+			}
 		} else if (fdextramap[idx].timeout<=now) {
 			Task t(fdextramap[idx].completionFn, asyncTimeout);
 			deleteResource(idx);
@@ -167,10 +177,8 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 	}
 
 	TimePoint now = std::chrono::steady_clock::now();
-	if (last_checked >= 0 || now > nextTimeout) {
-		Task x = checkEvents(now);
-		if (x != nullptr) return x;
-	}
+	Task x = checkEvents(now,true);
+	if (x != nullptr) return x;
 
 	auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(nextTimeout - now);
 	int r = poll(fdmap.data(),fdmap.size(),int_ms.count());
@@ -182,7 +190,7 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
 			throw SystemException(e, "Failed to call poll()");
 	} else {
 		now = std::chrono::steady_clock::now();
-		Task x = checkEvents(now);
+		x = checkEvents(now,false);
 		if (x != nullptr) return x;
 	}
 	return empty_task;
