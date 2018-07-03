@@ -54,6 +54,8 @@ public:
 
 	struct Config {
 		bool enableConsole = true;
+		bool enableWS = true;
+		bool enableDirect = true;
 		std::size_t maxReqSize = 0;
 	};
 
@@ -72,7 +74,11 @@ protected:
 	std::vector<Item> mapRecords;
 	String hostMapping;
 
+	bool enableDirect = true;
+	std::size_t direct_timeout;
+
 	void directRpcAsync(simpleServer::Stream s);
+	void directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx);
 
 
 };

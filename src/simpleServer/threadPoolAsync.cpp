@@ -8,10 +8,22 @@
 #include "exceptions.h"
 
 namespace simpleServer {
-
+using ondra_shared::defer;
 
 ThreadPoolAsyncImpl::~ThreadPoolAsyncImpl() {
 	stop();
+}
+
+void ThreadPoolAsyncImpl::cancel(const AsyncResource& resource) {
+	Sync _(lock);
+	auto sz = cQueue.size();
+	while (sz) {
+		PStreamEventDispatcher d = cQueue.front();
+		cQueue.pop();
+		d->cancel(resource);
+		cQueue.push(d);
+		--sz;
+	}
 }
 
 void ThreadPoolAsyncImpl::checkThreadCount() {
@@ -30,7 +42,7 @@ public:
 		:owner(owner)
 		,sed(sed) {}
 	void operator()() const {
-/*		auto t = sed->waitForEvent();
+/*		auto t = sed->wait();
 		if (t == nullptr) {
 			disp.quit();
 		} else {
@@ -45,12 +57,31 @@ protected:
 };
 
 
-void ThreadPoolAsyncImpl::waitForTask(const PStreamEventDispatcher &sed) noexcept {
-			auto t = sed->waitForEvent();
-			if (t == nullptr) {
+void ThreadPoolAsyncImpl::onExitDispatcher(const PStreamEventDispatcher &sed) noexcept {
+	Sync _(lock);
+	auto ccnt = cQueue.size();
+	for (decltype(ccnt) i = 0; i < ccnt; i++) {
+		const PStreamEventDispatcher &x = cQueue.front();
+		if (x == sed) {
+			cQueue.pop();
+			if (cQueue.empty()) {
 				dQueue.quit();
+			}
+			break;
+		} else {
+			cQueue.push(x);
+			cQueue.pop();
+		}
+	}
+
+}
+
+void ThreadPoolAsyncImpl::waitForTask(const PStreamEventDispatcher &sed) noexcept {
+			auto t = sed->wait();
+			if (t == nullptr) {
+				onExitDispatcher(sed);
 				return;
-			} else if (!sed->empty() || sed->isShared()) {
+			} else {
 				dQueue.dispatch(InvokeNetworkDispatcher(*this, sed));
 			}
 			t();
@@ -78,6 +109,12 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 
 
 void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
+
+	if (exitFlag) {
+		defer >> std::bind(fn, asyncCancel);
+		return;
+	}
+
 	unsigned int tries = 0;
 	auto retry = [&] {
 		Sync _(lock);
@@ -115,13 +152,16 @@ void ThreadPoolAsyncImpl::setCountOfThreads(unsigned int count) {
 
 void ThreadPoolAsyncImpl::stop() {
 
-	dQueue.quit();
 	{
 		Sync _(lock);
-		while (!cQueue.empty()) {
-			auto l = cQueue.front();
+		exitFlag = true;
+		auto sz = cQueue.size();
+		while (sz) {
+			PStreamEventDispatcher d = cQueue.front();
 			cQueue.pop();
-			l->stop();
+			cQueue.push(d);
+			d->stop();
+			--sz;
 		}
 	}
 	threadCount.wait();
@@ -146,6 +186,7 @@ void ThreadPoolAsyncImpl::worker() noexcept {
 
 		if (!dQueue.pump()) {
 			dQueue.quit();
+			defer_yield();
 			threadCount.dec();
 			return;
 		}
@@ -159,7 +200,7 @@ void ThreadPoolAsyncImpl::worker() noexcept {
 		}
 
 
-		auto t = lst->waitForEvent();
+		auto t = lst->wait();
 		tQueue.push(lst);
 		if (t == nullptr) {
 			threadCount.dec();
@@ -205,6 +246,12 @@ ThreadPoolAsync::~ThreadPoolAsync() {
 }
 
 void ThreadPoolAsyncImpl::runAsync(const CustomFn& completion) {
+
+	if (exitFlag) {
+		defer >> completion;
+		return;
+	}
+
 	if (reqThreadCount > reqDispatcherCount) {
 		checkThreadCount();
 		dQueue.dispatch(completion);

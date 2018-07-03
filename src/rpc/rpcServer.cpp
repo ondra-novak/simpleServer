@@ -164,14 +164,19 @@ void RpcHttpServer::addRPCPath(String path) {
 void RpcHttpServer::addRPCPath(String path, const Config &cfg) {
 	RpcHandler h(*this);
 	if (cfg.maxReqSize) h.setMaxReqSize(cfg.maxReqSize);
+	enableDirect = cfg.enableDirect;
 	h.enableConsole(cfg.enableConsole);
-	WebSocketHandlerWithContext ws(h);
-	auto h2 = [=](HTTPRequest req, StrViewA vpath) mutable {
-		if (!ws(req,vpath)) return h(req,vpath);
-		else return true;
-	};
+	if (cfg.enableWS) {
+		WebSocketHandlerWithContext ws(h);
+		auto h2 = [=](HTTPRequest req, StrViewA vpath) mutable {
+			if (!ws(req,vpath)) return h(req,vpath);
+			else return true;
+		};
+		mapRecords.push_back(Item(path,HTTPMappedHandler(h2)));
+	} else {
+		mapRecords.push_back(Item(path,HTTPMappedHandler(h)));
+	}
 
-	mapRecords.push_back(Item(path,HTTPMappedHandler(h2)));
 
 }
 
@@ -184,29 +189,51 @@ void RpcHttpServer::setHostMapping(const String &mapping) {
 	hostMapping = mapping;
 }
 
+
 void RpcHttpServer::directRpcAsync(Stream s) {
+	directRpcAsync2(s,new RpcConnContext);
+}
+void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx) {
 
 
-	PRpcConnContext ctx = new RpcConnContext;
+	auto sendFn =[=](Value v) {
+		try {
+			v.serialize(s);
+			s << "\n";
+			s.flush();
+			return true;
+		} catch (...) {
+			return false;
+		}
+
+	};
+
 
 	try {
-		s.setIOTimeout(-1);
-		Value jsonReq = Value::parse(s);
-		RpcRequest req = RpcRequest::create(jsonReq,[=](Value v) {
-			try {
-				v.serialize(s);
-				s << "\n";
-				s.flush();
-				return true;
-			} catch (...) {
-				return false;
-			}
-
-		}, RpcFlags::notify, ctx);
-		this->operator ()(req);
-		s.readAsync([=](simpleServer::AsyncState, const ondra_shared::BinaryView &b) {
+		BinaryView b = s.read(true);
+		while (!b.empty() && isspace(b[0])) b = b.substr(1);
+		if (!b.empty()) {
 			s.putBack(b);
-			directRpcAsync(s);
+			Value jsonReq = Value::parse(s);
+			RpcRequest req = RpcRequest::create(jsonReq,sendFn, RpcFlags::notify, ctx);
+			ctx->store("__last_jsonrpc_ver",req.getVersionField());
+			this->operator ()(req);
+		}
+		s.readAsync([=](simpleServer::AsyncState st, const ondra_shared::BinaryView &b) {
+			if (st == asyncTimeout) {
+				Value ver = ctx->retrieve("__last_jsonrpc_ver");
+				RpcRequest req = RpcRequest::create({Value(),Value(),Value(),Value(),ver},sendFn,RpcFlags::notify);
+				req.sendNotify("ping",Value());
+				s.readAsync([=](simpleServer::AsyncState st, const ondra_shared::BinaryView &b) {
+					if (st == asyncOK) {
+						s.putBack(b);
+						directRpcAsync2(s,ctx);
+					}
+				});
+			} else if (st == asyncOK) {
+				s.putBack(b);
+				directRpcAsync2(s,ctx);
+			}
 		});
 
 	} catch (...) {
@@ -225,20 +252,22 @@ void RpcHttpServer::start() {
 		reglist.push_back(k);
 	}
 	HttpStaticPathMapper hndl(std::move(reglist));
-	this->preHandler = [=](Stream s) {
-		try {
-			int b = s.peek();
-			if (b == '{') {//starting with RPC protocol
+	if (enableDirect) {
+		this->preHandler = [=](Stream s) {
+			try {
+				int b = s.peek();
+				if (b == '{') {//starting with RPC protocol
 
-				directRpcAsync(s);
+					directRpcAsync(s);
+					return true;
+				} else {
+					return false;
+				}
+			} catch (...) {
 				return true;
-			} else {
-				return false;
 			}
-		} catch (...) {
-			return true;
-		}
-	};
+		};
+	}
 	HostMappingHandler hostMap;
 	hostMap.setMapping(hostMapping);
 	HttpStaticPathMapperHandler stHandler(hndl);

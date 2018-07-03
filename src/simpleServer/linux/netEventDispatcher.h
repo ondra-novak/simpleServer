@@ -26,8 +26,10 @@ public:
 
 	virtual void runAsync(const CustomFn &completion) override;
 
+	virtual void cancel(const AsyncResource &resource) override;
 
-	virtual Task waitForEvent() override;
+
+	virtual Task wait() override;
 
 
 	///returns true, if the listener doesn't contain any asynchronous task
@@ -63,6 +65,7 @@ protected:
 	void deleteResource(int index);
 	void addIntrWaitHandle();
 	Task checkEvents(const TimePoint &now, bool finish);
+	Task findAndCancel(const AsyncResource &res);
 
 	int intrHandle;
 	int intrWaitHandle;
@@ -79,60 +82,6 @@ protected:
 	Task cleanup();
 	Task runQueue();
 
-/*
-
-
-
-
-	struct TaskInfo {
-		CompletionFn taskFn;
-		TimePoint timeout;
-		int org_timeout;
-		void swap(TaskInfo &other) {
-			std::swap(taskFn, other.taskFn);
-			std::swap(timeout, other.timeout);
-
-		}
-	};
-
-
-	struct HashRKey {
-	public:
-		std::size_t operator()(const RKey &key) const;
-		bool operator()(const RKey &key,const RKey &key) const;
-	};
-	typedef std::unordered_map<AsyncResource, TaskInfo, HashRKey, HashRKey> TaskMap;
-
-	FDMap fdmap;
-	TaskMap taskMap;
-	TimePoint nextTimeout =  TimePoint::max();
-	bool exitFlag;
-
-
-	void removeTask(int index, TaskMap::iterator &it);
-
-
-
-	typedef std::pair<pollfd, TaskInfo> TaskAddRequest;
-
-	Task addTask(const TaskAddRequest &req);
-
-
-	mutable std::mutex queueLock;
-	std::queue<TaskAddRequest> queue;
-
-
-
-	void addTaskToQueue(int fd, const CompletionFn &fn, int timeout, int event);
-
-
-	///clears all asynchronous tasks
-	void epilog();
-
-
-	Task runQueue();
-
-*/
 };
 
 } /* namespace simpleServer */

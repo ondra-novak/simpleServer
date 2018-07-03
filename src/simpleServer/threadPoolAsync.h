@@ -25,6 +25,7 @@ public:
 
 	virtual void stop() override;
 
+	virtual void cancel(const AsyncResource &resource) override;
 
 public:
 
@@ -45,6 +46,7 @@ protected:
 	unsigned int reqThreadCount = 1;
 	unsigned int taskLimit = -1;
 	Countdown threadCount;
+	bool exitFlag = false;
 	std::queue<PStreamEventDispatcher> cQueue;
 	std::mutex lock;
 	typedef std::lock_guard<std::mutex> Sync;
@@ -55,6 +57,7 @@ protected:
 	void worker() noexcept;
 	class InvokeNetworkDispatcher;
 	void waitForTask(const PStreamEventDispatcher &sed) noexcept;
+	void onExitDispatcher(const PStreamEventDispatcher &sed) noexcept;
 
 private:
 	void checkThreadCount();

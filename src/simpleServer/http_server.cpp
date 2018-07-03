@@ -83,13 +83,16 @@ void _intr::MiniServerImpl::runCycle() {
 		if (st == asyncOK) {
 			if (me->preHandler != nullptr) {
 				//preHandler defined, wait for first bytes
-				s.readAsync([=](AsyncState , BinaryView b) {
-					//put the buffer back - will be read by preHandler
-					s.putBack(b);
-					//try preHandler
-					if (!me->preHandler(s)) {
-						//if preHandler rejected request, continue with http
-						HTTPRequest::parseHttp(s, me->hndl, true);
+				s.readAsync([=](AsyncState st , BinaryView b) {
+
+					if (st == asyncOK) {
+						//put the buffer back - will be read by preHandler
+						s.putBack(b);
+						//try preHandler
+						if (!me->preHandler(s)) {
+							//if preHandler rejected request, continue with http
+							HTTPRequest::parseHttp(s, me->hndl, true);
+						}
 					}
 				});
 				me->runCycle();

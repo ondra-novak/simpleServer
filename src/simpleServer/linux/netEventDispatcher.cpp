@@ -12,9 +12,13 @@
 #include <unistd.h>
 
 #include "../exceptions.h"
+#include "../mt.h"
 #include "netEventDispatcher.h"
+#include "shared/defer.h"
 
 namespace simpleServer {
+
+using ondra_shared::defer;
 
 static LinuxEventDispatcher::Task empty_task([](AsyncState){},asyncOK);
 
@@ -48,6 +52,8 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 		const RegReq &r = queue.front();
 		if (r.ares.socket == 0 && r.ares.socket == 0) {
 			return Task(r.extra.completionFn,asyncOK);
+		} else if (r.extra.completionFn == nullptr) {
+			return findAndCancel(r.ares);
 		} else {
 			addResource(r);
 			queue.pop();
@@ -56,6 +62,27 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 	return Task();
 }
 
+LinuxEventDispatcher::Task LinuxEventDispatcher::findAndCancel(const AsyncResource &res) {
+	CompletionFn curFn = nullptr;
+	int cnt = (int)fdmap.size();
+	for (int i = 0; i < cnt; i++) {
+		if (fdmap[i].fd == res.socket && fdmap[i].events == res.op) {
+			if (curFn ==nullptr) curFn = fdextramap[i].completionFn;
+			else {
+				CompletionFn otherFn = fdextramap[i].completionFn;
+				curFn = [curFn,otherFn](AsyncState st) {
+					curFn(st);
+					otherFn(st);
+				};
+			}
+			deleteResource(i);
+			--i;
+			--cnt;
+		}
+	}
+	return Task(curFn,asyncCancel);
+
+}
 void LinuxEventDispatcher::addIntrWaitHandle() {
 
 	RegReq rq;
@@ -67,6 +94,11 @@ void LinuxEventDispatcher::addIntrWaitHandle() {
 }
 
 void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) {
+	if (exitFlag || complfn == nullptr) {
+		defer >> std::bind(complfn, asyncCancel);
+		return;
+	}
+
 	RegReq req;
 	req.ares = resource;
 	req.extra.completionFn = complfn;
@@ -80,6 +112,12 @@ void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, 
 }
 
 void LinuxEventDispatcher::runAsync(const CustomFn &completion)  {
+	if (exitFlag || completion == nullptr) {
+		defer >> completion;
+		return;
+	}
+
+
 	RegReq req;
 	req.extra.completionFn = [fn=CustomFn(completion)](AsyncState){fn();};
 
@@ -156,11 +194,21 @@ unsigned int LinuxEventDispatcher::getPendingCount() const {
 	return fdmap.size();
 }
 
+void LinuxEventDispatcher::cancel(const AsyncResource& resource) {
+	RegReq req;
+	req.ares = resource;
+	req.extra.completionFn = nullptr;
+
+	std::lock_guard<std::mutex> _(queueLock);
+	queue.push(req);
+	sendIntr();
+
+}
 
 LinuxEventDispatcher::Task LinuxEventDispatcher::cleanup() {
 	if (!fdmap.empty()) {
 		int idx = fdmap.size()-1;
-		Task t(fdextramap[idx].completionFn, asyncError);
+		Task t(fdextramap[idx].completionFn, asyncCancel);
 		deleteResource(idx);
 		return t;
 	} else {
@@ -169,7 +217,7 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::cleanup() {
 
 }
 
-LinuxEventDispatcher::Task LinuxEventDispatcher::waitForEvent() {
+LinuxEventDispatcher::Task LinuxEventDispatcher::wait() {
 
 
 	if (exitFlag) {
