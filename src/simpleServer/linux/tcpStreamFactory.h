@@ -2,7 +2,10 @@
 #include "../abstractStreamFactory.h"
 #include "../address.h"
 
+#pragma once
+
 namespace simpleServer {
+
 
 
 class TCPStreamFactory: public AbstractStreamFactory {
@@ -97,7 +100,7 @@ protected:
 protected:
 
 	int listenTimeout;
-	std::vector<int> openSockets;
+	std::vector<SocketObject> openSockets;
 	std::atomic<bool> cbrace;
 
 	class AsyncData;

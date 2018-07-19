@@ -21,7 +21,7 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 		cQueue.push(lst);
 		tQueue.push(lst);
 	}
-	while (threadCount.getCounter() < reqThreadCount) {
+	while (threadCount.getCounter() < static_cast<int>(reqThreadCount)) {
 		RefCntPtr<ThreadPoolAsyncImpl> me (this);
 		runThread([me]{me->worker();});
 		threadCount.inc();
@@ -120,9 +120,9 @@ void ThreadPoolAsyncImpl::worker() noexcept {
 
 		t();
 
-		if (threadCount.getCounter() > reqThreadCount) {
+		if (threadCount.getCounter() > static_cast<int>(reqThreadCount)) {
 			Sync _(lock);
-			if (threadCount.getCounter() > reqThreadCount) {
+			if (threadCount.getCounter() > static_cast<int>(reqThreadCount)) {
 				threadCount.dec();
 				return;
 			}
