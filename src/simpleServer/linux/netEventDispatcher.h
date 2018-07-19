@@ -24,16 +24,16 @@ public:
 
 	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
 
-	virtual void runAsync(const CompletionFn &completion) override;
+	virtual void runAsync(const CustomFn &completion) override;
+
+	virtual void cancel(const AsyncResource &resource) override;
 
 
-	virtual Task waitForEvent() override;
+	virtual Task wait() override;
 
 
 	///returns true, if the listener doesn't contain any asynchronous task
 	virtual bool empty() const override;
-	///Move all asynchronous tasks to different listener (must be the same type)
-	virtual void moveTo(AsyncProvider target) override;
 
 	virtual void stop() override;
 
@@ -42,65 +42,45 @@ public:
 protected:
 
 	typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
-
 	typedef AsyncState WaitResult;
-
-
-
-
-	struct TaskInfo {
-		CompletionFn taskFn;
-		TimePoint timeout;
-		int org_timeout;
-		void swap(TaskInfo &other) {
-			std::swap(taskFn, other.taskFn);
-			std::swap(timeout, other.timeout);
-
-		}
-	};
-
-
 	typedef std::vector<pollfd> FDMap;
-	typedef std::pair<int,int> RKey;
-	struct HashRKey {
-	public:
-		std::size_t operator()(const RKey &key) const;
+
+
+	struct FDExtra {
+		CompletionFn completionFn;
+		TimePoint timeout;
 	};
-	typedef std::unordered_map<RKey, TaskInfo, HashRKey> TaskMap;
 
+	struct RegReq {
+		AsyncResource ares;
+		FDExtra extra;
+	};
+
+	typedef std::vector<FDExtra> FDExtraMap;
 	FDMap fdmap;
-	TaskMap taskMap;
-	TimePoint nextTimeout =  TimePoint::max();
-	AsyncProvider moveToProvider;;
-	bool exitFlag;
+	FDExtraMap fdextramap;
 
 
-	void removeTask(int index, TaskMap::iterator &it);
+	void addResource(const RegReq &req);
+	void deleteResource(int index);
+	void addIntrWaitHandle();
+	Task checkEvents(const TimePoint &now, bool finish);
+	Task findAndCancel(const AsyncResource &res);
 
 	int intrHandle;
 	int intrWaitHandle;
 
-
-	typedef std::pair<pollfd, TaskInfo> TaskAddRequest;
-
-	Task addTask(const TaskAddRequest &req);
+	bool exitFlag;
+	TimePoint nextTimeout =  TimePoint::max();
+	int last_checked = 0;
 
 
 	mutable std::mutex queueLock;
-	std::queue<TaskAddRequest> queue;
-
-
+	std::queue<RegReq> queue;
 	void sendIntr();
 
-	void addTaskToQueue(int fd, const CompletionFn &fn, int timeout, int event);
-
-
-	///clears all asynchronous tasks
-	void epilog();
-
-
+	Task cleanup();
 	Task runQueue();
-
 
 };
 
