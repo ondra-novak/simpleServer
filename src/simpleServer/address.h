@@ -11,6 +11,8 @@ using ondra_shared::RefCntPtr;
 using ondra_shared::StrViewA;
 using ondra_shared::BinaryView;
 
+class SocketObject;
+
 class INetworkAddress: public RefCntObj {
 public:
 
@@ -25,6 +27,19 @@ public:
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const = 0;
 	virtual const INetworkAddress &unproxy() const = 0;
 
+	///Connects the socket to given address
+	/** Function creates socket and calls connect, but in non-blocking mode
+	 * You need to check state of the socket to determine, whether connect
+	 * has been successful
+	 *
+	 * @return socket prepared for connection
+	 */
+	virtual SocketObject connect() const = 0;
+
+
+	///Creates listening socket at given address
+
+	virtual SocketObject listen() const = 0;
 
 
 };
@@ -49,7 +64,7 @@ public:
 	RefCntPtr<INetworkAddress> getHandle() const {return addr;}
 
 	static NetAddr create(StrViewA addr, unsigned int defaultPort, AddressType type = IPvAll);
-	static NetAddr create(const BinaryView &sockAddr);
+	static NetAddr create(const BinaryView &sockAddr, int protocol = 0);
 
 	///Allows to combine multiple addresses into single NetAddr object.
 	/** The stream factories can use this multiple addresses as benefit while talking with other side.
@@ -61,6 +76,20 @@ public:
 	 * @return Object which contains multiple addresses. Each addres can be retrieved by function getNextAddr()
 	 */
 	NetAddr operator+ (const NetAddr &other) const;
+
+	///Connects the socket to given address
+	/** Function creates socket and calls connect, but in non-blocking mode
+	 * You need to check state of the socket to determine, whether connect
+	 * has been successful
+	 *
+	 * @return socket prepared for connection
+	 */
+	SocketObject connect() const;
+
+
+	///Creates listening socket at given address
+
+	SocketObject listen() const;
 
 protected:
 
