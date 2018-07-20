@@ -1,20 +1,13 @@
 #include <cstring>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <sys/un.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
  #include <arpa/inet.h>
-#include <unistd.h>
+#include "localAddr.h"
 #include "../address.h"
 
 #include "../exceptions.h"
 
 #include "../stringview.h"
-#include "socketObject.h"
-#include "localAddr.h"
-#include "../realpath.h"
 
 using ondra_shared::StringView;
 
@@ -28,10 +21,6 @@ public:
 	virtual std::string toString(bool resolve = false) const override;
 	virtual BinaryView toSockAddr() const override;
 	virtual RefCntPtr<INetworkAddress> getNextAddr() const override;
-
-	virtual SocketObject connect() const override;
-	virtual SocketObject listen() const override;
-
 
 	~AddressAddrInfo() {
 		if (addr) freeaddrinfo(addr);
@@ -72,61 +61,16 @@ RefCntPtr<INetworkAddress> AddressAddrInfo::getNextAddr() const
 	else return nullptr;
 }
 
-SocketObject AddressAddrInfo::connect() const {
-	SocketObject s(socket(addr->ai_family, SOCK_STREAM, addr->ai_protocol));
-	if (!s) throw SystemException(errno,"Failed to create socket");
-	int nblock = 1;ioctl(s, FIONBIO, &nblock);
-	::connect(s, reinterpret_cast<const struct sockaddr *>(addr->ai_addr),addr->ai_addrlen);
-	return s;
-}
-SocketObject AddressAddrInfo::listen() const {
-	SocketObject s(socket(addr->ai_family, SOCK_STREAM, addr->ai_protocol));
-	if (!s) throw SystemException(errno,"Failed to create socket");
-	int enable = 1;
-	(void)setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
-	if (addr->ai_family == AF_INET6)
-		(void)setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(int));
-	(void)ioctl(s, FIONBIO, &enable);
-	if (::bind(s, reinterpret_cast<const struct sockaddr *>(addr->ai_addr),addr->ai_addrlen) == -1) {
-		int e = errno;
-		throw SystemException(e,"Cannot bind socket to port:" + this->toString(false));
-	}
-	if (::listen(s,SOMAXCONN) == -1) {
-		int e = errno;
-		throw SystemException(e,"Cannot activate listen mode on the socket:" + this->toString(false));
-	}
-	return s;
-}
 
-
-class AddressSockAddr: public AddressAddrInfo {
+class AddressSockAddr: public INetworkAddress {
 public:
 
-	static addrinfo *convert_to_addrinfo(AddressSockAddr *me, const struct sockaddr *sa, int len, int protocol) {
-		me->addr.ai_addr = reinterpret_cast<sockaddr *>(me->data);
-		me->addr.ai_addrlen = len;
-		me->addr.ai_canonname = 0;
-		me->addr.ai_family = sa->sa_family;
-		me->addr.ai_flags = 0;
-		me->addr.ai_next = 0;
-		me->addr.ai_protocol = protocol;
-		me->addr.ai_socktype= SOCK_STREAM;
-		std::memcpy(me->data, sa, len);
-		return &me->addr;
+	AddressSockAddr(const struct sockaddr *sa, int len):len(len) {
+		std::memcpy(&this->sa, sa, len);
 	}
-
-
-
-	AddressSockAddr(const struct sockaddr *sa, int len, int protocol)
-		:AddressAddrInfo(convert_to_addrinfo(this,sa,len,protocol)) {}
-
-	~AddressSockAddr() {
-		AddressAddrInfo::addr = nullptr;
-	}
-
 
 	void *operator new(std::size_t sz, const int &salen) {
-		std::size_t totalsz = sz-16+salen;
+		std::size_t totalsz = sz+salen;
 		return ::operator new(totalsz);
 	}
 
@@ -138,10 +82,19 @@ public:
 		::operator delete(ptr);
 	}
 
-protected:
-	addrinfo addr;
-	char data[16];
+	virtual std::string toString(bool resolve) const override;
+	virtual BinaryView toSockAddr() const override;
 
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const override {
+		return nullptr;
+	}
+	virtual const INetworkAddress &unproxy() const override {return *this;}
+
+
+
+protected:
+	int len;
+	sockaddr sa;
 };
 
 
@@ -236,7 +189,7 @@ static NetAddr createUnixAddress(StrViewA file) {
 	}
 
 
-	return NetAddr(new NetAddrSocket(realpath(file),perms));
+	return NetAddr(new NetAddrSocket(file,perms));
 }
 
 
@@ -260,9 +213,6 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 
 	if (addr.substr(0,7) == "unix://" && addr.length>8) {
 		return createUnixAddress(addr.substr(6+(addr[7]=='.'?1:0)));
-	}
-	if (addr.substr(0,5) == "unix:" && addr.length>5) {
-		return createUnixAddress(addr.substr(5));
 	}
 
 	struct addrinfo req, *result;
@@ -370,13 +320,34 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 	return PNetworkAddress::staticCast(RefCntPtr<AddressAddrInfo>(new AddressAddrInfo(result)));
 }
 
-NetAddr NetAddr::create(const BinaryView &addr, int protocol) {
+NetAddr NetAddr::create(const BinaryView &addr) {
 	return  PNetworkAddress::staticCast(RefCntPtr<AddressSockAddr>(
-			new(addr.length) AddressSockAddr(reinterpret_cast<const struct sockaddr *>(addr.data),addr.length, protocol)));
+			new(addr.length) AddressSockAddr(reinterpret_cast<const struct sockaddr *>(addr.data),addr.length)));
 }
 
 
 
+std::string AddressSockAddr::toString(bool resolve) const {
+	char namebuff[1024];
+	char svcbuff[1024];
+	int res = getnameinfo(&sa, len, namebuff+1, sizeof(namebuff)-3, svcbuff,sizeof(svcbuff),
+			resolve?0:(NI_NUMERICHOST|NI_NUMERICSERV));
+	if (res != 0) {
+		throw GaiError(res);
+	}
+	char *n = namebuff+1;
+	if (strchr(n,':') != 0) {
+		namebuff[0] = '[';
+		strcat(namebuff,"]");
+		n = namebuff;
+	}
+	strcat(n,":");
+	return std::string(n).append(svcbuff);
+}
+
+BinaryView AddressSockAddr::toSockAddr() const {
+	return BinaryView(reinterpret_cast<const unsigned char *>(&sa), len);
+}
 
 class ChainedNetworkAddr: public INetworkAddress {
 public:
@@ -402,10 +373,6 @@ public:
 
 	virtual const INetworkAddress &unproxy() const override {return (slave.getHandle())->unproxy();}
 
-	virtual SocketObject connect() const override  {return slave.connect();}
-	virtual SocketObject listen() const override {return slave.listen();}
-
-
 protected:
 	NetAddr master, slave, next;
 
@@ -424,16 +391,5 @@ RefCntPtr<INetworkAddress> NetAddr::getNextAddr() const {
 }
 
 
-
-SocketObject NetAddr::connect() const {
-	return addr->connect();
 }
 
-SocketObject NetAddr::listen() const {
-	return addr->listen();
-}
-
-
-int invalidSocketValue = -1;
-
-}

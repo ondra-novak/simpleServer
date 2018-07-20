@@ -1,7 +1,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/tcp.h>
-#include <netinet/in.h>
 #include "tcpStream.h"
 #include "async.h"
 
@@ -75,22 +74,9 @@ void TCPStream::implCloseOutput() {
 	shutdown(sck, SHUT_WR);
 }
 
-static void disableNagle(int socket) {
-	int flag = 1;
-	(void)setsockopt(socket,            /* socket affected */
-	                        IPPROTO_TCP,     /* set option at TCP level */
-	                        TCP_NODELAY,     /* name of option */
-	                        (char *) &flag,  /* the cast is historical cruft */
-	                        sizeof(int));    /* length of option value */
-
-}
-
-
 TCPStream::TCPStream(int sck, int iotimeout, const NetAddr& peer)
 	:sck(sck),iotimeout(iotimeout),peer(peer)
 {
-	disableNagle(sck);
-
 }
 
 BinaryView TCPStream::implRead(MutableBinaryView buffer, bool nonblock) {

@@ -23,8 +23,6 @@
 #include "localAddr.h"
 #include <csignal>
 
-using ondra_shared::Handle;
-
 namespace simpleServer {
 
 
@@ -59,12 +57,32 @@ StreamFactory TCPConnect::create(NetAddr target,
 }
 
 
+static void disableNagle(int socket) {
+	int flag = 1;
+	int result = setsockopt(socket,            /* socket affected */
+	                        IPPROTO_TCP,     /* set option at TCP level */
+	                        TCP_NODELAY,     /* name of option */
+	                        (char *) &flag,  /* the cast is historical cruft */
+	                        sizeof(int));    /* length of option value */
+	 if (result < 0) {
+		 int e = errno;
+		 throw SystemException(e, "Unable to setup socket (TCP_NODELAY)");
+	 }
+
+}
 
 
+typedef RAII<int, decltype(&::close), &::close> RAIISocket;
 
-static SocketObject connectSocket(const NetAddr &addr) {
-
-	SocketObject s = addr.connect();
+static RAIISocket connectSocket(const NetAddr &addr, int &r) {
+	BinaryView b = addr.toSockAddr();
+	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
+	bool isip = sa->sa_family==AF_INET||sa->sa_family == AF_INET6;
+	RAIISocket s(socket(sa->sa_family, SOCK_STREAM,  isip?IPPROTO_TCP:0));
+	if (s == -1) throw SystemException(errno);
+	int nblock = 1;ioctl(s, FIONBIO, &nblock);
+	if (isip) disableNagle(s);
+	r = ::connect(s, sa, b.length);
 	return s;
 }
 
@@ -119,32 +137,36 @@ Stream TCPConnect::create() {
 		bool isNext;
 
 		do {
+			int r;
 			connAdr = t;
 
 			auto a = t.getNextAddr();
 			isNext = a != nullptr;
 			t = a;
 
-			errno = 0;
-			auto s = connectSocket(connAdr);
+			auto s = connectSocket(connAdr,r);
 
 
-			int e = errno;
-			if (e != 0 && e != EWOULDBLOCK && e != EINTR && e != EAGAIN && e != EINPROGRESS) {
-				throw SystemException(e,"Error connecting socket");
+			if (r == 0) {
+				selectedSocket = s.detach();
+			} else if (r == -1) {
+				int e = errno;
+				if (e != EWOULDBLOCK && e != EINTR && e != EAGAIN && e != EINPROGRESS) {
+					throw SystemException(e,"Error connecting socket");
+				}
+				pollfd fd;
+				fd.fd = s.detach();
+				fd.events = POLLOUT;
+				fd.revents = 0;
+				sockets.push_back(fd);
+
+				try {
+					selectedSocket = waitForSockets(sockets, 1000);
+				} catch (...) {
+					if (!isNext) throw;
+				}
+
 			}
-			pollfd fd;
-			fd.fd = s.detach();
-			fd.events = POLLOUT;
-			fd.revents = 0;
-			sockets.push_back(fd);
-
-			try {
-				selectedSocket = waitForSockets(sockets, 1000);
-			} catch (...) {
-				if (!isNext) throw;
-			}
-
 
 
 
@@ -156,7 +178,6 @@ Stream TCPConnect::create() {
 		for (auto &&x:sockets) {
 			if (x.fd != selectedSocket) close(x.fd);
 		}
-
 
 		return new TCPStream(selectedSocket, ioTimeout,connAdr);
 
@@ -194,8 +215,70 @@ StreamFactory TCPListen::create(bool localhost, unsigned int port,
 
 }
 
-static SocketObject listenSocket(const NetAddr &addr) {
-	SocketObject s = addr.listen();
+static int listenSocket(const NetAddr &addr) {
+	const INetworkAddress &naddr = addr.getHandle()->unproxy();
+	const NetAddrSocket *saddr = dynamic_cast<const NetAddrSocket *>(&naddr);
+	BinaryView b = addr.toSockAddr();
+	const struct sockaddr *sa = reinterpret_cast<const struct sockaddr *>(b.data);
+	int s;
+	if (saddr) {
+		struct stat buf;
+		const char *path = saddr->getPath();
+		if (stat(path, &buf) == 0) {
+			if (buf.st_mode & S_IFSOCK) {
+				unlink(path);
+			}
+		}
+
+		s = socket(sa->sa_family, SOCK_STREAM, 0);
+		if (s < 0) {
+			int e = errno;
+			throw SystemException(e,"failed to create socket");
+		}
+		if (::bind(s,sa,b.length)== -1) {
+			int e = errno;
+			close(s);
+			throw SystemException(e,"Cannot bind socket to port");
+		}
+		auto perms = saddr->getPermissions();
+		if (perms) {
+			if (chmod(path,perms) == -1) {
+				int e = errno;
+				close(s);
+				throw SystemException(e,"cannot change permissions of the socket");
+			}
+		}
+	} else {
+		s = socket(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
+		if (s < 0) {
+			int e = errno;
+			throw SystemException(e,"failed to create socket");
+		}
+		int enable = 1;
+		if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+		{
+			int e = errno;
+			close(s);
+			throw SystemException(e,"setsockopt(SO_REUSEADDR) failed");
+		}
+		if (sa->sa_family == AF_INET6 && setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(int)) < 0)
+		{
+			int e = errno;
+			close(s);
+			throw SystemException(e,"setsockopt(IPV6_V6ONLY) failed");
+		}
+		if (::bind(s, sa, b.length) == -1) {
+			int e = errno;
+			close(s);
+			throw SystemException(e,"Cannot bind socket to port");
+		}
+	}
+	int nblock = 1;ioctl(s, FIONBIO, &nblock);
+	if (::listen(s,SOMAXCONN) == -1) {
+		int e = errno;
+		close(s);
+		throw SystemException(e,"Cannot activate listen mode on the socket");
+	}
 	return s;
 }
 
@@ -204,7 +287,9 @@ TCPListen::TCPListen(NetAddr source, int listenTimeout, int ioTimeout):TCPStream
 	NetAddr t = source;
 	bool hasNext = true;
 	do {
-		openSockets.push_back(listenSocket(t));
+
+		int s = listenSocket(t);
+		openSockets.push_back(s);
 		auto a = t.getNextAddr();
 		hasNext = a != nullptr;
 		t = a;
@@ -267,6 +352,8 @@ static Stream acceptConnect(int s, int iotimeout) {
 	//non blocking because multiple threads can try to claim the socket
 	int a = accept4(s, sa, &slen, SOCK_NONBLOCK|SOCK_CLOEXEC);
 	if (a > 0) {
+		if (sa->sa_family == AF_INET || sa->sa_family == AF_INET6)
+			disableNagle(a);
 		NetAddr addr = NetAddr::create(BinaryView(reinterpret_cast<const unsigned char *>(&sa), slen));
 		return new TCPStream(a,iotimeout, addr);
 	} else {
@@ -325,6 +412,7 @@ Stream TCPListen::create() {
 
 TCPListen::~TCPListen() noexcept {
 	asyncData = nullptr;
+	for(auto &&x:openSockets)close(x);
 	openSockets.clear();
 }
 
@@ -365,74 +453,86 @@ struct ConnectShared {
 
 static void connectAsyncCycle(const AsyncProvider& provider, const NetAddr &addr, std::shared_ptr<ConnectShared> shared) {
 
+	int r;
 	//receive this addr
 	NetAddr thisAddr(addr);
 	AsyncProvider p(provider);
 
-	errno = 0;
+	RAIISocket sock = connectSocket(addr,r);
+	//if error in connect
+	if (r) {
+		//if not wouldblock
+		int e = errno;
+		//create socket
+		std::shared_ptr<RAIISocket> s(new RAIISocket(std::move(sock)));
 
-	SocketObject sock = connectSocket(addr);
-	//if not wouldblock
-	int e = errno;
-	//create socket
-	std::shared_ptr<SocketObject> s(new SocketObject(std::move(sock)));
-
-	if (e != EINPROGRESS && e != EWOULDBLOCK && e != EAGAIN && e != 0) {
-		//throw exception
-		throw SystemException(e, "Connect failed");
-	}
-
-	auto fnLong = [=](AsyncState st) {
-		//in case of OK
-		if (st == asyncOK) {
-			bool exp = false;
-			//check whether still waiting for connection
-			if (shared->finished.compare_exchange_strong(exp,true)) {
-				//if yes, create stream
-				Stream sx = new TCPStream(s->detach(), shared->iotimeout, thisAddr);
-				//give the result to the callback function
-				sx.setAsyncProvider(provider);
-				shared->cb(st, sx);
-			}
-			//otherwise nothing here
-		} else if (st == asyncError) {
-			shared->cError = std::current_exception();
+		if (e != EINPROGRESS && e != EWOULDBLOCK && e != EAGAIN) {
+			//throw exception
+			throw SystemException(e, "Connect failed");
 		}
-		shared->dec_pending();
-	};
-	//declare callback
-	auto fnShort = [=](AsyncState st) {
-		//in case of OK
-		if (st == asyncOK) {
-			fnLong(st);
-		} else  {
-			//connect has longPart and shortPart/
-			//in case of shortPart, create connection to next address
-			auto nx = thisAddr.getNextAddr();
-			//cycle addresses
-			while (nx != nullptr) {
-				try {
-					//recursively call connect for next address (in shortPart)
-					connectAsyncCycle(p,nx,shared);
-					//break
-					break;
-				} catch (...) {
-					//if exception, store it
-					shared->cError = std::current_exception();
-					//get next address
-					nx = NetAddr(nx).getNextAddr();
+
+		auto fnLong = [=](AsyncState st) {
+			//in case of OK
+			if (st == asyncOK) {
+				bool exp = false;
+				//check whether still waiting for connection
+				if (shared->finished.compare_exchange_strong(exp,true)) {
+					//if yes, create stream
+					Stream sx = new TCPStream(s->detach(), shared->iotimeout, thisAddr);
+					//give the result to the callback function
+					sx.setAsyncProvider(provider);
+					shared->cb(st, sx);
+				}
+				//otherwise nothing here
+			} else if (st == asyncError) {
+				shared->cError = std::current_exception();
+			}
+			shared->dec_pending();
+		};
+		//declare callback
+		auto fnShort = [=](AsyncState st) {
+			//in case of OK
+			if (st == asyncOK) {
+				fnLong(st);
+			} else  {
+				//connect has longPart and shortPart/
+				//in case of shortPart, create connection to next address
+				auto nx = thisAddr.getNextAddr();
+				//cycle addresses
+				while (nx != nullptr) {
+					try {
+						//recursively call connect for next address (in shortPart)
+						connectAsyncCycle(p,nx,shared);
+						//break
+						break;
+					} catch (...) {
+						//if exception, store it
+						shared->cError = std::current_exception();
+						//get next address
+						nx = NetAddr(nx).getNextAddr();
+					}
+				}
+				if (st == asyncTimeout) {
+					shared->inc_pending();
+					p->runAsync(AsyncResource(*s, POLLOUT), shared->timeout, fnLong);
 				}
 			}
-			if (st == asyncTimeout) {
-				shared->inc_pending();
-				p->runAsync(AsyncResource(*s, POLLOUT), shared->timeout, fnLong);
-			}
-		}
-		shared->dec_pending();
-	};
+			shared->dec_pending();
+		};
 
-	shared->inc_pending();
-	p->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
+		shared->inc_pending();
+		p->runAsync(AsyncResource(*s,POLLOUT), 1000, fnShort);
+	} else {
+		bool exp = false;
+		//create socket
+		std::shared_ptr<RAIISocket> s(new RAIISocket(std::move(sock)));
+
+		if (shared->finished.compare_exchange_strong(exp,true)) {
+			Stream sx = new TCPStream(s->detach(), shared->timeout, thisAddr);
+			sx.setAsyncProvider(provider);
+			shared->cb(asyncOK, sx);
+		}
+	}
 }
 
 
@@ -444,7 +544,7 @@ void TCPConnect::createAsync(const AsyncProvider &provider, const Callback &cb) 
 
 class TCPListen::AsyncData: public RefCntObj {
 public:
-	AsyncData(TCPListen &owner):owner(owner),idleSockets(owner.openSockets.begin(), owner.openSockets.end()) {
+	AsyncData(TCPListen &owner):owner(owner),idleSockets(owner.openSockets) {
 	}
 
 

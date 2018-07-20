@@ -239,8 +239,9 @@ int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 		if (checkPidFile()) return 255;
 		mother = TCPListen::create(createNetAddr(),-1,30000);
 
+		ServiceControl me(this);
 		addCommand("stop",[=](ArgList, Stream sx) {
-			this->stop();
+			me.stop();
 			waitEnd.push(sx);
 			return getpid();
 		});
@@ -292,7 +293,7 @@ void LinuxService::sendExitCode(int code) {
 
 
 NetAddr LinuxService::createNetAddr() {
-	std::string netpath = "unix:";
+	std::string netpath = "unix://";
 	netpath.append(controlFile.data(), controlFile.length());
 	netpath.append(":666");
 	return NetAddr::create(netpath,0,NetAddr::IPvAll);
