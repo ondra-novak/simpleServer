@@ -3,6 +3,16 @@
 namespace simpleServer {
 
 
+bool CmpHeaderKeys::operator()(StrViewA a, StrViewA b) const {
+	auto l = std::min(a.length, b.length);
+	for (auto k = l-l; k < l; k++) {
+		char al = tolower(a[k]);
+		char bl = tolower(b[k]);
+		if (al < bl) return true;
+		if (al > bl) return false;
+	}
+	return  (a.length < b.length);
+}
 
 ReceivedHeaders::HdrMap::const_iterator ReceivedHeaders::begin() const {
 	return hdrMap.begin();

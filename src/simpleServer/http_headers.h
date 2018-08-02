@@ -15,6 +15,11 @@ using ondra_shared::StringPool;
 using ondra_shared::StringView;
 
 
+struct CmpHeaderKeys {
+	bool operator()(StrViewA a, StrViewA b) const;
+};
+
+
 ///The class parses and stores headers read from the stream
 /**
  * It expects that every header block contains a first line which carries request or status, followed by
@@ -28,7 +33,8 @@ using ondra_shared::StringView;
 class ReceivedHeaders {
 public:
 
-	typedef std::map<StrViewA, HeaderValue> HdrMap;
+
+	typedef std::map<StrViewA, HeaderValue, CmpHeaderKeys> HdrMap;
 
 	///Begin of the headers
 	HdrMap::const_iterator begin() const;
