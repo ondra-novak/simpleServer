@@ -187,7 +187,7 @@ public:
 	HeaderValue operator[](StrViewA key) const;
 protected:
 	typedef StringPool<char> Pool;
-	typedef std::map<Pool::String, Pool::String> HdrMap;
+	typedef std::map<Pool::String, Pool::String, CmpHeaderKeys> HdrMap;
 
 
 
