@@ -22,7 +22,7 @@ Resource client_index_html = {
 	<div class="label" id="label"> Command: </div>
 	<div class="input_outer">
 		<div class="quickhelp empty	" id="quickhelp"></div>
-		<div class="input" id="input" contenteditable="true"></div>
+        <div class="input" id="input" contenteditable="true"></div>
 		<menu class="mainmenu" id="mainmenu">
 			<li id="clearWorkspace">Clear workspace</li>
 			<li class="separator"></li>
@@ -91,7 +91,7 @@ function start() {
 	}
 	input.addEventListener("keydown", function(ev) {
 		var x = ev.which || ev.keyCode;
-		if (x == 13 && !ev.getModifierState("Control")) {
+		if (x == 13 && !ev.getModifierState("Shift")) {
 			hideHelp();
 			tabhelp.classList.add("hidden");
 			ev.preventDefault();
@@ -114,6 +114,9 @@ function start() {
 				tabhelp.classList.remove("hidden");
 			}
 		}
+	});
+	input.addEventListener("input", function() {
+		removeHTML(input);
 	});
 	sendbutt.addEventListener("click",function() {
 		sendCommand(rpc, input.innerText).then(function(){			
@@ -175,6 +178,34 @@ function start() {
 
 }
 
+
+function removeHTML(elem) {
+	var hasHTML = elem.firstElementChild;
+	if (!hasHTML) return;
+	if (elem.dataset.removeHtmlRecursiveCall) return;
+	elem.dataset.removeHtmlRecursiveCall = 1;
+	var selection="<?!krles!?>"
+
+	document.execCommand("insertText",false,selection);
+	var text = elem.innerText;
+    var selofs = text.indexOf(selection);
+	document.execCommand("undo");
+	text = elem.innerText;
+	var re = new RegExp(String.fromCharCode(160), "g");
+	text = text.replace(re, " ");
+	while (elem.firstChild) elem.removeChild(elem.firstChild);
+    var tnode = document.createTextNode(text);
+	elem.appendChild(tnode);
+	if (selofs >= 0) {
+    	var range = document.createRange();
+		range.setStart(tnode,selofs);
+		range.setEnd(tnode,selofs);
+		var docsel = document.getSelection();
+		docsel.removeAllRanges();
+		docsel.addRange(range);
+	}
+	delete elem.dataset.removeHtmlRecursiveCall;
+}
 
 function hideMainMenu() {
 		panelcontrol.classList.remove("menu_visible");

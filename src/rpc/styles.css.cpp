@@ -113,7 +113,9 @@ border: 1px solid black;
 background-color:#222;
 padding: 5px;
 min-height: 1em;
+white-space: pre-wrap;
 }
+
 
 json-string {
 	color: #AAFFAA;
