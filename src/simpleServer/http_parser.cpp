@@ -844,6 +844,39 @@ StrViewA HTTPRequestData::getHost() const {
 	return host;
 }
 
+template<typename It>
+bool HTTPRequestData::allowMethodsImpl(const It &beg,const It &end) {
+	StrViewA m = getMethod();
+	std::size_t chrs = 0;
+	for (auto it = beg; it != end; ++it) {
+		StrViewA n = *it;
+		chrs+=n.length+2;
+		if (n.length == m.length) {
+			std::size_t i = 0;
+			while (i < n.length && toupper(m[i]) == toupper(n[i]))
+				++i;
+			if (i == n.length) return true;
+		}
+	}
+
+	bool sep = false;
+	std::string allowValue;
+	allowValue.reserve(chrs);
+	for (auto it = beg; it != end; ++it) {
+		if (sep) allowValue.append(", ");
+		else sep = true;
+		StrViewA n = *it;
+		allowValue.append(n.data, n.length);
+	}
+	sendResponse(HTTPResponse(405)("Allow",allowValue).contentLength(0));
+	return false;
+}
+
+
+bool HTTPRequestData::allowMethods(std::initializer_list<StrViewA> methods) {
+	return allowMethodsImpl(methods.begin(),methods.end());
+}
+
 
 }
 

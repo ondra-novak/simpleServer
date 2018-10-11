@@ -118,6 +118,19 @@ public:
 	 * @return String contains method name: GET, PUT, POST, OPTIONS, etc
 	 */
 	StrViewA getMethod() const;
+
+
+	///Defines allowed methods
+	/** Function uses getMethod() to retrieve current method. If
+	 * the method is not in the list, it generates the error response 405
+	 * Method Not Allowed, and returns false
+	 *
+	 * @param methods list of allowed methods
+	 * @retval true pass
+	 * @retval false not pass, function generated response 405. Request
+	 * is finished
+	 */
+	bool allowMethods(std::initializer_list<StrViewA> methods);
 	///Retrieves path
 	/**
 	 * @return string contains path from the request line (raw)
@@ -313,7 +326,8 @@ protected:
 
 	void readBodyAsync_cont1(std::size_t maxSize, HTTPHandler completion);
 
-
+	template<typename It>
+	bool allowMethodsImpl(const It &beg, const It &end);
 
 };
 
@@ -348,6 +362,11 @@ public:
 	 * @return String contains method name: GET, PUT, POST, OPTIONS, etc
 	 */
 	StrViewA getMethod() const {return ptr->getMethod();}
+
+	bool allowMethods(std::initializer_list<StrViewA> methods) {
+		return ptr->allowMethods(methods);
+	}
+
 	///Retrieves path
 	/**
 	 * @return string contains path from the request line (raw)
