@@ -476,7 +476,7 @@ public:
 	protected:
 		AsyncState state;
 		BinaryView data;
-		Fn(fn);
+		Fn fn;
 
 	};
 
