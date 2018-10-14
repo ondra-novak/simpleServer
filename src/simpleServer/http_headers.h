@@ -134,6 +134,10 @@ public:
 		 */
 	SendHeaders &&request(StrViewA str);
 
+	SendHeaders &&cacheFor(std::size_t seconds);
+
+	SendHeaders &&eTag(StrViewA str);
+
 
 	///Clear content of object
 	void clear();

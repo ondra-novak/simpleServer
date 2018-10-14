@@ -68,7 +68,7 @@ protected:
 			RefCntPtr<LimitedStream> me(this);
 			Callback ccb(cb);
 			source.readAsync([=](AsyncState st, const BinaryView &b) {
-				BinaryView x = b.substr(me->readLimit);
+				BinaryView x = b.substr(0,me->readLimit);
 				source.putBack(b.substr(x.length));
 				me->readLimit-=x.length;
 				ccb(st, x);

@@ -1,3 +1,4 @@
+#include <cstring>
 #include "http_headers.h"
 
 namespace simpleServer {
@@ -160,6 +161,17 @@ SendHeaders&& SendHeaders::request(StrViewA str) {
 	firstLine = pool.add(str);
 	return std::move(*this);
 }
+
+SendHeaders &&SendHeaders::cacheFor(std::size_t seconds) {
+	char buffer[100] = "max-age=";
+	char *e = putNumber(buffer+strlen(buffer),seconds,true);
+	return operator()("Cache-Control", StrViewA(buffer, e-buffer));
+}
+
+SendHeaders &&SendHeaders::eTag(StrViewA str) {
+	return operator()("ETag", str);
+}
+
 
 void SendHeaders::clear() {
 	pool.clear();

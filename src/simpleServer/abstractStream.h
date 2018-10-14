@@ -2,8 +2,10 @@
 #pragma once
 #include "shared/refcnt.h"
 #include "shared/stringview.h"
+#include "shared/defer.h"
 #include "asyncProvider.h"
 #include "exceptions.h"
+
 
 namespace simpleServer {
 
@@ -13,6 +15,7 @@ using ondra_shared::StringView;
 using ondra_shared::StrViewA;
 using ondra_shared::MutableBinaryView;
 using ondra_shared::BinaryView;
+using ondra_shared::defer;
 
 enum WriteMode {
 	///perform writing non-blocking. If it is impossible, nothing is written
@@ -34,6 +37,7 @@ enum WriteMode {
 class AsyncResource;
 class AbstractStream;
 class Stream;
+
 
 ///Very abstract interface which descibes protocol to access data in the stream
 class IGeneralStream {
@@ -491,26 +495,37 @@ public:
 	 *
 	 */
 	template<typename Fn>
-	void readAsync(const Fn &callbackFn) {
-
-		BinaryView data = read(true);
-		bool eof = isEof(data);
-		if (!eof && data.empty()) {
-			implReadAsync(callbackFn);
+	void readAsync(Fn &&callbackFn) {
+		if (asyncProvider == nullptr && canRunAsync()) {
+			implReadAsync(std::forward<Fn>(callbackFn));
 		} else {
-			return callbackFn(eof?asyncEOF:asyncOK,data);
+			BinaryView data = read(true);
+			bool eof = isEof(data);
+			if (!eof && data.empty()) {
+				implReadAsync(std::forward<Fn>(callbackFn));
+			} else {
+				asyncProvider.runAsync([=]{
+					callbackFn(eof?asyncEOF:asyncOK,data);
+				});
+
+			}
 		}
 	}
 
 	template<typename Fn>
-	void readAsync(const MutableBinaryView &b, const Fn &callbackFn) {
-
-		BinaryView data = read(b,true);
-		bool eof = isEof(data);
-		if (!eof && data.empty()) {
-			implReadAsync(b, callbackFn);
+	void readAsync(const MutableBinaryView &b, Fn &&callbackFn) {
+		if (asyncProvider == nullptr && canRunAsync()) {
+			implReadAsync(b, std::forward<Fn>(callbackFn));
 		} else {
-			return callbackFn(eof?asyncEOF:asyncOK,data);
+			BinaryView data = read(b,true);
+			bool eof = isEof(data);
+			if (!eof && data.empty()) {
+				implReadAsync(b, std::forward<Fn>(callbackFn));
+			} else {
+				asyncProvider.runAsync([=]{
+					callbackFn(eof?asyncEOF:asyncOK,data);
+				});
+			}
 		}
 	}
 	///Write synchronously
@@ -529,7 +544,7 @@ public:
 	 *
 	 */
 	template<typename Fn>
-	void writeAsync(BinaryView data, Fn callbackFn, bool all= false) {
+	void writeAsync(BinaryView data, Fn &&callbackFn, bool all= false) {
 
 		BinaryView remainData = write(data,writeNonBlock);
 		if (remainData == data) {
@@ -539,7 +554,7 @@ public:
 					write(remain, writeNonBlock);
 					BinaryView x = write(data, writeNonBlock);
 					if (all && !x.empty()) {
-						writeAsync(x, callbackFn, all);
+						writeAsync(x, std::forward<Fn>(callbackFn), all);
 					} else {
 						callbackFn(status,x);
 					}
@@ -548,7 +563,9 @@ public:
 				}
 			});
 		} else {
-			return callbackFn(asyncOK,remainData);
+			defer >> [=] {
+				callbackFn(asyncOK,remainData);
+			};
 		}
 
 	}
@@ -745,12 +762,12 @@ public:
 		return ptr->waitForOutput(timeout);
 	}
 	template<typename Fn>
-	void readAsync(const Fn &completion) const {
-		return ptr->readAsync(completion);
+	void readAsync(Fn &&completion) const {
+		return ptr->readAsync(std::forward<Fn>(completion));
 	}
 	template<typename Fn>
-	void readAsync(const MutableBinaryView &buffer, const Fn &completion) const {
-		return ptr->readAsync(buffer,completion);
+	void readAsync(const MutableBinaryView &buffer, Fn &&completion) const {
+		return ptr->readAsync(buffer,std::forward<Fn>(completion));
 	}
 	template<typename Fn>
 	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) const {

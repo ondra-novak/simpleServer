@@ -24,6 +24,7 @@ namespace simpleServer {
 
 using ondra_shared::AbstractLogProvider;
 using ondra_shared::unsignedToString;
+using ondra_shared::logDebug;
 
 
 static StrViewA statusMessages[] = {
@@ -329,7 +330,6 @@ void HTTPRequestData::sendResponse(StrViewA contentType, BinaryView body,
 	s.write(BinaryView(body));
 
 	s.flush();
-	handleKeepAlive();
 
 }
 
@@ -356,6 +356,7 @@ void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrV
 			"</body>"
 			"</html>";
 
+	if (statusCode >= 500) keepAlive = false;
 	sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
 }
 
@@ -381,7 +382,7 @@ void HTTPRequestData::sendResponse(const HTTPResponse& resp, StrViewA body) {
 	Stream s = sendHeaders(resp.getCode(), &resp, nullptr, &body.length);
 	s.write(BinaryView(body));
 	s.flush();
-	handleKeepAlive();
+
 
 }
 
@@ -498,6 +499,8 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 
 	Flags flags;
 	std::size_t bodyLimit = -1;
+	std::size_t zero = 0;
+
 	bool usechunked = false;
 
 	if (code == 204) {
@@ -506,8 +509,8 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 		//so transfer encoding and content type should not apper in headers
 
 		contentType = 0;
-		contentLength = 0;
-		flags.hasCtl = true;
+		contentLength = &zero;
+		flags.hasCtl = false;
 		flags.hasCtt = true;
 		flags.hasTE = true;
 	}
@@ -522,6 +525,7 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 		originStream << CONTENT_LENGTH << ": " << *contentLength << CRLF;
 		flags.hasCtl = true;
 		lgCtxLen = *contentLength;
+		bodyLimit = *contentLength;
 	}
 
 	if (resp) {
@@ -634,6 +638,10 @@ void HTTPRequestData::sendResponse(StrViewA contentType, StrViewA body,int statu
 	sendResponse(contentType, BinaryView(body),  statusCode, statusMessage);
 }
 
+Stream HTTPRequestData::getBodyStream() {
+	return reqStream;
+}
+
 void HTTPRequestData::readBodyAsync(std::size_t maxSize, HTTPHandler completion) {
 	userBuffer.clear();
 	readBodyAsync_cont1(maxSize, completion);
@@ -689,6 +697,7 @@ void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler compl
 
 void HTTPRequestData::handleKeepAlive() {
 	reqStream = nullptr;
+//	logDebug("Called handleKeepAlive: $1", (std::uintptr_t)this);
 
 	if (keepAliveHandler != nullptr && keepAlive) {
 		parseHttp(originStream, keepAliveHandler,true);
@@ -868,6 +877,7 @@ bool HTTPRequestData::allowMethodsImpl(const It &beg,const It &end) {
 		StrViewA n = *it;
 		allowValue.append(n.data, n.length);
 	}
+	this->
 	sendResponse(HTTPResponse(405)("Allow",allowValue).contentLength(0));
 	return false;
 }

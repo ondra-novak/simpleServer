@@ -59,6 +59,12 @@ public:
 	HTTPResponse &contentType(StrViewA ctx) {
 		SendHeaders::contentType(ctx);return *this;
 	}
+	HTTPResponse &cacheFor(std::size_t time) {
+		SendHeaders::cacheFor(time);return *this;
+	}
+	HTTPResponse &eTag(StrViewA tag) {
+		SendHeaders::eTag(tag);return *this;
+	}
 
 	void clear();
 
@@ -272,6 +278,10 @@ public:
 	 *
 	 */
 	void readBodyAsync(std::size_t maxSize, HTTPHandler completion);
+
+
+	///Retrieves stream of body - if you need to read stream manually
+	Stream getBodyStream();
 
 	///sends file directly from the disk to the client
 	/**
@@ -533,6 +543,9 @@ public:
 	}
 
 
+	Stream getBodyStream() {
+		return ptr->getBodyStream();
+	}
 
 
 };
