@@ -25,6 +25,7 @@ namespace simpleServer {
 using ondra_shared::AbstractLogProvider;
 using ondra_shared::unsignedToString;
 using ondra_shared::logDebug;
+using ondra_shared::logInfo;
 
 
 static StrViewA statusMessages[] = {
@@ -819,6 +820,7 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 	std::fstream file(fname, std::ios::binary | std::ios::in );
 	if (!file) {
 		sendErrorPage(404);
+		logInfo("Failed to open file: $1", fname);
 	} else {
 		file.seekg(0,std::ios::end);
 		std::size_t sz = file.tellg();
