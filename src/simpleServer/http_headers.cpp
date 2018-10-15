@@ -168,8 +168,15 @@ SendHeaders &&SendHeaders::cacheFor(std::size_t seconds) {
 	return operator()("Cache-Control", StrViewA(buffer, e-buffer));
 }
 
+SendHeaders &&SendHeaders::cacheForever() {
+	return operator()("Cache-Control", "public,max-age=31536000,immutable");
+}
+
 SendHeaders &&SendHeaders::eTag(StrViewA str) {
 	return operator()("ETag", str);
+}
+SendHeaders &&SendHeaders::disableCache() {
+	return operator()("Cache-Control", "no-cache");
 }
 
 

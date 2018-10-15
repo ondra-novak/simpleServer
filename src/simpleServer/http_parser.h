@@ -48,29 +48,21 @@ public:
 	explicit HTTPResponse(int code);
 	HTTPResponse(int code, StrViewA response);
 	HTTPResponse(const HTTPResponse &other);
+	HTTPResponse(SendHeaders &&other):SendHeaders(std::move(other)) {message.relocate(pool);}
 
+	HTTPResponse &&operator()(const StrViewA key, const StrViewA value) {SendHeaders::operator ()(key,value);return std::move(*this);}
+	HTTPResponse &&contentLength(std::size_t sz) {SendHeaders::contentLength(sz);return std::move(*this);}
+	HTTPResponse &&contentType(StrViewA str) {SendHeaders::contentType(str);return std::move(*this);}
+	HTTPResponse &&cacheFor(std::size_t seconds) {SendHeaders::cacheFor(seconds);return std::move(*this);}
+	HTTPResponse &&cacheForever() {SendHeaders::cacheForever();return std::move(*this);}
+	HTTPResponse &&disableCache() {SendHeaders::disableCache();return std::move(*this);}
+	HTTPResponse &&eTag(StrViewA str) {SendHeaders::eTag(str);return std::move(*this);}
 
-	HTTPResponse &operator()(const StrViewA key, const StrViewA value) {
-		SendHeaders::operator ()(key, value);return *this;
-	}
-	HTTPResponse &contentLength(std::size_t sz) {
-		SendHeaders::contentLength(sz);return *this;
-	}
-	HTTPResponse &contentType(StrViewA ctx) {
-		SendHeaders::contentType(ctx);return *this;
-	}
-	HTTPResponse &cacheFor(std::size_t time) {
-		SendHeaders::cacheFor(time);return *this;
-	}
-	HTTPResponse &eTag(StrViewA tag) {
-		SendHeaders::eTag(tag);return *this;
-	}
 
 	void clear();
 
 	int getCode() const;
 	StrViewA getStatusMessage() const;
-
 
 
 

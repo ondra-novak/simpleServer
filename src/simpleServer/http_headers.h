@@ -88,6 +88,17 @@ public:
 			operator()(key, value);
 		});
 	}
+	SendHeaders(SendHeaders &&other)
+			:pool(std::move(other.pool))
+			,hdrMap(std::move(other.hdrMap))
+			,firstLine(std::move(other.firstLine)) {
+		firstLine.relocate(pool);
+		for (auto &&k : hdrMap) {
+			k.first.relocate(pool);
+			k.second.relocate(pool);
+		}
+	}
+
 	SendHeaders(const StrViewA &key, const StrViewA &value) {this->operator ()(key,value);}
 
 	explicit SendHeaders(StrViewA firstLine) {
@@ -135,6 +146,10 @@ public:
 	SendHeaders &&request(StrViewA str);
 
 	SendHeaders &&cacheFor(std::size_t seconds);
+
+	SendHeaders &&cacheForever();
+
+	SendHeaders &&disableCache();
 
 	SendHeaders &&eTag(StrViewA str);
 
