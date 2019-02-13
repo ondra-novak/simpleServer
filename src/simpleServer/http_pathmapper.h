@@ -53,7 +53,8 @@ template<typename PathMapFunction>
 class HttpPathMapper {
 public:
 
-	HttpPathMapper(const_ref<PathMapFunction> mapper):mapper(mapper) {}
+	explicit HttpPathMapper(const_ref<PathMapFunction> mapper):mapper(mapper) {}
+	explicit HttpPathMapper(PathMapFunction &&mapper):mapper(std::move(mapper)) {}
 
 
 	///Call mapper as HTTPHandler
