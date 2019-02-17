@@ -113,16 +113,16 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 			} else {
 				Value rdata = Value::fromString(StrViewA(BinaryView(x)));
 				SharedLogObject logObj(*httpreq->log, "RPC");
-				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj](const Value &v, const RpcRequest &req){
+				Stream out = httpreq.sendResponse("application/json");
+				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj,out](const Value &v, const RpcRequest &req){
 
 					handleLogging(logObj,v,req);
 
 					try {
 
-						Stream out = httpreq.sendResponse("application/json");
 						v.serialize(out);
-						out.flush();
-						return true;
+						out << "\r\n";
+						return out.flush();
 
 					} catch (...) {
 						return false;
