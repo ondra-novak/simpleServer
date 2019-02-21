@@ -42,9 +42,9 @@ public:
 	/**
 	 * @param AsyncState reason of completion.
 	 */
-	typedef std::function<void(AsyncState) noexcept> CompletionFn;
+	typedef std::function<void(AsyncState) > CompletionFn;
 	///Declaration of custom asynchronous function
-	typedef std::function<void()noexcept> CustomFn;
+	typedef std::function<void()> CustomFn;
 
 	///runs asynchronous I/O operation
 	/**

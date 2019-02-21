@@ -545,7 +545,7 @@ function formatJson(json) {
 			for (var x in json) {
 				var dr = document.createElement("json-pair");
 				if (prevEl)prevEl.appendChild(document.createTextNode(", "));
-				var name = "\"" + x + "\"";
+				var name = JSON.stringify(x);
 				var dk = document.createElement("json-key");
 				dk.appendChild(document.createTextNode(name));
 				var dv = document.createElement("json-value");
@@ -560,8 +560,8 @@ function formatJson(json) {
 		}
 	} else {
 		d = document.createElement("json-"+typeof json);
-		var x = json.toString();
-		if (typeof json == "string") x = "\""  + x +"\"";
+		var x = JSON.stringify(json.toString());
+//		if (typeof json == "string") x = "\""  + x +"\"";
 		d.appendChild(document.createTextNode(x));
 	} 
 	return d;
