@@ -560,7 +560,7 @@ function formatJson(json) {
 		}
 	} else {
 		d = document.createElement("json-"+typeof json);
-		var x = JSON.stringify(json.toString());
+		var x = JSON.stringify(json);
 //		if (typeof json == "string") x = "\""  + x +"\"";
 		d.appendChild(document.createTextNode(x));
 	} 

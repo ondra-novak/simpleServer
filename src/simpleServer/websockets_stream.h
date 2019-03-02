@@ -49,6 +49,9 @@ public:
 
 	const Stream getStream() const {return stream;}
 	bool isClosed() const {return closed;}
+	///Enforce type polymorphics
+	virtual ~WebSocketStreamImpl() {}
+
 
 protected:
 	Stream stream;
@@ -396,6 +399,7 @@ public:
 
 	///Returns true, if the websocket is already closed
 	bool isClosed() const {return ptr->isClosed();}
+
 };
 
 

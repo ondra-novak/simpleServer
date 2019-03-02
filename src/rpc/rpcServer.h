@@ -80,7 +80,22 @@ protected:
 	void directRpcAsync(simpleServer::Stream s);
 	void directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx);
 
+};
 
+class HttpRpcConnContext: public json::RpcConnContext {
+public:
+
+	HttpRpcConnContext(const simpleServer::HTTPRequest &req, bool secure):req(req),secure(secure) {}
+	virtual Value retrieve(StrViewA key) const;
+	void exportToHeader(SendHeaders &hdrs);
+
+	bool isSecure() const {return secure;}
+
+
+protected:
+	mutable Value cookies;
+	simpleServer::HTTPRequest req;
+	bool secure;
 };
 
 

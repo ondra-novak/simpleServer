@@ -8,6 +8,7 @@
 #include "rpcServer.h"
 #include <imtjson/serializer.h>
 #include <imtjson/parser.h>
+#include "../simpleServer/urlencode.h"
 #include "../simpleServer/websockets_stream.h"
 #include "../simpleServer/asyncProvider.h"
 #include "../simpleServer/http_hostmapping.h"
@@ -15,7 +16,9 @@
 #include "../simpleServer/query_parser.h"
 
 #include "../simpleServer/logOutput.h"
+
 #include "resources.h"
+
 
 namespace simpleServer {
 
@@ -30,10 +33,7 @@ public:
 	typedef _details::WebSocketStreamImpl Super;
 	using Super::WebSocketStreamImpl;
 
-	auto getConnContext() const {return ctx;}
-
-protected:
-	PRpcConnContext ctx = new RpcConnContext;
+	RefCntPtr<HttpRpcConnContext> ctx;
 };
 
 class WebSocketHandlerWithContext: public WebSocketHandler{
@@ -73,8 +73,9 @@ public:
 static void handleLogging(const SharedLogObject logObj, const Value &v, const RpcRequest &req) noexcept {
 	if (logObj.isLogLevelEnabled(LogLevel::progress)) {
 		try {
-
 			Value diagData = req.getDiagData();
+			//do not log notifications
+			if ((v.type() != json::object || v["method"].defined()) && !diagData.defined()) return;
 			Value args = req.getArgs();
 			Value method = req.getMethodName();
 			Value context = req.getContext();
@@ -93,6 +94,67 @@ static void handleLogging(const SharedLogObject logObj, const Value &v, const Rp
 
 
 
+Value HttpRpcConnContext::retrieve(StrViewA key) const {
+	Value sup = RpcConnContext::retrieve(key);
+	if (sup.defined()) return sup;
+	if (!cookies.defined())  {
+			Object datain;
+			std::string buff;
+			std::string vkey;
+			auto buffput = [&](char c) {buff.push_back(c);};
+			HeaderValue cookie = req["Cookie"];
+			if (cookie.defined())  {
+				auto parts = cookie.split("; ");
+				while (!!parts) {
+					UrlDecode<decltype(buffput) &> dec(buffput);
+
+					auto subparts = StrViewA(parts()).split("=",2);
+					StrViewA key = subparts();
+					StrViewA value = subparts();
+
+					buff.clear();
+					for (auto &&c:key) dec(c);
+					std::swap(vkey,buff);
+
+					buff.clear();
+					for (auto &&c:value) dec(c);
+
+					try {
+						datain.set(vkey, Value::fromString(buff));
+					} catch (...) {
+						datain.set(vkey, buff);
+					}
+				}
+			}
+			{
+				auto headers = datain.object("_headers");
+				for(auto &&c: req) {
+					headers.set(c.first, c.second);
+				}
+			}
+			cookies = datain;
+	}
+	return cookies[key];
+}
+
+
+void HttpRpcConnContext::exportToHeader(SendHeaders &hdrs) {
+	if (this->data.size()) {
+		std::ostringstream buff;
+		bool sep = false;
+		auto buffput = [&](char c){buff.put(c);};
+		for (Value v : this->data) {
+			if (sep) {buffput(',');buffput(' ');}
+			StrViewA key = v.getKey();
+			String value = v.stringify();
+			UrlEncode<decltype(buffput) &> enc(buffput);
+			for (auto &&c: key) enc(c);
+			buffput('=');
+			for (auto &&c: value) enc(c);
+		}
+		hdrs("Set-Cookie", buff.str());
+	}
+}
 
 bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpath) const {
 
@@ -113,21 +175,31 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 			} else {
 				Value rdata = Value::fromString(StrViewA(BinaryView(x)));
 				SharedLogObject logObj(*httpreq->log, "RPC");
-				Stream out = httpreq.sendResponse("application/json");
-				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj,out](const Value &v, const RpcRequest &req){
+				Stream out;
+				RefCntPtr<HttpRpcConnContext> ctx = new HttpRpcConnContext(httpreq,false);
+				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj,out,ctx](
+							const Value &v, const RpcRequest &req) mutable {
 
+					if (out == nullptr) {
+						HTTPResponse hdrs(200);
+						ctx->exportToHeader(hdrs);
+						hdrs.contentType("application/json");
+						out = httpreq.sendResponse(hdrs);
+					}
 					handleLogging(logObj,v,req);
 
 					try {
 
-						v.serialize(out);
+						if (v.defined()) {
+							v.serialize(out);
+						}
 						out << "\r\n";
 						return out.flush();
 
 					} catch (...) {
 						return false;
 					}
-				}, RpcFlags::preResponseNotify);
+				}, RpcFlags::preResponseNotify, PRpcConnContext::staticCast(ctx));
 				srv(rrq);
 			}
 		});
@@ -198,7 +270,7 @@ void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx)
 
 	auto sendFn =[=](Value v) {
 		try {
-			v.serialize(s);
+			if (v.defined()) v.serialize(s);
 			s << "\n";
 			s.flush();
 			return true;
@@ -289,20 +361,15 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 		WSStreamWithContext::Super *wsx = wsstream;
 		WSStreamWithContext *wswc = static_cast<WSStreamWithContext *>(wsx);
 		PRpcConnContext connctx;
-		if (wswc) connctx = wswc->getConnContext();
+		if (wswc->ctx == nullptr) wswc->ctx = new HttpRpcConnContext(httpreq, true);
+		connctx = PRpcConnContext::staticCast(wswc->ctx);
 
 		SharedLogObject logObj(*httpreq->log, "RPC");
 
 		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj](const Value &v, const RpcRequest &req){
 			WebSocketStream ws(wsstream);
 			if (!v.defined()) {
-				if (ws.isClosed()) return false;
-				try {
-					ws.ping(BinaryView());
-					return true;
-				} catch (...) {
-					return false;
-				}
+				return !(ws.isClosed());
 			}
 
 			handleLogging(logObj,v,req);

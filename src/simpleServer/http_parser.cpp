@@ -78,6 +78,7 @@ static const char* CONTENT_TYPE = "Content-Type";
 static const char* CONTENT_LENGTH = "Content-Length";
 static const char* TRANSFER_ENCODING = "Transfer-Encoding";
 static const char* CONNECTION = "Connection";
+static const char* SET_COOKIE = "Set-Cookie";
 static const char* HOST = "Host";
 static const char* CRLF = "\r\n";
 
@@ -555,9 +556,22 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 					keepAlive = true;
 					flags.hasClose = true;
 				}
+			} else if (key == SET_COOKIE) {
+				//exception - Set-Cookie is split to multiple headers
+				//however - we don't suport duplicate keys
+				//so it is possible to define cookies as comma-separated list
+				//
+				//This part splits comma separated list into separate lines
+				auto splt = value.split(",");
+				while (!!splt) {
+					StrViewA row = splt().trim(isspace);
+					originStream << key << ": " << row << CRLF;
+				}
+				return true;
 			}
 
 			originStream << key << ": " << value << CRLF;
+
 			return true;
 		});
 
