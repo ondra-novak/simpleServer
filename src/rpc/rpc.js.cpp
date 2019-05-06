@@ -291,6 +291,9 @@ var WsRpcClient  = (function(){
 		if (jdata.result) {
 			var id = jdata.id;
 			var reg = this.waiting[id];
+			if (jdata.context) {
+				this.updateContext(jdata.context);
+			}
 			if (reg) reg.ok(jdata.result);
 			delete this.waiting[id];
 		} else if (jdata.error) {
