@@ -6,4 +6,3 @@ add_library (simpleRpcServer ${simpleRpcServer_SRC})
 add_executable (rpctest test/rpctest.cpp)
 target_link_libraries (rpctest LINK_PUBLIC simpleRpcServer simpleServer imtjson pthread)
 
- 
