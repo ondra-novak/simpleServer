@@ -43,10 +43,15 @@ LinuxEventDispatcher::~LinuxEventDispatcher() noexcept {
 	close(intrWaitHandle);
 }
 
+template<typename T>
+void ignore_variable(T) {}
+
 LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 	std::lock_guard<std::mutex> _(queueLock);
 	char b;
-	::read(intrWaitHandle, &b, 1);
+	ignore_variable(::read(intrWaitHandle, &b, 1));
+
+
 
 	if (!queue.empty()) {
 		const RegReq &r = queue.front();
