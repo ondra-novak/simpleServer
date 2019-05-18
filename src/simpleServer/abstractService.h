@@ -123,7 +123,18 @@ public:
 	 * @param handler function called to implement service
 	 * @return function returns the exit code from the program
 	 */
-	static int create(int argc, char **argv, StrViewA name, ServiceHandler handler);
+	static int create(int argc, char **argv, StrViewA name, ServiceHandler &&handler);
+
+	///Enter to service mode m
+	/**
+	 * @param name name of the service (it can be empty)
+	 * @param pidfile pathname to pidfile
+	 * @param cmd command ("run","start","stop", "restart", etc)
+	 * @param handler function called to implement service main loop
+	 * @param args argumets passed to the service handler (optional). If not set, the arguments are set to empty
+	 * @return function returns the exit code from the program
+	 */
+	static int create(StrViewA name, StrViewA pidfile, StrViewA cmd, ServiceHandler &&handler, ArgList args = ArgList());
 
 
 

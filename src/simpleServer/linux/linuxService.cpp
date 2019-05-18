@@ -26,25 +26,30 @@ using ondra_shared::AbstractLogProviderFactory;
 using ondra_shared::VLA;
 using ondra_shared::logInfo;
 
-int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler handler) {
+int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler &&handler) {
+	if (argc < 3) {
+		throw ServiceInvalidParametersException();
+	}
+
+	VLA<StrViewA, 10> tmp_arglist(argc);
+
+
+	for (int i = 0; i < argc; i++) {
+		tmp_arglist[i] = StrViewA(argv[i]);
+	}
+	ArgList arglist(tmp_arglist);
+
+
+	StrViewA pidfile = arglist[1];
+	StrViewA command = arglist[2];
+	ArgList remainArgs = arglist.substr(3);
+	return create(name,pidfile,command,std::move(handler),remainArgs);
+}
+int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, ServiceHandler &&handler, ArgList remainArgs) {
+
 	bool handleExcept = false;
 	try {
-		if (argc < 3) {
-			throw ServiceInvalidParametersException();
-		}
 
-		VLA<StrViewA, 10> tmp_arglist(argc);
-
-
-		for (int i = 0; i < argc; i++) {
-			tmp_arglist[i] = StrViewA(argv[i]);
-		}
-		ArgList arglist(tmp_arglist);
-
-
-		StrViewA pidfile = arglist[1];
-		StrViewA command = arglist[2];
-		ArgList remainArgs = arglist.substr(3);
 
 		RefCntPtr<LinuxService> svc = new LinuxService(pidfile);
 
@@ -66,23 +71,24 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 			handleExcept = true;
 			svc->stopOtherService();
 			handleExcept = false;
-			//svc->postCommand( "stop", ArgList(), std::cerr);
 			if (!svc->enterDaemon()) {
 					return svc->waitForExitCode();
 				}
 			return svc->startService(name, handler, remainArgs);
 		} else if (command == "status") {
 			if (svc->checkPidFile()) return 0;
-			else std::cerr << "Service not running" << std::endl;
+			else std::cerr << "Service '" << name.data << "' is not running" << std::endl;
 			return 1;
 		} else {
 				handleExcept = true;
-				svc->postCommand(command, remainArgs, std::cerr);
+				auto res = svc->postCommand(command, remainArgs, std::cerr);
+				std::cerr << std::endl;
+				return res;
 		}
 		return 0;
 	} catch (SystemException &e) {
 		if (handleExcept && (e.getErrNo() == ECONNREFUSED || e.getErrNo() == ENOENT)) {
-			std::cerr << "Service not running" << std::endl;
+			std::cerr << "Service '" << name.data << "' is not running" << std::endl;
 		} else {
 			std::cerr << "ERROR: " << e.what() << std::endl;
 		}
@@ -164,7 +170,7 @@ void LinuxService::processRequest(Stream s) {
 		} else {
 			auto it =cmdMap.find(argList[0]);
 			if (it == cmdMap.end()) {
-				s << "ERROR: command '" << argList[0] << "' is not supported~-1";
+				s << "ERROR: command '" << argList[0] << "' is not supported~255";
 
 			} else {
 				int ret =  it->second(argList, s);
@@ -174,7 +180,7 @@ void LinuxService::processRequest(Stream s) {
 		}
 	} catch (std::exception &e) {
 		logWarning("Failed to process command: $1",e.what());
-		s << "ERROR: " << e.what();
+		s << "ERROR: " << e.what() << "~255";
 		s.flush();
 	}
 
@@ -245,11 +251,15 @@ int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 			return getpid();
 		});
 		addCommand("status",[=](ArgList, Stream sx) {
-			sx << "Service '" << name << "' runnning as pid " << getpid() << "\n";
+			sx << "Service '" << name << "' is running as pid " << getpid() ;
 			return 0;
 		});
 		addCommand("wait",[=](ArgList, Stream sx) {
 			waitEnd.push(sx);
+			return 0;
+		});
+		addCommand("pidof",[=](ArgList, Stream sx) {
+			sx << getpid() ;
 			return 0;
 		});
 
@@ -350,7 +360,7 @@ int LinuxService::postCommand(StrViewA command, ArgList args, std::ostream &outp
 bool LinuxService::checkPidFile() {
 	if (access(controlFile.c_str(),0) == 0) {
 		try {
-			postCommand("status",ArgList(), std::cerr);
+			if (postCommand("status",ArgList(), std::cerr)) std::cerr << std::endl;
 			return true;
 		} catch (...) {
 			unlink(controlFile.c_str());
