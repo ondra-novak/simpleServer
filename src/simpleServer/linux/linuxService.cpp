@@ -76,7 +76,7 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 				}
 			return svc->startService(name, handler, remainArgs);
 		} else if (command == "status") {
-			if (svc->checkPidFile()) return 0;
+			if (svc->checkPidFile()) {return 0;}
 			else std::cerr << "Service '" << name.data << "' is not running" << std::endl;
 			return 1;
 		} else {
@@ -113,11 +113,38 @@ void LinuxService::dispatch() {
 
 
 	Stream s;
-	setsid();
+	// move to root (detach from mounted volume)
+	if (chdir("/") != 0) {
+		int err = errno;
+		throw SystemException(err,"Failed to call chdir('/') (dispatch)");
+	}
 	if (umbilicalCord) {
+
+		//finalize daemon
+		//starting in daemon mode, become new session leader
+		setsid();
+		//send exit code 0 to the umbilical cord
 		sendExitCode(0);
+		//cut umbilical cord
 		close(umbilicalCord);
+		//remove umbilical cord complete
 		umbilicalCord = 0;
+		//redirect stdout and stderr to /dev/null
+		int n = open("/dev/null",O_WRONLY);
+		int m = open("/dev/null",O_RDONLY);
+		//close stderr
+		close(2);
+		//close stdout
+		close(1);
+		//close stdin
+		close(0);
+		//we need to fill fds 0,1,2 because nobody expects, that these descriptors are empty
+		dup2(m, 0);
+		dup2(n, 1);
+		dup2(n, 2);
+		close(n);
+		close(m);
+
 	}
 
 	logInfo("The service started, pid= $1",getpid());
@@ -206,8 +233,16 @@ bool LinuxService::enterDaemon() {
 	int fres = fork();
 	if (fres == 0) {
 		daemonEntered = true;
-//		std::cout << "press enter after debugger attach" << std::endl;
-	//	std::cin.get();
+		//the entering to the daemon state is split into two places
+		//in this place, the separate child is only create, but
+		//not in daemon yet. The main process and the new daemon
+		//process are still connected by a pipe
+		//
+		//the daemon mode is finalized when dispatch is successfully initialized
+		//
+		//this allows to capcure error messages and record exit code
+		//of initialization of the service before
+		//the service starts to dispatching messages
 		umbilicalCord = fds[1];
 		close(fds[0]);
 		return true;
@@ -360,7 +395,8 @@ int LinuxService::postCommand(StrViewA command, ArgList args, std::ostream &outp
 bool LinuxService::checkPidFile() {
 	if (access(controlFile.c_str(),0) == 0) {
 		try {
-			if (postCommand("status",ArgList(), std::cerr)) std::cerr << std::endl;
+			postCommand("status",ArgList(), std::cerr);
+			std::cerr << std::endl;
 			return true;
 		} catch (...) {
 			unlink(controlFile.c_str());
