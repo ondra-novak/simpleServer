@@ -6,19 +6,24 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
 #include <signal.h>
 
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 
+#include "../raii.h"
 #include "../abstractStreamFactory.h"
 
 #include "../exceptions.h"
 #include "tcpStreamFactory.h"
+#include "fileStream.h"
 #include "../http_headers.h"
 #include "../logOutput.h"
 #include "../vla.h"
+
+
 
 namespace simpleServer {
 
@@ -45,7 +50,8 @@ int ServiceControl::create(int argc, char **argv, StrViewA name, ServiceHandler 
 	ArgList remainArgs = arglist.substr(3);
 	return create(name,pidfile,command,std::move(handler),remainArgs);
 }
-int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, ServiceHandler &&handler, ArgList remainArgs) {
+
+int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, ServiceHandler &&handler, ArgList remainArgs, bool forceStart) {
 
 	bool handleExcept = false;
 	try {
@@ -55,11 +61,17 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 
 
 		if (command == "start") {
-			if (!svc->enterDaemon()) {
-				return svc->waitForExitCode();
-			}
-			return svc->startService(name, handler, remainArgs);
+			svc->onInit([&]{
+				return svc->runCommand("run", ArgList(), Stream());
+			});
+			return svc->enterDaemon([&]{
+				return svc->startService(name, handler, remainArgs);
+			});
+
 		} else if (command == "run") {
+			svc->onInit([&]{
+				return svc->runCommand("run", ArgList(), Stream());
+			});
 			return svc->startService(name, handler, remainArgs);
 		} else if (command == "stop") {
 			handleExcept = true;
@@ -71,19 +83,33 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 			handleExcept = true;
 			svc->stopOtherService();
 			handleExcept = false;
-			if (!svc->enterDaemon()) {
-					return svc->waitForExitCode();
-				}
-			return svc->startService(name, handler, remainArgs);
+			svc->onInit([&]{
+				return svc->runCommand("run", ArgList(), Stream());
+			});
+			return svc->enterDaemon([&]{
+				return svc->startService(name, handler, remainArgs);
+			});
 		} else if (command == "status") {
 			if (svc->checkPidFile()) {return 0;}
 			else std::cerr << "Service '" << name.data << "' is not running" << std::endl;
 			return 1;
 		} else {
-				handleExcept = true;
-				auto res = svc->postCommand(command, remainArgs, std::cerr);
-				std::cerr << std::endl;
-				return res;
+				if (forceStart && !svc->checkPidFileSilent()) {
+					int retval = 255;
+					svc->onInit([&]{
+						auto ret = svc->runCommand(command, remainArgs, Stream(new FileStream(1)));
+						svc->stop();
+						retval = ret;
+						return ret;
+					});
+					auto retval2 = svc->startService(name, handler, ArgList());
+					if (retval2) return retval2;else return retval;
+				} else {
+					handleExcept = true;
+					auto res = svc->postCommand(command, remainArgs, std::cerr);
+					std::cerr << std::endl;
+					return res;
+				}
 		}
 		return 0;
 	} catch (SystemException &e) {
@@ -103,6 +129,15 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 
 
 
+int LinuxService::runCommand(StrViewA command, ArgList args, Stream s) {
+	auto it =cmdMap.find(command);
+	if (it== cmdMap.end()) {
+		return 255;
+	}
+	return it->second(args,s);
+}
+
+
 void LinuxService::dispatch() {
 
 
@@ -118,39 +153,17 @@ void LinuxService::dispatch() {
 		int err = errno;
 		throw SystemException(err,"Failed to call chdir('/') (dispatch)");
 	}
-	if (umbilicalCord) {
-
-		//finalize daemon
-		//starting in daemon mode, become new session leader
-		setsid();
-		//send exit code 0 to the umbilical cord
-		sendExitCode(0);
-		//cut umbilical cord
-		close(umbilicalCord);
-		//remove umbilical cord complete
-		umbilicalCord = 0;
-		//redirect stdout and stderr to /dev/null
-		int n = open("/dev/null",O_WRONLY);
-		int m = open("/dev/null",O_RDONLY);
-		//close stderr
-		close(2);
-		//close stdout
-		close(1);
-		//close stdin
-		close(0);
-		//we need to fill fds 0,1,2 because nobody expects, that these descriptors are empty
-		dup2(m, 0);
-		dup2(n, 1);
-		dup2(n, 2);
-		close(n);
-		close(m);
-
-	}
-
 	logInfo("The service started, pid= $1",getpid());
 
+	while (!onInitStack.empty()) {
+		auto fn = std::move(onInitStack.top());
+		onInitStack.pop();
+		fn();
+	}
 
-	 s = mother();
+
+	s = mother();
+
 
 
 	while (s != nullptr) {
@@ -223,54 +236,92 @@ void LinuxService::stop() {
 	mother.stop();
 }
 
-bool LinuxService::enterDaemon() {
+static void closefd(int fd) {
+	close(fd);
+}
+static int invalid_fd = -1;
+
+typedef ondra_shared::Handle<int, void(*)(int), &closefd, &invalid_fd> FD;
+
+
+static void writeExitCode(int fd, int exitCode) {
+	if (::write(fd,&exitCode, sizeof(exitCode)) == -1) {
+		throw SystemException(errno);
+	}
+}
+
+static int readExitCode(int fd)  {
+	int exitCode = 0;
+	if (::read(fd,&exitCode, sizeof(exitCode)) == -1) {
+		throw SystemException(errno);
+	}
+	return exitCode;
+}
+
+int LinuxService::enterDaemon(Action &&action) {
+
 
 	int fds[2];
 	if (pipe2(fds, O_CLOEXEC) != 0) {
 		int err = errno;
 		throw SystemException(err,"Failed to call pipe2 (enterDaemon)");
 	}
+
+	FD readEnd(fds[0]), writeEnd(fds[1]);
+
 	int fres = fork();
 	if (fres == 0) {
+		readEnd.close();
+
 		daemonEntered = true;
-		//the entering to the daemon state is split into two places
-		//in this place, the separate child is only create, but
-		//not in daemon yet. The main process and the new daemon
-		//process are still connected by a pipe
-		//
-		//the daemon mode is finalized when dispatch is successfully initialized
-		//
-		//this allows to capcure error messages and record exit code
-		//of initialization of the service before
-		//the service starts to dispatching messages
-		umbilicalCord = fds[1];
-		close(fds[0]);
-		return true;
+
+		onInit([&]{
+			//finalize daemon
+			//starting in daemon mode, become new session leader
+			setsid();
+			//send exit code 0 to the umbilical cord
+			writeExitCode(writeEnd,0);
+			//redirect stdout and stderr to /dev/null
+			int n = open("/dev/null",O_WRONLY);
+			int m = open("/dev/null",O_RDONLY);
+			//close stderr
+			close(2);
+			//close stdout
+			close(1);
+			//close stdin
+			close(0);
+			//we need to fill fds 0,1,2 because nobody expects, that these descriptors are empty
+			dup2(m, 0);
+			dup2(n, 1);
+			dup2(n, 2);
+			close(n);
+			close(m);
+			writeEnd.close();
+			return 0;
+		});
+
+		try {
+			int ret = action();
+			if (!writeEnd.is_invalid()) {
+				writeExitCode(writeEnd, ret);
+				writeEnd.close();
+			}
+			return ret;
+		} catch (...) {
+			if (!writeEnd.is_invalid()) {
+				writeExitCode(writeEnd, 253);
+			}
+			throw;
+		}
 	} else if (fres == -1) {
 		int e = errno;
 		throw SystemException(e, __FUNCTION__);
 	}else {
-		umbilicalCord = fds[0];
-		close(fds[1]);
-		return false;
-	}
-
-}
-
-int LinuxService::waitForExitCode() {
-	if (umbilicalCord == 0) return 254;
-	int buffer;
-	int e = read(umbilicalCord, &buffer, sizeof(buffer));
-	if (e == -1) {
-		int err = errno;
-		throw SystemException(err,__FUNCTION__);
-	}
-	if (e == 0) {
-		return 254;
-	} else {
-		return buffer;
+		writeEnd.close();
+		return readExitCode(readEnd);
 	}
 }
+
 
 int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 		ArgList args) {
@@ -300,35 +351,24 @@ int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 
 		int ret = hndl(this, name, args);
 		unlink(controlFile.c_str());
-		sendExitCode(ret);
 		return ret;
 
 	} catch (...) {
 		unlink(controlFile.c_str());
-		sendExitCode(253);
 		throw;
 	}
 
 }
 
-LinuxService::LinuxService(std::string controlFile):umbilicalCord(0),controlFile(controlFile) {
+LinuxService::LinuxService(std::string controlFile):controlFile(controlFile) {
 
 
 }
 
 LinuxService::~LinuxService() {
-	if (umbilicalCord) close(umbilicalCord);
+
 }
 
-void LinuxService::sendExitCode(int code) {
-	if (umbilicalCord != 0) {
-		int i = write(umbilicalCord, &code, sizeof(code));
-		if (i == -1) {
-			int err = errno;
-			throw SystemException(err,__FUNCTION__);
-		}
-	}
-}
 
 #ifndef SUN_LEN
 # define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path)	      \
@@ -392,10 +432,10 @@ int LinuxService::postCommand(StrViewA command, ArgList args, std::ostream &outp
 		return exitCode;
 }
 
-bool LinuxService::checkPidFile() {
+bool LinuxService::checkPidFile(std::ostream &out) {
 	if (access(controlFile.c_str(),0) == 0) {
 		try {
-			postCommand("status",ArgList(), std::cerr);
+			postCommand("status",ArgList(), out);
 			std::cerr << std::endl;
 			return true;
 		} catch (...) {
@@ -404,6 +444,16 @@ bool LinuxService::checkPidFile() {
 		}
 	}
 	return false;
+}
+
+bool LinuxService::checkPidFile() {
+	return checkPidFile(std::cerr);
+}
+
+
+bool LinuxService::checkPidFileSilent() {
+	std::ostringstream dummy;
+	return checkPidFile(dummy);
 }
 
 void LinuxService::stopOtherService() {
@@ -431,23 +481,12 @@ void LinuxService::cleanWaitings() {
 }
 
 void LinuxService::enableRestart()  {
-	if (restartEnabled || umbilicalCord == 0) return;
+	if (restartEnabled || !daemonEntered) return;
 	do {
 		time_t startTime;
 		time(&startTime);
-		/*
-		int input[2];
-		int output[2];
 
-		if (pipe2(input,O_CLOEXEC)) {
-			int e = errno;
-			throw SystemException(e, "pipe2 input");
-		}
-		if (pipe2(output,O_CLOEXEC)) {
-			int e = errno;
-			throw SystemException(e, "pipe2 output");
-		}
-		*/
+
 		pid_t chld = fork();
 		if (chld == 0) break;
 		if (chld == -1) {
@@ -455,11 +494,6 @@ void LinuxService::enableRestart()  {
 			if (e != EINTR) {
 				throw SystemException(e, "fork");
 			}
-		}
-
-		if (umbilicalCord) {
-			close(umbilicalCord);
-			umbilicalCord = 0;
 		}
 
 		int status;
@@ -562,6 +596,11 @@ void LinuxService::changeUser(StrViewA userInfo) {
 		throw SystemException(e, "changeUser: Cannot change current user");
 	}
 
+
+}
+
+void LinuxService::onInit(Action &&a) {
+	onInitStack.push(std::move(a));
 }
 
 }

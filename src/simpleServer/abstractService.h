@@ -132,12 +132,11 @@ public:
 	 * @param cmd command ("run","start","stop", "restart", etc)
 	 * @param handler function called to implement service main loop
 	 * @param args argumets passed to the service handler (optional). If not set, the arguments are set to empty
+	 * @param forceStart if service is not running, it is forced to start to carry out the command. This is equivalent to "run" command.
+	 *                   note that control commands are not affected: start, stop, run, restart, status, wait, pidof
 	 * @return function returns the exit code from the program
 	 */
-	static int create(StrViewA name, StrViewA pidfile, StrViewA cmd, ServiceHandler &&handler, ArgList args = ArgList());
-
-
-
+	static int create(StrViewA name, StrViewA pidfile, StrViewA cmd, ServiceHandler &&handler, ArgList args = ArgList(), bool forceStart = false);
 
 
 
@@ -179,6 +178,7 @@ public:
 		ptr->changeUser(userInfo);
 	}
 };
+
 
 
 

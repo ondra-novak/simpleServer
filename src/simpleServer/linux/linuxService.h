@@ -5,6 +5,8 @@
 #include <iosfwd>
 #include <queue>
 #include <map>
+#include <stack>
+
 #include "../abstractService.h"
 #include "../abstractStreamFactory.h"
 #include "../address.h"
@@ -29,26 +31,32 @@ protected:
 
 	friend class ServiceControl;
 
-	bool enterDaemon();
+	typedef std::function<int()> Action;
+	int enterDaemon(Action &&action);
 
-	int waitForExitCode();
+
 	int startService(StrViewA name, ServiceHandler hndl, ArgList args);
-	void sendExitCode(int code);
 
-	int umbilicalCord=0;
 
 	std::string controlFile;
 
+	typedef std::stack<Action> OnInitAction;
+
+	OnInitAction onInitStack;
+	void onInit(Action &&a);
 
 	NetAddr createNetAddr();
 
 	void processRequest(Stream s);
+	int runCommand(StrViewA command, ArgList args, Stream s);
 
 	std::map<std::string, UserCommandFn> cmdMap;
 
 	int postCommand(StrViewA command, ArgList args, std::ostream &output, int timeout = 30000, bool timeoutIsEnd=false);
 
+	bool checkPidFile(std::ostream &out);
 	bool checkPidFile();
+	bool checkPidFileSilent();
 	void stopOtherService();
 	void cleanWaitings();
 
