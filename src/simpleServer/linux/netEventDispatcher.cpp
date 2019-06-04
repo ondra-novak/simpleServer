@@ -55,10 +55,14 @@ LinuxEventDispatcher::Task LinuxEventDispatcher::runQueue() {
 
 	if (!queue.empty()) {
 		const RegReq &r = queue.front();
-		if (r.ares.socket == 0 && r.ares.socket == 0) {
-			return Task(r.extra.completionFn,asyncOK);
+		if (r.ares.socket == 0 && r.ares.op == 0) {
+			Task t(r.extra.completionFn,asyncOK);
+			queue.pop();
+			return t;
 		} else if (r.extra.completionFn == nullptr) {
-			return findAndCancel(r.ares);
+			auto q = r.ares;
+			queue.pop();
+			return findAndCancel(q);
 		} else {
 			addResource(r);
 			queue.pop();
