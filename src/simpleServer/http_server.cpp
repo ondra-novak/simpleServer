@@ -64,9 +64,13 @@ MiniHttpServer::~MiniHttpServer() {
 	if (running) srv->stopCycle();
 }
 
-MiniHttpServer &MiniHttpServer::operator >>(HTTPHandler handler) {
+MiniHttpServer &MiniHttpServer::operator >>(HTTPHandler &&handler) {
+	return operator>>=(std::move(handler));
+}
+MiniHttpServer &MiniHttpServer::operator >>=(HTTPHandler &&handler) {
+
 	if (!running) {
-		srv->setHndl(handler);
+		srv->setHndl(std::move(handler));
 		srv->runCycle();
 		running = true;
 	}

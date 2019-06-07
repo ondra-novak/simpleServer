@@ -29,16 +29,16 @@ namespace _intr {
 			return ehndl;
 		}
 
-		void setEhndl(const ErrorHandler& ehndl) {
-			this->ehndl = ehndl;
+		void setEhndl(ErrorHandler&& ehndl) {
+			this->ehndl = std::move(ehndl);
 		}
 
 		const HTTPHandler& getHndl() const {
 			return hndl;
 		}
 
-		void setHndl(const HTTPHandler& hndl) {
-			this->hndl = hndl;
+		void setHndl(HTTPHandler && hndl) {
+			this->hndl = std::move(hndl);
 		}
 
 		const StreamFactory& getSf() const {
@@ -79,7 +79,8 @@ public:
 	MiniHttpServer(StreamFactory sf, AsyncProvider asyncProvider);
 	~MiniHttpServer();
 
-	MiniHttpServer &operator >> (HTTPHandler handler);
+	MiniHttpServer &operator >> (HTTPHandler &&handler);
+	MiniHttpServer &operator >>= (HTTPHandler &&handler);
 
 
 
