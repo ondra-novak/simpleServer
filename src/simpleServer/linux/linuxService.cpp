@@ -214,7 +214,7 @@ void LinuxService::processRequest(Stream s) {
 				s << "ERROR: command '" << argList[0] << "' is not supported~255";
 
 			} else {
-				int ret =  it->second(argList, s);
+				int ret =  it->second(argList.substr(1), s);
 				s << "~" << ret;
 			}
 			s.flush();
@@ -437,7 +437,7 @@ bool LinuxService::checkPidFile(std::ostream &out) {
 	if (access(controlFile.c_str(),0) == 0) {
 		try {
 			postCommand("status",ArgList(), out);
-			std::cerr << std::endl;
+			out << "\n";
 			return true;
 		} catch (...) {
 			unlink(controlFile.c_str());
