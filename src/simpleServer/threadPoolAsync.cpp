@@ -133,7 +133,7 @@ void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, c
 				lst->runAsync(resource,timeout, fn);
 				return;
 			}
-		} catch (OutOfSpaceException) {
+		} catch (OutOfSpaceException &) {
 			retry();
 		}
 	}while(true);
