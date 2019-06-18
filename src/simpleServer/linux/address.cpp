@@ -318,7 +318,12 @@ NetAddr NetAddr::create(StrViewA addr, unsigned int defaultPort, AddressType typ
 				prepPort = addr.substr(sep+1);
 			}
 		}
-		node = copyString(alloca(prepNode.length+1),prepNode);
+		if (prepNode.empty() || prepNode=="*") {
+			req.ai_flags |=  AI_PASSIVE;
+			node = nullptr;
+		} else {
+			node = copyString(alloca(prepNode.length+1),prepNode);
+		}
 
 	}
 
