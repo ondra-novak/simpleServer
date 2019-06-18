@@ -14,7 +14,7 @@ BinaryView FileStream::implRead(bool nonblock) {
 
 }
 
-BinaryView FileStream::implWrite(BinaryView buffer, bool nonblock) {
+BinaryView FileStream::implWrite(BinaryView buffer, bool) {
 	do {
 		int r = ::write(fd, buffer.data, buffer.length);
 		if (r < 0) {
@@ -33,11 +33,11 @@ BinaryView FileStream::implWrite(BinaryView buffer, bool nonblock) {
 
 
 
-bool FileStream::implWaitForRead(int timeoutms) {
+bool FileStream::implWaitForRead(int ) {
 	return true;
 }
 
-bool FileStream::implWaitForWrite(int timeoutms) {
+bool FileStream::implWaitForWrite(int ) {
 	return true;
 }
 
@@ -57,7 +57,7 @@ FileStream::FileStream(int fd)
 
 }
 
-BinaryView FileStream::implRead(MutableBinaryView buffer, bool nonblock) {
+BinaryView FileStream::implRead(MutableBinaryView buffer, bool ) {
 	do {
 		int r = ::read(fd,buffer.data, buffer.length);
 		if (r < 0) {
@@ -72,7 +72,7 @@ BinaryView FileStream::implRead(MutableBinaryView buffer, bool nonblock) {
 }
 
 
-bool FileStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
+bool FileStream::implWrite(WrBuffer& curBuffer, bool nonblock ) {
  if (curBuffer.wrpos == 0) {
 	 curBuffer = WrBuffer(outputBuffer,outputBufferSize,0);
  } else {
