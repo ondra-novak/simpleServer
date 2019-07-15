@@ -73,14 +73,14 @@ RefCntPtr<INetworkAddress> AddressAddrInfo::getNextAddr() const
 }
 
 SocketObject AddressAddrInfo::connect() const {
-	SocketObject s(socket(addr->ai_family, SOCK_STREAM, addr->ai_protocol));
+	SocketObject s(socket(addr->ai_family, SOCK_STREAM|SOCK_CLOEXEC, addr->ai_protocol));
 	if (!s) throw SystemException(errno,"Failed to create socket");
 	int nblock = 1;ioctl(s, FIONBIO, &nblock);
 	::connect(s, reinterpret_cast<const struct sockaddr *>(addr->ai_addr),addr->ai_addrlen);
 	return s;
 }
 SocketObject AddressAddrInfo::listen() const {
-	SocketObject s(socket(addr->ai_family, SOCK_STREAM, addr->ai_protocol));
+	SocketObject s(socket(addr->ai_family, SOCK_STREAM|SOCK_CLOEXEC, addr->ai_protocol));
 	if (!s) throw SystemException(errno,"Failed to create socket");
 	int enable = 1;
 	(void)setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
