@@ -22,6 +22,7 @@ public:
 	void operator()(const HTTPRequest &req);
 	bool operator()(const HTTPRequest &req, const StrViewA &vpath);
 
+	virtual ~HttpFileMapper() {}
 
 	static char pathSeparator;
 

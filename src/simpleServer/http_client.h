@@ -147,7 +147,7 @@ public:
 class IHttpsProvider {
 public:
 	virtual Stream connect(Stream conn, StrViewA hostname) = 0;
-
+	virtual ~IHttpsProvider() {}
 };
 
 

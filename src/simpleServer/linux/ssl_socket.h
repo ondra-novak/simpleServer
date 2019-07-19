@@ -24,6 +24,7 @@ enum class SSLMode {
 class SSLAbstractStreamFactory {
 public:
 	SSLAbstractStreamFactory();
+	virtual ~SSLAbstractStreamFactory() {};
 	virtual Stream convert_to_ssl(Stream stream) = 0;
 	virtual void setup(SSL_CTX *ctx);
 	virtual void verifyConnection(SSL_CTX *ctx, SSL *ssl, AbstractStream *stream);
@@ -46,8 +47,8 @@ public:
 
 	virtual Stream convert_to_ssl(Stream stream) override;
 	virtual void setup(SSL_CTX *ctx) override;
-	virtual void verifyConnection(SSL_CTX *ctx, SSL *ssl, AbstractStream *stream);
-	virtual void precreateConnection(SSL_CTX *ctx, SSL *ssl);
+	virtual void verifyConnection(SSL_CTX *ctx, SSL *ssl, AbstractStream *stream) override;
+	virtual void precreateConnection(SSL_CTX *ctx, SSL *ssl)  override;
 
 };
 
@@ -56,8 +57,8 @@ public:
 	virtual Stream convert_to_ssl(Stream stream) override;
 	virtual Stream convert_to_ssl(Stream stream, const std::string &host);
 	virtual void setup(SSL_CTX *ctx) override;
-	virtual void verifyConnection(SSL_CTX *ctx, SSL *ssl, AbstractStream *stream);
-	virtual void precreateConnection(SSL_CTX *ctx, SSL *ssl);
+	virtual void verifyConnection(SSL_CTX *ctx, SSL *ssl, AbstractStream *stream)  override;
+	virtual void precreateConnection(SSL_CTX *ctx, SSL *ssl)  override;
 
 
 	void setHost(const std::string &host);
