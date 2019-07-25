@@ -255,4 +255,20 @@ void StreamJsonRpcClient::parseFrame(json::Value j) {
 	}
 }
 
+
+void WebSocketJsonRpcClient::setStream(WebSocketStream wsstream,
+		const RpcResult& cancelResult) {
+	Sync _(lock);
+	cancelAllPendingCalls(cancelResult);
+	this->wsstream = wsstream;
+}
+
+void StreamJsonRpcClient::setStream(Stream stream,
+		const RpcResult& cancelResult) {
+	Sync _(lock);
+	cancelAllPendingCalls(cancelResult);
+	this->stream = stream;
+}
+
+
 }

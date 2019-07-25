@@ -118,6 +118,14 @@ public:
 		return wsstream;
 	}
 
+	///Changes stream - usefull when old streams disconnects
+	/**
+	 * @param wsstream new, connected stream
+	 * @param cancelResult function cancels all pending calls. This variable
+	 * must contain result send to all canceled pending calls
+	 */
+	void setStream(WebSocketStream wsstream, const json::RpcResult &cancelResult);
+
 protected:
 	WebSocketStream wsstream;
 	std::vector<char> buffer;
@@ -179,6 +187,19 @@ public:
 	void parseAllResponsesAsync(IAsyncProvider::CompletionFn compFn);
 	///Parses all responses asynchronously. Function will not block
 	void parseAllResponsesAsync();
+
+	///Changes stream - usefull when old streams disconnects
+	/**
+	 * @param wsstream new, connected stream
+	 * @param cancelResult function cancels all pending calls. This variable
+	 * must contain result send to all canceled pending calls
+	 */
+	void setStream(Stream wsstream, const json::RpcResult &cancelResult);
+
+	const Stream &getStream() const {
+		return stream;
+	}
+
 
 protected:
 	Stream stream;
