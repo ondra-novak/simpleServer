@@ -31,7 +31,7 @@ public:
 		}
 
 	}
-	virtual std::string toString(bool) const {
+	virtual std::string toString(bool) const override {
 		char perms[10];
 		if (permissions) {
 			snprintf(perms,10,":%03o", permissions);
@@ -41,12 +41,12 @@ public:
 		}
 
 	}
-	virtual BinaryView toSockAddr() const {
+	virtual BinaryView toSockAddr() const override  {
 		return BinaryView(reinterpret_cast<const unsigned char *>(&sockAddr), sizeof (sockAddr));
 	}
 
-	virtual RefCntPtr<INetworkAddress> getNextAddr() const {return nullptr;}
-	virtual const INetworkAddress &unproxy() const {return *this;}
+	virtual RefCntPtr<INetworkAddress> getNextAddr() const override  {return nullptr;}
+	virtual const INetworkAddress &unproxy() const override  {return *this;}
 
 	unsigned int getPermissions() const {return permissions;}
 	const char *getPath() const {return sockAddr.sun_path;}
