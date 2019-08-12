@@ -354,7 +354,7 @@ void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrV
 			"<h1>"  << statusCode << " " << statusMessage <<"</h1>"
 			"<p><![CDATA[" << desc << "]]></p>"
 			"<hr />"
-			"<small><em>Powered by Bredy's simpleServer - C++x11 mini-http-server - <a href=\"https://github.com/ondra-novak/simpleServer\">sources available under MIT licence</a></em></small>"
+			"<small><em>Powered by Bredy's simpleServer - C++x17 simpleServer- <a href=\"https://github.com/ondra-novak/simpleServer\">sources available under MIT licence</a></em></small>"
 			"</body>"
 			"</html>";
 
