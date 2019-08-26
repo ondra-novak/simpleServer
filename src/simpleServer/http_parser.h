@@ -363,26 +363,26 @@ public:
 	/**
 	 * @return String contains method name: GET, PUT, POST, OPTIONS, etc
 	 */
-	StrViewA getMethod() const {return ptr->getMethod();}
+	StrViewA getMethod() const {return (*this)->getMethod();}
 
 	bool allowMethods(std::initializer_list<StrViewA> methods) {
-		return ptr->allowMethods(methods);
+		return (*this)->allowMethods(methods);
 	}
 
 	///Retrieves path
 	/**
 	 * @return string contains path from the request line (raw)
 	 */
-	StrViewA getPath() const {return ptr->getPath();}
+	StrViewA getPath() const {return (*this)->getPath();}
 
-	StrViewA getHost() const {return ptr->getHost();}
+	StrViewA getHost() const {return (*this)->getHost();}
 ///Retrieves http version
 	/**
 	 * @return string contains HTTP version: HTTP/1.0 or HTTP/1.1
 	 */
-	HttpVersion getVersion() const {return ptr->getVersion();}
+	HttpVersion getVersion() const {return (*this)->getVersion();}
 	///Retrieves whole request line
-	StrViewA getRequestLine() const {return ptr->getRequestLine();}
+	StrViewA getRequestLine() const {return (*this)->getRequestLine();}
 	///Forges full uri
 	/**
 	 * @param secure set true if the connection is secured, otherwise false
@@ -390,7 +390,7 @@ public:
 	 *
 	 * @note function just combines Host and path to create URI.
 	 */
-	std::string getURI(bool secure=true) const {return ptr->getURI(secure);}
+	std::string getURI(bool secure=true) const {return (*this)->getURI(secure);}
 
 
 	///Send response
@@ -401,8 +401,8 @@ public:
 	 * @param body body of the response
 	 *
 	 */
-	void sendResponse(StrViewA contentType, BinaryView body)const  {ptr->sendResponse(contentType,body);}
-	void sendResponse(StrViewA contentType, StrViewA body)const  {ptr->sendResponse(contentType,body);}
+	void sendResponse(StrViewA contentType, BinaryView body)const  {(*this)->sendResponse(contentType,body);}
+	void sendResponse(StrViewA contentType, StrViewA body)const  {(*this)->sendResponse(contentType,body);}
 	///Send response
 	/**
 	 * Allows to send simple response to the client
@@ -412,8 +412,8 @@ public:
 	 * @param statusCode sends with specified status code. (i.e. 404)
 	 *
 	 */
-	void sendResponse(StrViewA contentType, BinaryView body, int statusCode)const  {ptr->sendResponse(contentType,body,statusCode);}
-	void sendResponse(StrViewA contentType, StrViewA body, int statusCode) const  {ptr->sendResponse(contentType,body,statusCode);}
+	void sendResponse(StrViewA contentType, BinaryView body, int statusCode)const  {(*this)->sendResponse(contentType,body,statusCode);}
+	void sendResponse(StrViewA contentType, StrViewA body, int statusCode) const  {(*this)->sendResponse(contentType,body,statusCode);}
 	///Send response
 	/**
 	 * Allows to send simple response to the client
@@ -425,21 +425,21 @@ public:
 	 *
 	 */
 	void sendResponse(StrViewA contentType, BinaryView body, int statusCode, StrViewA statusMessage) const
-	 	 {ptr->sendResponse(contentType,body,statusCode,statusMessage);}
+	 	 {(*this)->sendResponse(contentType,body,statusCode,statusMessage);}
 	void sendResponse(StrViewA contentType, StrViewA body, int statusCode, StrViewA statusMessage) const
-		{ptr->sendResponse(contentType,body,statusCode,statusMessage);}
+		{(*this)->sendResponse(contentType,body,statusCode,statusMessage);}
 	///Generates error page
 	/**
 	 * @param statusCode sends with specified status code. (i.e. 404)
 	 *
 	 */
-	void sendErrorPage(int statusCode) const {ptr->sendErrorPage(statusCode);}
+	void sendErrorPage(int statusCode) const {(*this)->sendErrorPage(statusCode);}
 	///Generates error page
 	/**
 	 * @param statusCode sends with specified status code. (i.e. 404)
 	 * @param statusMessage sends with specified status message. (i.e. "Not found")
 	 */
-	void sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc = StrViewA()) const {ptr->sendErrorPage(statusCode,statusMessage,desc);}
+	void sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc = StrViewA()) const {(*this)->sendErrorPage(statusCode,statusMessage,desc);}
 
 
 	///Generates response, returns stream
@@ -449,7 +449,7 @@ public:
 	 * @param contentType contenr type of the stream
 	 * @return stream. You can start sending data through the stream
 	 */
-	Stream sendResponse(StrViewA contentType) const {return ptr->sendResponse(contentType);}
+	Stream sendResponse(StrViewA contentType) const {return (*this)->sendResponse(contentType);}
 	///Generates response, returns stream
 	/**
 	 * Allows to stream response
@@ -459,7 +459,7 @@ public:
 	 * @param statusMessage allows to set status message
 	 * @return stream. You can start sending data through the stream
 	 */
-	Stream sendResponse(StrViewA contentType, int statusCode) const {return ptr->sendResponse(contentType, statusCode);}
+	Stream sendResponse(StrViewA contentType, int statusCode) const {return (*this)->sendResponse(contentType, statusCode);}
 	///Generates response, returns stream
 	/**
 	 * Allows to stream response
@@ -469,7 +469,7 @@ public:
 	 * @param statusMessage allows to set status message
 	 * @return stream. You can start sending data through the stream
 	 */
-	Stream sendResponse(StrViewA contentType, int statusCode, StrViewA statusMessage) const {return ptr->sendResponse(contentType, statusCode, statusMessage);}
+	Stream sendResponse(StrViewA contentType, int statusCode, StrViewA statusMessage) const {return (*this)->sendResponse(contentType, statusCode, statusMessage);}
 
 
 	///Generates response using HTTPResponse object
@@ -477,23 +477,23 @@ public:
 	 * @param resp object contains headers
 	 * @param content content
 	 */
-	void sendResponse(const HTTPResponse &resp, StrViewA body)const {ptr->sendResponse(resp,body);}
+	void sendResponse(const HTTPResponse &resp, StrViewA body)const {(*this)->sendResponse(resp,body);}
 	///Generates response using HTTPResponse object
 	/**
 	 * @param resp object contains headers
 	 * @return stream
 	 */
-	Stream sendResponse(const HTTPResponse &resp) const {return ptr->sendResponse(resp);}
+	Stream sendResponse(const HTTPResponse &resp) const {return (*this)->sendResponse(resp);}
 
 
-	void redirect(StrViewA url, Redirect type = Redirect::temporary) const {return ptr->redirect(url,type);}
+	void redirect(StrViewA url, Redirect type = Redirect::temporary) const {return (*this)->redirect(url,type);}
 
 	///Redirects the browser
-	bool redirectToFolderRoot(Redirect type = Redirect::permanent_repeat) const {return ptr->redirectToFolderRoot(type);}
+	bool redirectToFolderRoot(Redirect type = Redirect::permanent_repeat) const {return (*this)->redirectToFolderRoot(type);}
 
 
 
-	std::vector<unsigned char> &getUserBuffer() const {return ptr->userBuffer;}
+	std::vector<unsigned char> &getUserBuffer() const {return (*this)->userBuffer;}
 
 	///Reads body of the request asynchronously.
 	/**
@@ -506,7 +506,7 @@ public:
 	 * @param completion function called when reading is complette.
 	 *
 	 */
-	void readBodyAsync(std::size_t maxSize, HTTPHandler completion) const {ptr->readBodyAsync(maxSize, completion);}
+	void readBodyAsync(std::size_t maxSize, HTTPHandler completion) const {(*this)->readBodyAsync(maxSize, completion);}
 
 	///sends file directly from the disk to the client
 	/**
@@ -519,24 +519,24 @@ public:
 	 * from the content of the file.
 	 */
 
-	void sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true)const {ptr->sendFile(content_type, pathname, etag);}
+	void sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true)const {(*this)->sendFile(content_type, pathname, etag);}
 
 	///Begin of the headers
 	ReceivedHeaders::HdrMap::const_iterator begin() const {
-		return ptr->begin();
+		return (*this)->begin();
 	}
 	///End of the headers
 	ReceivedHeaders::HdrMap::const_iterator end() const {
-		return ptr->end();
+		return (*this)->end();
 	}
 	///Retrieves header value
 	HeaderValue operator[](StrViewA key) const {
-		return ptr->operator [](key);
+		return (*this)->operator [](key);
 	}
 
 
 	Stream getBodyStream() {
-		return ptr->getBodyStream();
+		return (*this)->getBodyStream();
 	}
 
 

@@ -522,6 +522,7 @@ void LinuxService::enableRestart()  {
 			exit(255);
 		}
 		logError("The service crashed with status $1. Restarting...", WTERMSIG(status));
+		sleep(3);
 		logRotate();
 	}
 	while (true);

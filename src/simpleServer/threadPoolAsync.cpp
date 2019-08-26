@@ -228,20 +228,20 @@ AsyncProvider ThreadPoolAsync::create(unsigned int numThreads, unsigned int numL
 }
 
 void ThreadPoolAsync::setCountOfDispatchers(unsigned int count) {
-	ptr->setCountOfDispatchers(count);
+	(*this)->setCountOfDispatchers(count);
 }
 
 void ThreadPoolAsync::setCountOfThreads(unsigned int count) {
-	ptr->setCountOfThreads(count);
+	(*this)->setCountOfThreads(count);
 }
 
 void ThreadPoolAsync::stop() {
-	ptr->stop();
+	(*this)->stop();
 }
 
 ThreadPoolAsync::~ThreadPoolAsync() {
-	if (!ptr->isShared()) {
-		ptr->stop();
+	if (!(*this)->isShared()) {
+		(*this)->stop();
 	}
 }
 
@@ -262,7 +262,7 @@ void ThreadPoolAsyncImpl::runAsync(const CustomFn& completion) {
 }
 
 void ThreadPoolAsync::setTasksPerDispLimit(unsigned int count) {
-	ptr->setTasksPerDispLimit(count);
+	(*this)->setTasksPerDispLimit(count);
 }
 
 ThreadPoolAsync::operator AsyncProvider() const {

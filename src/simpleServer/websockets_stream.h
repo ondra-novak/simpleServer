@@ -208,7 +208,7 @@ public:
 	 *  You can also need this function to set or modify the asynchronous provider
 	 *  for the underying socket
 	 */
-	const Stream getStream() const {return ptr->getStream();}
+	const Stream getStream() const {return (*this)->getStream();}
 
 
 	///Read next message asynchronously
@@ -222,7 +222,7 @@ public:
 	template<typename Fn>
 	void readAsync(const Fn &fn) {
 			discardFrame();
-			ptr->readAsync(fn);
+			(*this)->readAsync(fn);
 	}
 
 	///Read next message synchronously
@@ -248,7 +248,7 @@ public:
 	 * }
 	 * @endcode
 	 */
-	bool read( bool nonblock = false) {return ptr->read(nonblock);}
+	bool read( bool nonblock = false) {return (*this)->read(nonblock);}
 
 	///Discards current frame
 	/** The function must be called when the current frame has been already processed and
@@ -261,7 +261,7 @@ public:
 	 * this is not necessary.
 	 */
 	void discardFrame() {
-		ptr->discardFrame();
+		(*this)->discardFrame();
 	}
 
 	///Reads whole frame while it blocks current thread until the frame is read whole.
@@ -271,7 +271,7 @@ public:
 	 * @retval false connection has been reset
 	 */
 	bool readFrame() {
-		ptr->discardFrame();
+		(*this)->discardFrame();
 		while (read()) {
 			if (isComplete()) return true;
 		}
@@ -287,28 +287,28 @@ public:
 	 *
 	 * @note function is MT safe
 	 */
-	void close(int code = WebSocketsConstants::closeNormal) {ptr->close(code);}
+	void close(int code = WebSocketsConstants::closeNormal) {(*this)->close(code);}
 	///Send ping request
 	/**
 	 * @param data user payload
 	 *
 	 * @note function is MT safe
 	 */
-	void ping(const BinaryView &data) {ptr->ping(data);}
+	void ping(const BinaryView &data) {(*this)->ping(data);}
 	///Send text message
 	/**
 	 * @param contans text to send
 	 *
 	 * @note function is MT safe
 	 */
-	void postText(const StrViewA &data) {ptr->postText(data);}
+	void postText(const StrViewA &data) {(*this)->postText(data);}
 	///Send binary message
 	/**
 	 * @param contans binary data to send
 	 *
 	 * @note function is MT safe
 	 */
-	void postBinary(const BinaryView &data) {ptr->postBinary(data);}
+	void postBinary(const BinaryView &data) {(*this)->postBinary(data);}
 
 	///Send close request asynchronously
 	/**
@@ -324,7 +324,7 @@ public:
 	 * is complete. The function has prototype void(AsyncState)
 	 */
 	template<typename Fn>
-	void closeAsync(int code, const Fn &fn) {ptr->closeAsync(code,fn);}
+	void closeAsync(int code, const Fn &fn) {(*this)->closeAsync(code,fn);}
 	///Send ping request asynchronously
 	/**
 	 *
@@ -336,7 +336,7 @@ public:
 	 * is complete.
 	 */
 	template<typename Fn>
-	void pingAsync(const BinaryView &data, const Fn &fn) {ptr->pingAsync(data,fn);}
+	void pingAsync(const BinaryView &data, const Fn &fn) {(*this)->pingAsync(data,fn);}
 	///Send text request asynchronously
 	/**
 	 *
@@ -348,7 +348,7 @@ public:
 	 * is complete.
 	 */
 	template<typename Fn>
-	void postTextAsync(const StrViewA &data, const Fn &fn) {ptr->postTextAsync(data,fn);}
+	void postTextAsync(const StrViewA &data, const Fn &fn) {(*this)->postTextAsync(data,fn);}
 	///Send binary request asynchronously
 	/**
 	 *
@@ -360,7 +360,7 @@ public:
 	 * is complete.
 	 */
 	template<typename Fn>
-	void postBinaryAsync(const BinaryView &data, const Fn &fn) {ptr->postBinaryAsync(data,fn);}
+	void postBinaryAsync(const BinaryView &data, const Fn &fn) {(*this)->postBinaryAsync(data,fn);}
 
 	///Determines, whether receiving messsage is complete
 	/** You should check complete status after every read(), otherwise the message
@@ -372,7 +372,7 @@ public:
 	 * @note when non blocking read is used, you should call discardFrame() to clear
 	 * completion status.
 	 */
-	bool isComplete() const {return ptr->isComplete();}
+	bool isComplete() const {return (*this)->isComplete();}
 
 
 	///Retrieves type of frame has been received
@@ -385,20 +385,20 @@ public:
 	 *@retval pong pong received
 	 *
 	 */
-	WSFrameType getFrameType() const {return ptr->getFrameType();}
+	WSFrameType getFrameType() const {return (*this)->getFrameType();}
 
 	///Retrieve data as binary view
 	/** Function retrieves data as binary view*/
-	BinaryView getData() const {return ptr->getData();}
+	BinaryView getData() const {return (*this)->getData();}
 
 	///Retrieve data as text view
-	StrViewA getText() const {return ptr->getText();}
+	StrViewA getText() const {return (*this)->getText();}
 
 	///Get code (for opcodeConnClose)
-	unsigned int getCode() const {return ptr->getCode();}
+	unsigned int getCode() const {return (*this)->getCode();}
 
 	///Returns true, if the websocket is already closed
-	bool isClosed() const {return ptr->isClosed();}
+	bool isClosed() const {return (*this)->isClosed();}
 
 };
 

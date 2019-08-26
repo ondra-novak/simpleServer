@@ -622,7 +622,7 @@ public:
 	 * */
 
 	int operator()() const {
-		return ptr->readByte();
+		return (*this)->readByte();
 	}
 
 	///The Stream can be used as function to write next byte to the output stream
@@ -631,7 +631,7 @@ public:
 	 *  outside of this range is not defined (probably it will write only lowest 8 bits)
 	 */
 	void operator()(int b) const {
-		ptr->writeByte((unsigned char)b);
+		(*this)->writeByte((unsigned char)b);
 	}
 
 	///Reads next byte without removing it from the stream
@@ -640,7 +640,7 @@ public:
 	 * @retval -1 end of stream (no more data)
 	 */
 	int peek() const {
-		return ptr->peekByte();
+		return (*this)->peekByte();
 	}
 	///Reads some bytes from the stream
 	/**
@@ -662,11 +662,11 @@ public:
 	 * with the returned view.
 	 */
 	BinaryView read(bool nonblock=false) const {
-		return ptr->read(nonblock);
+		return (*this)->read(nonblock);
 	}
 
 	BinaryView read(const MutableBinaryView &buffer, bool nonblock=false) const {
-		return ptr->read(buffer, nonblock);
+		return (*this)->read(buffer, nonblock);
 	}
 
 	///Puts back the part of the buffer, so next read will read it back
@@ -694,7 +694,7 @@ public:
 	 * behaviour
 	 */
 	void putBack(const BinaryView &data) const {
-		return ptr->putBack(data);
+		return (*this)->putBack(data);
 	}
 
 	///Puts backs one byte
@@ -703,14 +703,14 @@ public:
 	 * only if there weren't EOF, otherwise it can cause inpredictable result
 	 */
 	void putBackByte() const {
-		return ptr->putBackByte();
+		return (*this)->putBackByte();
 	}
 	///Puts back EOF, so it will appear that stream is ending
 	/** This function causes, that next read will return EOF. However it is possible to
 	 * complete any blocking operation. Function is MT safe.
 	 */
 	void putBackEof() const {
-		return ptr->putBackEof();
+		return (*this)->putBackEof();
 	}
 	///Closes the output part of the stream by writing EOF
 	/** the other side will receive EOF
@@ -720,7 +720,7 @@ public:
 	 *
 	 *  */
 	void  closeOutput() const {
-		ptr->writeEof();
+		(*this)->writeEof();
 	}
 	///Closes the output part of the stream by writing EOF
 	/** the other side will receive EOF
@@ -730,7 +730,7 @@ public:
 	 *
 	 *  */
 	void writeEof() const {
-		ptr->writeEof();
+		(*this)->writeEof();
 	}
 
 	///flushes the internal output buffer
@@ -745,44 +745,44 @@ public:
 	 * return until operation completes
 	 */
 	bool flush(WriteMode wr = writeAndFlush) const {
-		return ptr->flush(wr);
+		return (*this)->flush(wr);
 	}
 	BinaryView write(const BinaryView &buffer, WriteMode wrmode = writeWholeBuffer) const {
-		return ptr->write(buffer, wrmode);
+		return (*this)->write(buffer, wrmode);
 	}
 	int setIOTimeout(int timeoutms) const {
-		return ptr->setIOTimeout(timeoutms);
+		return (*this)->setIOTimeout(timeoutms);
 	}
 
 	bool waitForInput(int timeout) const {
-		return ptr->waitForInput(timeout);
+		return (*this)->waitForInput(timeout);
 	}
 
 	bool waitForOutput(int timeout) const {
-		return ptr->waitForOutput(timeout);
+		return (*this)->waitForOutput(timeout);
 	}
 	template<typename Fn>
 	void readAsync(Fn &&completion) const {
-		return ptr->readAsync(std::forward<Fn>(completion));
+		return (*this)->readAsync(std::forward<Fn>(completion));
 	}
 	template<typename Fn>
 	void readAsync(const MutableBinaryView &buffer, Fn &&completion) const {
-		return ptr->readAsync(buffer,std::forward<Fn>(completion));
+		return (*this)->readAsync(buffer,std::forward<Fn>(completion));
 	}
 	template<typename Fn>
 	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) const {
-		return ptr->writeAsync(data, completion, alldata);
+		return (*this)->writeAsync(data, completion, alldata);
 	}
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) const {
-		return ptr->setAsyncProvider(asyncProvider);
+		return (*this)->setAsyncProvider(asyncProvider);
 	}
 	AsyncProvider getAsyncProvider() const {
-		return ptr->getAsyncProvider();
+		return (*this)->getAsyncProvider();
 	}
 
 	bool canRunAsync() const {
-		return ptr->canRunAsync();
+		return (*this)->canRunAsync();
 	}
 
 	const Stream &operator << (StrViewA text) const {

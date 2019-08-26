@@ -141,22 +141,22 @@ public:
 
 
 	void dispatch() const {
-		ptr->dispatch();
+		(*this)->dispatch();
 	}
 
 	void addCommand(StrViewA command, UserCommandFn fn) const {
-		ptr->addCommand(command, fn);
+		(*this)->addCommand(command, fn);
 	}
 	void stop() const {
-		ptr->stop();
+		(*this)->stop();
 	}
 
 
 	void enableRestart() {
-		ptr->enableRestart();
+		(*this)->enableRestart();
 	}
 	bool isDaemon() const{
-		return ptr->isDaemon();
+		return (*this)->isDaemon();
 	}
 
 
@@ -175,7 +175,7 @@ public:
 	 * empty name is interpreted as disable function.
 	 */
 	void changeUser(StrViewA userInfo) {
-		ptr->changeUser(userInfo);
+		(*this)->changeUser(userInfo);
 	}
 };
 

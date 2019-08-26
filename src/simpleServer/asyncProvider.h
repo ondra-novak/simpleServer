@@ -105,25 +105,25 @@ public:
 
 	template<typename Fn>
 	void runAsync(const AsyncResource &resource, int timeout, const Fn &completion) const {
-		ptr->runAsync(resource, timeout,completion);
+		(*this)->runAsync(resource, timeout,completion);
 	}
 
 	template<typename Fn>
 	void runAsync(const Fn &completion) const {
-		ptr->runAsync(completion);
+		(*this)->runAsync(completion);
 	}
 
 	void stop() const {
-		ptr->stop();
+		(*this)->stop();
 	}
 
 	void cancel(const AsyncResource &x) const {
-		ptr->cancel(x);
+		(*this)->cancel(x);
 	}
 
 	template<typename Fn>
 	void operator>>(const Fn &completion) const {
-		ptr->runAsync(completion);
+		(*this)->runAsync(completion);
 	}
 
 	///Converts AsyncProvider to Worker

@@ -90,26 +90,26 @@ public:
 
 
 	Stream operator()() const {
-		return ptr->create();
+		return (*this)->create();
 	}
 
 	typedef AbstractStreamFactory::Iterator Iterator;
 
 	Iterator begin() const {
-		return ptr->begin();
+		return (*this)->begin();
 	}
 	Iterator end() const {
-		return ptr->end();
+		return (*this)->end();
 	}
 
 	void stop() const {
-		return ptr->stop();
+		return (*this)->stop();
 	}
 
 
 	template<typename Callback>
 	void operator()(const AsyncProvider &provider, const Callback &cb) const {
-		ptr->createAsync(provider, cb);
+		(*this)->createAsync(provider, cb);
 	}
 
 };
