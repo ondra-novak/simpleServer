@@ -60,42 +60,39 @@ protected:
 			writeLimit += curBuffer.wrpos;
 			return r;
 		}
-		virtual void implReadAsync(const Callback &cb)  override {
+		virtual void implReadAsync(Callback &&cb)  override {
 			if (readLimit == 0) {
 				cb(asyncEOF, eofConst);
 				return;
 			}
 			RefCntPtr<LimitedStream> me(this);
-			Callback ccb(cb);
-			source.readAsync([=](AsyncState st, const BinaryView &b) {
+			source.readAsync([=, ccb = std::move(cb)](AsyncState st, const BinaryView &b) {
 				BinaryView x = b.substr(0,me->readLimit);
 				source.putBack(b.substr(x.length));
 				me->readLimit-=x.length;
 				ccb(st, x);
 			});
 		}
-		virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb)  override {
+		virtual void implReadAsync(const MutableBinaryView &buffer, Callback &&cb)  override {
 			if (readLimit == 0) {
 				cb(asyncEOF, eofConst);
 				return;
 			}
 			MutableBinaryView b = buffer.substr(0,readLimit);
 			RefCntPtr<LimitedStream> me(this);
-			Callback ccb(cb);
-			source.readAsync(b,[=](AsyncState st, const BinaryView &b) {
+			source.readAsync(b,[=,ccb=std::move(cb)](AsyncState st, const BinaryView &b) {
 				me->readLimit-=b.length;
 				ccb(st,b);
 			});
 		}
-		virtual void implWriteAsync(const BinaryView &data, const Callback &cb)  override {
+		virtual void implWriteAsync(const BinaryView &data, Callback &&cb)  override {
 			if (writeLimit == 0) return;
 
 			BinaryView b = data.substr(0,writeLimit);
 			RefCntPtr<LimitedStream> me(this);
-			Callback ccb(cb);
 			writeLimit-= b.length;
 
-			source->getDirectWrite().writeAsync(b, [=](AsyncState st, const BinaryView &data){
+			source->getDirectWrite().writeAsync(b, [=,ccb=std::move(cb)](AsyncState st, const BinaryView &data){
 				me->writeLimit+=data.length;
 				ccb(st, data);
 			});

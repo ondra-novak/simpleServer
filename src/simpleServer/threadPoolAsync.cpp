@@ -108,7 +108,7 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 }
 
 
-void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, const CompletionFn &fn) {
+void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout,  CompletionFn &&fn) {
 
 	if (exitFlag) {
 		defer >> std::bind(fn, asyncCancel);
@@ -130,7 +130,7 @@ void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout, c
 			if (lst->getPendingCount()>=taskLimit) {
 				retry();
 			} else {
-				lst->runAsync(resource,timeout, fn);
+				lst->runAsync(resource,timeout, std::move(fn));
 				return;
 			}
 		} catch (OutOfSpaceException &) {
@@ -245,19 +245,19 @@ ThreadPoolAsync::~ThreadPoolAsync() {
 	}
 }
 
-void ThreadPoolAsyncImpl::runAsync(const CustomFn& completion) {
+void ThreadPoolAsyncImpl::runAsync(CustomFn&& completion) {
 
 	if (exitFlag) {
-		defer >> completion;
+		defer >> std::move(completion);
 		return;
 	}
 
 	if (reqThreadCount > reqDispatcherCount) {
 		checkThreadCount();
-		dQueue.dispatch(completion);
+		dQueue.dispatch(std::move(completion));
 	} else {
 		auto lst = getListener();
-		lst->runAsync(completion);
+		lst->runAsync(std::move(completion));
 	}
 }
 

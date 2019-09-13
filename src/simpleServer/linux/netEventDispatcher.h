@@ -22,9 +22,9 @@ public:
 	LinuxEventDispatcher();
 	virtual ~LinuxEventDispatcher() noexcept;
 
-	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) override;
+	virtual void runAsync(const AsyncResource &resource, int timeout, CompletionFn &&complfn) override;
 
-	virtual void runAsync(const CustomFn &completion) override;
+	virtual void runAsync(CustomFn &&completion) override;
 
 	virtual void cancel(const AsyncResource &resource) override;
 

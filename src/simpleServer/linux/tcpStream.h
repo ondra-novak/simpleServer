@@ -24,9 +24,9 @@ protected:
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
 	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
 	virtual bool implWrite(WrBuffer &curBuffer, bool nonblock) override;
-	virtual void implReadAsync(const Callback &cb) override;
-	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb)  override;
-	virtual void implWriteAsync(const BinaryView &data, const Callback &cb)  override;
+	virtual void implReadAsync(Callback &&cb) override;
+	virtual void implReadAsync(const MutableBinaryView &buffer, Callback &&cb)  override;
+	virtual void implWriteAsync(const BinaryView &data, Callback &&cb)  override;
 	virtual bool implWaitForRead(int timeoutms)  override;
 	virtual bool implWaitForWrite(int timeoutms)  override;
 	virtual void implCloseInput()  override;
@@ -49,8 +49,8 @@ protected:
 	int iotimeout;
 	NetAddr peer;
 
-	virtual void asyncReadCallback(const MutableBinaryView& buffer, const Callback& cb, AsyncState state);
-	virtual void asyncWriteCallback(const BinaryView& data, const Callback& cb, AsyncState state);
+	virtual void asyncReadCallback(const MutableBinaryView& buffer, Callback&& cb, AsyncState state);
+	virtual void asyncWriteCallback(const BinaryView& data, Callback&& cb, AsyncState state);
 
 	static bool doPoll(int sock, int events, int timeoutms);
 

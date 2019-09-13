@@ -40,9 +40,9 @@ protected:
 	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
 	virtual bool implWrite(WrBuffer &curBuffer, bool nonblock) override;
 
-	virtual void implReadAsync(const Callback &cb) override;
-	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb) override ;
-	virtual void implWriteAsync(const BinaryView &data, const Callback &cb) override;
+	virtual void implReadAsync(Callback &&cb) override;
+	virtual void implReadAsync(const MutableBinaryView &buffer, Callback &&cb) override ;
+	virtual void implWriteAsync(const BinaryView &data, Callback &&cb) override;
 
 	virtual bool implWaitForRead(int timeoutms) override;
 	virtual bool implWaitForWrite(int timeoutms) override;
@@ -211,20 +211,19 @@ bool ChunkedStream<chunkSize>::implFlush() {
 }
 
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::implReadAsync(const Callback& cb) {
+inline void ChunkedStream<chunkSize>::implReadAsync(Callback&& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	BinaryView rd = source.read(true);
 	if (isEof(rd)) {
 		fakeAsync(asyncEOF, eofConst, cb);
 	} else if (rd.empty()) {
-		Callback ccb = cb;
 		RefCntPtr<ChunkedStream> me(this);
-		source.readAsync([=](AsyncState st, const BinaryView &data){
+		source.readAsync([=, ccb=std::move(cb)](AsyncState st, const BinaryView &data) mutable {
 			if (st == asyncOK) {
 				me->source.putBack(data);
 				BinaryView rd = me->read(true);
 				if (isEof(rd)) ccb(asyncEOF, BinaryView(0,0));
-				else if (rd.empty()) me->implReadAsync(ccb);
+				else if (rd.empty()) me->implReadAsync(std::move(ccb));
 				else ccb(asyncOK, rd);
 			} else {
 				ccb(st,data);
@@ -269,7 +268,7 @@ inline bool ChunkedStream<chunkSize>::implWrite(WrBuffer& curBuffer, bool ) {
 }
 
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::implWriteAsync(const BinaryView &data, const Callback& cb) {
+inline void ChunkedStream<chunkSize>::implWriteAsync(const BinaryView &data, Callback&& cb) {
 	RefCntPtr<ChunkedStream> me(this);
 	Callback ccb(cb);
 
@@ -292,7 +291,7 @@ inline void ChunkedStream<chunkSize>::implWriteAsync(const BinaryView &data, con
 
 
 template<std::size_t chunkSize>
-inline void ChunkedStream<chunkSize>::implReadAsync(const MutableBinaryView& buffer,const Callback& cb) {
+inline void ChunkedStream<chunkSize>::implReadAsync(const MutableBinaryView& buffer,Callback&& cb) {
 	Callback ccb(cb);
 	RefCntPtr<ChunkedStream> me(this);
 	MutableBinaryView b(buffer);

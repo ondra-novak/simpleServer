@@ -92,11 +92,11 @@ bool FileStream::implWrite(WrBuffer& curBuffer, bool nonblock ) {
 }
 
 
-void FileStream::implReadAsync(const MutableBinaryView& buffer, const Callback& cb) {
+void FileStream::implReadAsync(const MutableBinaryView& buffer, Callback&& cb) {
 	cb(asyncOK, implRead(buffer,false));
 }
 
-void FileStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
+void FileStream::implWriteAsync(const BinaryView& data, Callback&& cb) {
 	cb(asyncOK, implWrite(data,false));
 
 }
@@ -123,9 +123,9 @@ int FileStream::setIOTimeout(int) {
 	return 0;
 }
 
-void FileStream::implReadAsync(const Callback& cb) {
+void FileStream::implReadAsync(Callback&& cb) {
 	MutableBinaryView b(inputBuffer, inputBufferSize);
-	implReadAsync(b,cb);
+	implReadAsync(b,std::move(cb));
 }
 }
 

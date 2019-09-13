@@ -54,7 +54,7 @@ public:
 	 * @param timeout specifies timeout in miliseconds
 	 * @param complfn function called when I/O operation completes
 	 */
-	virtual void runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) = 0;
+	virtual void runAsync(const AsyncResource &resource, int timeout, CompletionFn &&complfn) = 0;
 
 	///Runs function asynchronously
 	/** Function calls directly complettion function but it is executed in completion thread, which
@@ -65,7 +65,7 @@ public:
 	 * You can use this function to execute paralel tasks. Note that massive paralel task
 	 * will probably block other I/O completion functions
 	 */
-	virtual void runAsync(const CustomFn &completion) = 0;
+	virtual void runAsync(CustomFn &&completion) = 0;
 
 	///Cancels waiting for asynchronous resource
 	/**

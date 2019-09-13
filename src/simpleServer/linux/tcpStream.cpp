@@ -136,13 +136,13 @@ bool TCPStream::implWrite(WrBuffer& curBuffer, bool nonblock) {
  return true;
 }
 
-void TCPStream::asyncReadCallback(const MutableBinaryView& b, const Callback& cbc, AsyncState state) {
+void TCPStream::asyncReadCallback(const MutableBinaryView& b, Callback&& cbc, AsyncState state) {
 	if (state == asyncOK) {
 		BinaryView r = implRead(b,true);
 		if (isEof(r)) {
 			cbc(asyncEOF,r);
 		} else if (r.empty()) {
-			implReadAsync(b,cbc);
+			implReadAsync(b,std::move(cbc));
 		}else {
 			cbc(state, r);
 		}
@@ -150,11 +150,11 @@ void TCPStream::asyncReadCallback(const MutableBinaryView& b, const Callback& cb
 		cbc(state, BinaryView(0,0));
 	}
 }
-void TCPStream::asyncWriteCallback(const BinaryView& b, const Callback& cbc, AsyncState state){
+void TCPStream::asyncWriteCallback(const BinaryView& b, Callback&& cbc, AsyncState state){
 	if (state == asyncOK) {
 		BinaryView r = implWrite(b, true);
 		if (r.length == b.length) {
-			implWriteAsync(b, cbc);
+			implWriteAsync(b, std::move(cbc));
 		} else if (isEof(r)) {
 			cbc(asyncEOF, r);
 		}else {
@@ -167,29 +167,27 @@ void TCPStream::asyncWriteCallback(const BinaryView& b, const Callback& cbc, Asy
 }
 
 
-void TCPStream::implReadAsync(const MutableBinaryView& buffer, const Callback& cb) {
+void TCPStream::implReadAsync(const MutableBinaryView& buffer, Callback&& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	RefCntPtr<TCPStream> me(this);
 
-	Callback cbc(cb);
 	MutableBinaryView b(buffer);
 
-	auto fn = [me,cbc,b](AsyncState state) {
-		me->asyncReadCallback(b, cbc, state);
+	auto fn = [me,cbc=std::move(cb),b](AsyncState state) mutable {
+		me->asyncReadCallback(b, std::move(cbc), state);
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
 }
 
-void TCPStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
+void TCPStream::implWriteAsync(const BinaryView& data, Callback&& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	RefCntPtr<TCPStream> me(this);
 
-	Callback cbc( cb);
 	BinaryView b(data);
 
-	auto fn = [me,cbc, b](AsyncState state) {
-		me->asyncWriteCallback(b,cbc,state);
+	auto fn = [me,cbc=std::move(cb), b](AsyncState state) mutable  {
+		me->asyncWriteCallback(b,std::move(cbc),state);
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
@@ -219,9 +217,9 @@ int TCPStream::setIOTimeout(int iotimeoutms) {
 	return ret;
 }
 
-void TCPStream::implReadAsync(const Callback& cb) {
+void TCPStream::implReadAsync(Callback&& cb) {
 	MutableBinaryView b(inputBuffer, inputBufferSize);
-	implReadAsync(b,cb);
+	implReadAsync(b,std::move(cb));
 }
 }
 

@@ -16,8 +16,8 @@ AsyncProvider::operator Worker() const {
 	public:
 		Wrk(RefCntPtr<AbstractAsyncProvider> async):async(async) {}
 
-		virtual void dispatch(const Msg &msg){
-			async->runAsync(msg);
+		virtual void dispatch(Msg &&msg){
+			async->runAsync(std::move(msg));
 		}
 
 		virtual void run() noexcept	{}

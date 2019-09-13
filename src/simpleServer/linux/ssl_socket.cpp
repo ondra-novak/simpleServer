@@ -53,8 +53,8 @@ public:
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
 	virtual BinaryView implWrite(BinaryView buffer, bool nonblock) override;
 	virtual void implCloseOutput() override;
-	virtual void implReadAsync(const MutableBinaryView& buffer, const Callback& cb) override;
-	virtual void implWriteAsync(const BinaryView& data, const Callback& cb) override;
+	virtual void implReadAsync(const MutableBinaryView& buffer, Callback&& cb) override;
+	virtual void implWriteAsync(const BinaryView& data, Callback&& cb) override;
 
 	void connect();
 	void accept();
@@ -76,11 +76,11 @@ protected:
 	static const int errNoData = -12;
 
 	bool handleSSLError(int errCode);
-	bool handleSSLErrorAsync(int errCode, const CompFn &fn);
+	bool handleSSLErrorAsync(int errCode, CompFn &&fn);
 
 
-	void implReadAsyncTicket(unsigned int ticket, const MutableBinaryView& buffer, const Callback& cb);
-	void implWriteAsyncTicket(unsigned int ticket, const BinaryView& data, const Callback& cb);
+	void implReadAsyncTicket(unsigned int ticket, const MutableBinaryView& buffer, Callback&& cb);
+	void implWriteAsyncTicket(unsigned int ticket, const BinaryView& data, Callback&& cb);
 
 	class RepeatAsyncWrite;
 	class RepeatAsyncRead;
@@ -198,16 +198,16 @@ void SSLTcpStream::implCloseOutput() {
 
 class SSLTcpStream::RepeatAsyncRead {
 public:
-	RepeatAsyncRead(RefCntPtr<SSLTcpStream> owner,unsigned int ticket, MutableBinaryView buffer, const Callback &asyncFn)
-			:owner(owner),ticket(ticket),buffer(buffer),asyncFn(asyncFn) {}
-	void operator()(AsyncState st) const {
+	RepeatAsyncRead(RefCntPtr<SSLTcpStream> owner,unsigned int ticket, MutableBinaryView buffer, Callback &&asyncFn)
+			:owner(owner),ticket(ticket),buffer(buffer),asyncFn(std::move(asyncFn)) {}
+	void operator()(AsyncState st) {
 		if (st == asyncOK) {
-			owner->implReadAsyncTicket(ticket,buffer, asyncFn);
+			owner->implReadAsyncTicket(ticket,buffer, std::move(asyncFn));
 		} else {
 			asyncFn(st,BinaryView());
 		}
 	}
-	void operator()() const { operator()(asyncOK);}
+	void operator()() { operator()(asyncOK);}
 protected:
 	RefCntPtr<SSLTcpStream> owner;
 	unsigned int ticket;
@@ -219,14 +219,14 @@ class SSLTcpStream::RepeatAsyncWrite {
 public:
 	RepeatAsyncWrite(RefCntPtr<SSLTcpStream> owner, unsigned int ticket, BinaryView buffer, const Callback &asyncFn)
 			:owner(owner),ticket(ticket),buffer(buffer),asyncFn(asyncFn) {}
-	void operator()(AsyncState st) const {
+	void operator()(AsyncState st) {
 		if (st == asyncOK) {
-			owner->implWriteAsyncTicket(ticket,buffer, asyncFn);
+			owner->implWriteAsyncTicket(ticket,buffer, std::move(asyncFn));
 		} else {
 			asyncFn(st,BinaryView());
 		}
 	}
-	void operator()() const { operator()(asyncOK);}
+	void operator()() { operator()(asyncOK);}
 protected:
 	RefCntPtr<SSLTcpStream> owner;
 	unsigned int ticket;
@@ -234,28 +234,28 @@ protected:
 	Callback asyncFn;
 };
 
-void SSLTcpStream::implReadAsync(const MutableBinaryView& buffer, const Callback& cb) {
+void SSLTcpStream::implReadAsync(const MutableBinaryView& buffer, Callback&& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	unsigned int ticket = ++nextTicket;
-	implReadAsyncTicket(ticket, buffer, cb);
+	implReadAsyncTicket(ticket, buffer, std::move(cb));
 }
 
-void SSLTcpStream::implWriteAsync(const BinaryView& data, const Callback& cb) {
+void SSLTcpStream::implWriteAsync(const BinaryView& data, Callback&& cb) {
 	if (asyncProvider == nullptr) throw NoAsyncProviderException();
 	unsigned int ticket = ++nextTicket;
-	implWriteAsyncTicket(ticket, data, cb);
+	implWriteAsyncTicket(ticket, data, std::move(cb));
 }
 
-bool SSLTcpStream::handleSSLErrorAsync(int errCode, const CompFn &cb) {
+bool SSLTcpStream::handleSSLErrorAsync(int errCode, CompFn &&cb) {
 	int err = SSL_get_error(ssl, errCode);
 	switch (err) {
 		case SSL_ERROR_ZERO_RETURN:
 			return false;
 		case SSL_ERROR_WANT_WRITE:
-			asyncProvider->runAsync(AsyncResource(sck,POLLOUT), iotimeout, cb);
+			asyncProvider->runAsync(AsyncResource(sck,POLLOUT), iotimeout, std::move(cb));
 			return true;
 		case SSL_ERROR_WANT_READ:
-			asyncProvider->runAsync(AsyncResource(sck,POLLIN|POLLRDHUP), iotimeout, cb);
+			asyncProvider->runAsync(AsyncResource(sck,POLLIN|POLLRDHUP), iotimeout, std::move(cb));
 			return true;
 		default:
 			throw SSLError();
@@ -265,23 +265,23 @@ bool SSLTcpStream::handleSSLErrorAsync(int errCode, const CompFn &cb) {
 
 
 
-inline void SSLTcpStream::implReadAsyncTicket(unsigned int ticket,const MutableBinaryView& buffer, const Callback& cb) {
+inline void SSLTcpStream::implReadAsyncTicket(unsigned int ticket,const MutableBinaryView& buffer, Callback&& cb) {
 	Sync _(lock);
 	if (lockTicket) {
 		if (lockTicket != ticket) {
-		waitActions << RepeatAsyncRead(this, ticket, buffer,cb);
+		waitActions << RepeatAsyncRead(this, ticket, buffer,std::move(cb));
 		return;
 		}
 	} else {
 		if (SSL_pending(ssl) == 0 && !TCPStream::implWaitForRead(0)) {
-			asyncProvider->runAsync(AsyncResource(sck,POLLIN|POLLRDHUP),iotimeout,RepeatAsyncRead(this, ticket, buffer,cb));
+			asyncProvider->runAsync(AsyncResource(sck,POLLIN|POLLRDHUP),iotimeout,RepeatAsyncRead(this, ticket, buffer,std::move(cb)));
 			return;
 		}
 	}
 	int r = SSL_read(ssl,buffer.data, buffer.length);
 	if (r <= 0) {
 		try {
-			bool rt = handleSSLErrorAsync(r,RepeatAsyncRead(this,ticket, buffer,cb));
+			bool rt = handleSSLErrorAsync(r,RepeatAsyncRead(this,ticket, buffer,std::move(cb)));
 			if (!rt) {
 				_.unlock();
 				cb(asyncEOF,eofConst);
@@ -329,7 +329,7 @@ inline SSL* SSLTcpStream::getSSL() const {
 	return ssl;
 }
 
-inline void SSLTcpStream::implWriteAsyncTicket(unsigned int ticket,	const BinaryView& data, const Callback& cb) {
+inline void SSLTcpStream::implWriteAsyncTicket(unsigned int ticket,	const BinaryView& data, Callback&& cb) {
 	Sync _(lock);
 	if (lockTicket) {
 		if (lockTicket != ticket) {

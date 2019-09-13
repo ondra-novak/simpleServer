@@ -102,7 +102,7 @@ void LinuxEventDispatcher::addIntrWaitHandle() {
 
 }
 
-void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, const CompletionFn &complfn) {
+void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, CompletionFn &&complfn) {
 	if (exitFlag || complfn == nullptr) {
 		defer >> std::bind(complfn, asyncCancel);
 		return;
@@ -120,7 +120,7 @@ void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, 
 
 }
 
-void LinuxEventDispatcher::runAsync(const CustomFn &completion)  {
+void LinuxEventDispatcher::runAsync(CustomFn &&completion)  {
 	if (exitFlag || completion == nullptr) {
 		defer >> completion;
 		return;

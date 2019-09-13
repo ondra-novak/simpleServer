@@ -163,7 +163,7 @@ protected:
 	 *
 	 * @note doesn't support putBack() function. Use only if you need direct access to the stream
 	 */
-	virtual void implReadAsync(const Callback &cb) = 0;
+	virtual void implReadAsync(Callback &&cb) = 0;
 
 	///Read to the buffer asynchronously
 	/**
@@ -172,7 +172,7 @@ protected:
 	 *
 	 * @param cb callback function called upon completion
 	 */
-	virtual void implReadAsync(const MutableBinaryView &buffer, const Callback &cb) = 0;
+	virtual void implReadAsync(const MutableBinaryView &buffer, Callback &&cb) = 0;
 
 
 	///Write buffer asynchronously
@@ -184,7 +184,7 @@ protected:
 	 *
 	 * @note function doesn't support caching
 	 */
-	virtual void implWriteAsync(const BinaryView &data, const Callback &cb) = 0;
+	virtual void implWriteAsync(const BinaryView &data, Callback &&cb) = 0;
 
 
 
@@ -227,8 +227,8 @@ protected:
 		BinaryView write(BinaryView buffer, bool nonblock) {
 			return owner.implWrite(buffer,nonblock);
 		}
-		void writeAsync(const BinaryView &data, const Callback &cb) {
-			return owner.implWriteAsync(data,cb);
+		void writeAsync(const BinaryView &data, Callback &&cb) {
+			return owner.implWriteAsync(data,std::move(cb));
 		}
 		bool flush() {
 			return owner.implFlush();
@@ -504,7 +504,7 @@ public:
 			if (!eof && data.empty()) {
 				implReadAsync(std::forward<Fn>(callbackFn));
 			} else {
-				asyncProvider.runAsync([=]{
+				asyncProvider.runAsync([=,callbackFn=std::move(callbackFn)] ()mutable {
 					callbackFn(eof?asyncEOF:asyncOK,data);
 				});
 
