@@ -67,4 +67,29 @@ protected:
 
 };
 
+
+template<typename Container>
+std::string urlDecode(const Container &container) {
+	std::string res;
+	auto wrfn = [&](char c) {res.push_back(c);};
+	UrlDecode<decltype(wrfn)> decoder(std::move(wrfn));
+	for (auto &&x : container) {
+		decoder(x);
+	}
+	return res;
+}
+
+template<typename Container>
+std::string urlEncode(const Container &container) {
+	std::string res;
+	auto wrfn = [&](char c) {res.push_back(c);};
+	UrlEncode<decltype(wrfn)> encoder(std::move(wrfn));
+	for (auto &&x : container) {
+		encoder(x);
+	}
+	return res;
+}
+
+
+
 }
