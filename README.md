@@ -1,2 +1,2 @@
 # simpleServer
-Mini TCP/HTTP server in C++11 for backend applications
+Mini TCP/HTTP server in C++17 for backend applications
