@@ -471,10 +471,42 @@ public:
 	void operator()() const {
 
 		RefCntPtr<HTTPRequestData> h(this->h);
+
 		try {
+			//We must read rest of the body, to keep protocol in sync
+			//However if the rest body is too large, it is better to close connection instead
+			//So only two reads are performed. If the second read returns a data, connection is closed
+			//This allows to continue in keepalive when only small part of body left unprocessed
+
+			Stream stream = h->getBodyStream();
 			if (p!= nullptr) {
-				p.runAsync([h]{h->handleKeepAlive();});
+				//use async in advise
+				stream->readAsync([h,stream](AsyncState st, BinaryView ) {
+					//flush any output buffers
+					h->originStream->flush();
+					//continue if the body is processed
+					if (st == asyncEOF) h->handleKeepAlive();
+					else if (st == asyncOK) {
+						//discard data and try once extra read
+						stream->readAsync([h,stream](AsyncState st, BinaryView ) {
+							//if eof reached, continue in keep alive
+							if (st == asyncEOF) h->handleKeepAlive();
+						});
+					}
+					//discard connection at all
+				});
 			}	else {
+				//perform synchronously read
+				BinaryView b = stream->read();
+				//if non-empty - read again
+				if (!b.empty()) {
+					//read again
+					b = stream->read();
+					//if not empty, drop keepalive
+					if (!b.empty()) return;
+				}
+				h->originStream->flush();
+				//continue keepalive
 				h->handleKeepAlive();
 			}
 		} catch (...) {}
@@ -893,8 +925,8 @@ bool HTTPRequestData::allowMethodsImpl(const It &beg,const It &end) {
 		StrViewA n = *it;
 		allowValue.append(n.data, n.length);
 	}
-	this->
-	sendResponse(HTTPResponse(405)("Allow",allowValue).contentLength(0));
+	Stream s = this->sendResponse(HTTPResponse(405)("Allow",allowValue).contentLength(0));
+	s.flush();
 	return false;
 }
 
