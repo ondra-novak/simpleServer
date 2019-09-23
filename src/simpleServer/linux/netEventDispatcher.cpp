@@ -104,7 +104,7 @@ void LinuxEventDispatcher::addIntrWaitHandle() {
 
 void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, CompletionFn &&complfn) {
 	if (exitFlag || complfn == nullptr) {
-		defer >> std::bind(complfn, asyncCancel);
+		defer >> std::bind(std::move(complfn), asyncCancel);
 		return;
 	}
 
@@ -128,7 +128,7 @@ void LinuxEventDispatcher::runAsync(CustomFn &&completion)  {
 
 
 	RegReq req;
-	req.extra.completionFn = [fn=CustomFn(completion)](AsyncState){fn();};
+	req.extra.completionFn = [fn=std::move(completion)](AsyncState){fn();};
 
 	std::lock_guard<std::mutex> _(queueLock);
 	queue.push(req);

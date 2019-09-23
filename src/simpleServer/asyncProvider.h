@@ -104,13 +104,13 @@ public:
 	using RefCntPtr<AbstractAsyncProvider>::RefCntPtr;
 
 	template<typename Fn>
-	void runAsync(const AsyncResource &resource, int timeout, const Fn &completion) const {
-		(*this)->runAsync(resource, timeout,completion);
+	void runAsync(const AsyncResource &resource, int timeout, Fn &&completion) const {
+		(*this)->runAsync(resource, timeout,std::forward<Fn>(completion));
 	}
 
 	template<typename Fn>
-	void runAsync(const Fn &completion) const {
-		(*this)->runAsync(completion);
+	void runAsync( Fn &&completion) const {
+		(*this)->runAsync(std::forward<Fn>(completion));
 	}
 
 	void stop() const {
@@ -122,8 +122,8 @@ public:
 	}
 
 	template<typename Fn>
-	void operator>>(const Fn &completion) const {
-		(*this)->runAsync(completion);
+	void operator>>(Fn &&completion) const {
+		(*this)->runAsync(std::forward<Fn>(completion));
 	}
 
 	///Converts AsyncProvider to Worker

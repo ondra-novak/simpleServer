@@ -259,6 +259,25 @@ static int readExitCode(int fd)  {
 	return exitCode;
 }
 
+static void closeStd() {
+	//redirect stdout and stderr to /dev/null
+	int n = open("/dev/null",O_WRONLY);
+	int m = open("/dev/null",O_RDONLY);
+	//close stderr
+	close(2);
+	//close stdout
+	close(1);
+	//close stdin
+	close(0);
+	//we need to fill fds 0,1,2 because nobody expects, that these descriptors are empty
+	dup2(m, 0);
+	dup2(n, 1);
+	dup2(n, 2);
+	close(n);
+	close(m);
+
+}
+
 int LinuxService::enterDaemon(Action &&action) {
 
 
@@ -282,21 +301,7 @@ int LinuxService::enterDaemon(Action &&action) {
 			setsid();
 			//send exit code 0 to the umbilical cord
 			writeExitCode(writeEnd,0);
-			//redirect stdout and stderr to /dev/null
-			int n = open("/dev/null",O_WRONLY);
-			int m = open("/dev/null",O_RDONLY);
-			//close stderr
-			close(2);
-			//close stdout
-			close(1);
-			//close stdin
-			close(0);
-			//we need to fill fds 0,1,2 because nobody expects, that these descriptors are empty
-			dup2(m, 0);
-			dup2(n, 1);
-			dup2(n, 2);
-			close(n);
-			close(m);
+			closeStd();
 			writeEnd.close();
 			return 0;
 		});
@@ -496,6 +501,8 @@ void LinuxService::enableRestart()  {
 				throw SystemException(e, "fork");
 			}
 		}
+
+		closeStd();
 
 		int status;
 		if (waitpid(chld,&status, 0) == -1) {

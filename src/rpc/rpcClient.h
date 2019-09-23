@@ -184,7 +184,7 @@ public:
 	 * the timeout error is exposed to the callback function
 	 *
 	 **/
-	void parseAllResponsesAsync(IAsyncProvider::CompletionFn compFn);
+	void parseAllResponsesAsync(IAsyncProvider::CompletionFn &&compFn, std::string &&ping_cmd="ping");
 	///Parses all responses asynchronously. Function will not block
 	void parseAllResponsesAsync();
 

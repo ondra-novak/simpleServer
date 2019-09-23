@@ -204,6 +204,7 @@ void StreamJsonRpcClient::onRequest(const json::Value& request,
 
 bool StreamJsonRpcClient::parseResponse() {
 	BinaryView b = stream.read(false);
+	while (!b.empty() && isspace(b[0])) b = b.substr(1);
 	if (b.empty()) return false;
 	stream.putBack(b);
 	Value r = Value::parse(stream);
@@ -226,12 +227,31 @@ void StreamJsonRpcClient::parseResponseAsync(IAsyncProvider::CompletionFn compFn
 }
 
 void StreamJsonRpcClient::parseAllResponsesAsync(
-		IAsyncProvider::CompletionFn compFn) {
-	stream.readAsync([=](AsyncState st, BinaryView b) {
+		IAsyncProvider::CompletionFn &&compFn, std::string &&ping_cmd) {
+	stream.readAsync([
+		  compFn = std::move(compFn),
+		  ping_cmd=std::move(ping_cmd),
+		  this
+	   ](AsyncState st, BinaryView b) mutable {
 		if (st == asyncOK) {
 			stream.putBack(b);
 			parseResponse();
-			parseAllResponsesAsync(compFn);
+			parseAllResponsesAsync(std::move(compFn), std::move(ping_cmd));
+		} else if (st == asyncTimeout) {
+			this->operator ()(ping_cmd, json::array) >> [](RpcResult) {};
+			stream.readAsync([
+					  compFn = std::move(compFn),
+					  ping_cmd=std::move(ping_cmd),
+					  this
+				](AsyncState st, BinaryView b)mutable{
+					if (st == asyncOK) {
+						stream.putBack(b);
+						parseResponse();
+						parseAllResponsesAsync(std::move(compFn), std::move(ping_cmd));
+					} else{
+						compFn(st);
+					}
+				});
 		} else {
 			compFn(st);
 		}
