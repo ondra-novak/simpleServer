@@ -267,12 +267,14 @@ void RpcHttpServer::directRpcAsync(Stream s) {
 }
 void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx) {
 
+	SharedLogObject logObj( "RPC-D");
 
-	auto sendFn =[=](Value v) {
+	auto sendFn =[=](Value v, RpcRequest req) {
 		try {
 			if (v.defined()) v.serialize(s);
 			s << "\n";
 			s.flush();
+			handleLogging(logObj,v,req);
 			return true;
 		} catch (...) {
 			return false;
@@ -291,6 +293,8 @@ void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx)
 			ctx->store("__last_jsonrpc_ver",req.getVersionField());
 			this->operator ()(req);
 		}
+
+
 		s.readAsync([=](simpleServer::AsyncState st, const ondra_shared::BinaryView &b) {
 			if (st == asyncTimeout) {
 				Value ver = ctx->retrieve("__last_jsonrpc_ver");
