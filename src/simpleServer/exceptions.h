@@ -31,6 +31,7 @@ public:
 	int getErrNo() const {return err;}
 
 	std::string getMessage() const;
+	const std::string &getDesc() const {return desc;}
 
 
 protected:
