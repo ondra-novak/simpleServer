@@ -5,7 +5,6 @@
 #include "http_parser.h"
 
 #include <fcntl.h>
-#include <imtjson/shared/logOutput.h>
 #include <string.h>
 
 #include <cstdlib>
