@@ -77,9 +77,21 @@ protected:
 	bool enableDirect = true;
 	std::size_t direct_timeout;
 
-	void directRpcAsync(simpleServer::Stream s);
-	void directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx);
 
+
+	class DirectRpcConnContext: public RpcConnContext {
+	public:
+
+		static const char *ident;
+
+		using Ident = ondra_shared::TaskCounter<DirectRpcConnContext>;
+
+		LogObject logObj;
+		DirectRpcConnContext();
+
+	};
+	void directRpcAsync(simpleServer::Stream s);
+	void directRpcAsync2(simpleServer::Stream s, RefCntPtr<DirectRpcConnContext> ctx);
 };
 
 class HttpRpcConnContext: public json::RpcConnContext {

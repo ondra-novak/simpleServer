@@ -70,7 +70,7 @@ public:
 };
 
 
-static void handleLogging(const SharedLogObject logObj, const Value &v, const RpcRequest &req) noexcept {
+static void handleLogging(const LogObject &logObj, const Value &v, const RpcRequest &req) noexcept {
 	if (logObj.isLogLevelEnabled(LogLevel::progress)) {
 		try {
 			Value diagData = req.getDiagData();
@@ -174,10 +174,9 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 
 			} else {
 				Value rdata = Value::fromString(StrViewA(BinaryView(x)));
-				SharedLogObject logObj(*httpreq->log, "RPC");
 				Stream out;
 				RefCntPtr<HttpRpcConnContext> ctx = new HttpRpcConnContext(httpreq,false);
-				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj,out,ctx](
+				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj = LogObject(httpreq->log,"RPC"),out,ctx](
 							const Value &v, const RpcRequest &req) mutable {
 
 					if (out == nullptr) {
@@ -262,19 +261,31 @@ void RpcHttpServer::setHostMapping(const String &mapping) {
 }
 
 
-void RpcHttpServer::directRpcAsync(Stream s) {
-	directRpcAsync2(s,new RpcConnContext);
-}
-void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx) {
 
-	SharedLogObject logObj( "RPC-D");
+RpcHttpServer::DirectRpcConnContext::DirectRpcConnContext()
+	:logObj(AbstractLogProvider::create(),Ident("TCP")) {}
+
+/*
+template<typename WrFn>
+void logPrintValue(WrFn &wr, const HttpIdent &ident) {
+	wr("http:");
+	unsignedToString(ident.instanceId,wr,36,4);
+}
+*/
+
+
+void RpcHttpServer::directRpcAsync(Stream s) {
+	directRpcAsync2(s,new DirectRpcConnContext);
+}
+void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, RefCntPtr<DirectRpcConnContext> ctx) {
+
 
 	auto sendFn =[=](Value v, RpcRequest req) {
 		try {
 			if (v.defined()) v.serialize(s);
 			s << "\n";
 			s.flush();
-			handleLogging(logObj,v,req);
+			handleLogging(ctx->logObj,v,req);
 			return true;
 		} catch (...) {
 			return false;
@@ -289,7 +300,7 @@ void RpcHttpServer::directRpcAsync2(simpleServer::Stream s, PRpcConnContext ctx)
 		if (!b.empty()) {
 			s.putBack(b);
 			Value jsonReq = Value::parse(s);
-			RpcRequest req = RpcRequest::create(jsonReq,sendFn, RpcFlags::notify, ctx);
+			RpcRequest req = RpcRequest::create(jsonReq,sendFn, RpcFlags::notify, PRpcConnContext::staticCast(ctx));
 			ctx->store("__last_jsonrpc_ver",req.getVersionField());
 			this->operator ()(req);
 		}
@@ -368,9 +379,8 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 		if (wswc->ctx == nullptr) wswc->ctx = new HttpRpcConnContext(httpreq, true);
 		connctx = PRpcConnContext::staticCast(wswc->ctx);
 
-		SharedLogObject logObj(*httpreq->log, "RPC");
 
-		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj](const Value &v, const RpcRequest &req){
+		RpcRequest rrq = RpcRequest::create(jreq,[wsstream,logObj = LogObject(httpreq->log, "RPC")](const Value &v, const RpcRequest &req){
 			WebSocketStream ws(wsstream);
 			if (!v.defined()) {
 				return !(ws.isClosed());

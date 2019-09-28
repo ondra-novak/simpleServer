@@ -5,6 +5,7 @@
 #include "http_parser.h"
 
 #include <fcntl.h>
+#include <imtjson/shared/logOutput.h>
 #include <string.h>
 
 #include <cstdlib>
@@ -20,8 +21,10 @@
 #include "shared/logOutput.h"
 
 
+
 namespace simpleServer {
 
+using ondra_shared::TaskCounter;
 using ondra_shared::AbstractLogProvider;
 using ondra_shared::unsignedToString;
 using ondra_shared::logDebug;
@@ -83,57 +86,11 @@ static const char* HOST = "Host";
 static const char* CRLF = "\r\n";
 
 
-/*
-static const char *DAY_NAMES[] =
-  { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static const char *MONTH_NAMES[] =
-  { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
-
-
-
-std::string Rfc1123_DateTimeNow()
-{
-    const int RFC1123_TIME_LEN = 29;
-    time_t t;
-    struct tm tm;
-    char buf[RFC1123_TIME_LEN+1];
-
-    time(&t);
-    gmtime_s(&tm, &t);
-
-    strftime(buf, RFC1123_TIME_LEN+1, "---, %d --- %Y %H:%M:%S GMT", &tm);
-    memcpy(buf, DAY_NAMES[tm.tm_wday], 3);
-    memcpy(buf+8, MONTH_NAMES[tm.tm_mon], 3);
-
-    return buf;
-}
-*/
-
-
-struct HttpIdent{
-	unsigned int instanceId;
-};
-
-template<typename WrFn>
-void logPrintValue(WrFn &wr, const HttpIdent &ident) {
-	wr("http:");
-	unsignedToString(ident.instanceId,wr,36,4);
-}
-
-
-static LogObject initLogIdent(AbstractLogProvider *lp) {
-	std::atomic<unsigned int> counter(0);
-	HttpIdent ident;
-	ident.instanceId = ++counter;
-	return LogObject(*lp, ident);
-
-}
 HTTPRequestData::HTTPRequestData()
-	:log(initLogIdent(AbstractLogProvider::initInstance().get())) {}
+	:log(AbstractLogProvider::create(), TaskCounter<HTTPRequestData>("http:")) {}
 HTTPRequestData::HTTPRequestData(LogObject curLog)
-	:log(initLogIdent(curLog.getProvider())){}
+	:log(curLog.getProvider()->create(), TaskCounter<HTTPRequestData>("http:")) {}
 
 
 template<typename Fn>
