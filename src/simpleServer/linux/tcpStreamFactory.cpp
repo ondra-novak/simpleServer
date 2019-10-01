@@ -141,7 +141,7 @@ Stream TCPConnect::create() {
 
 			try {
 				selectedSocket = waitForSockets(sockets, 1000);
-			} catch (SystemException e) {
+			} catch (const SystemException &e) {
 				if (!isNext)
 					throw SystemException(e.getErrNo(), std::string("Unable open connection to address: ").append(target.toString(true)).append(" - ").append(e.getDesc()));
 			} catch (...) {
