@@ -83,7 +83,7 @@ void QueryParser::parse(StrViewA vpath) {
 
 		if (c == '+') {
 			wrfn(' ');
-		} else if (c == '%') {
+		} else if (c == '%' && state != readingPath) {
 			nxstate = state;
 			state = readingSpecChar1;
 		} else {
