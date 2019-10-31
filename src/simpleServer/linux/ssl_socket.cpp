@@ -438,7 +438,6 @@ Stream SSLClientFactory::convert_to_ssl(Stream stream) {
 
 void SSLAbstractStreamFactory::setup(SSL_CTX* ctx) {
 	SSL_CTX_set_default_verify_paths(ctx);
-    SSL_CTX_set_ecdh_auto(ctx, 1);
 	if (!certfile.empty()) {
 	    if (SSL_CTX_use_certificate_file(ctx, certfile.c_str(), SSL_FILETYPE_PEM) <= 0) {
 		        throw SSLError();
