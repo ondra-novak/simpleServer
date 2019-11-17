@@ -22,12 +22,12 @@ public:
 
 protected:
 
-	virtual void enableRestart();
-	virtual bool isDaemon() const;
+	virtual void enableRestart() override ;
+	virtual bool isDaemon() const override ;
 
-	virtual void dispatch();
-	virtual void addCommand(StrViewA command, UserCommandFn fn) ;
-	virtual void stop();
+	virtual void dispatch() override ;
+	virtual void addCommand(StrViewA command, UserCommandFn &&fn) override ;
+	virtual void stop() override ;
 
 	friend class ServiceControl;
 
@@ -65,7 +65,9 @@ protected:
 	bool daemonEntered = false;
 	bool restartEnabled = false;
 
-	virtual void changeUser(StrViewA userInfo);
+	virtual void changeUser(StrViewA userInfo) override ;
+
+	void initControlFile();
 
 };
 

@@ -17,6 +17,8 @@ typedef StringView<StrViewA> ArgList;
 
 
 typedef std::function<int(ArgList, Stream output)> UserCommandFn;
+typedef std::function<int(ArgList)> UserCommandFn2;
+typedef std::function<int()> UserCommandFn3;
 
 
 
@@ -39,7 +41,8 @@ public:
 	 *
 	 * @note function can be called from the other thread, or in a handler
 	 */
-	virtual void addCommand(StrViewA command, UserCommandFn fn) = 0;
+	virtual void addCommand(StrViewA command, UserCommandFn &&fn) = 0;
+
 	///Stops dispatching
 	/** It has the same effect as command "stop" */
 	virtual void stop() = 0;
@@ -76,6 +79,7 @@ public:
 	virtual void changeUser(StrViewA userInfo) = 0;
 
 	virtual ~AbstractServiceControl() {}
+
 
 };
 
@@ -144,8 +148,8 @@ public:
 		(*this)->dispatch();
 	}
 
-	void addCommand(StrViewA command, UserCommandFn fn) const {
-		(*this)->addCommand(command, fn);
+	void addCommand(StrViewA command, UserCommandFn &&fn) const {
+		(*this)->addCommand(command, std::move(fn));
 	}
 	void stop() const {
 		(*this)->stop();
@@ -177,6 +181,35 @@ public:
 	void changeUser(StrViewA userInfo) {
 		(*this)->changeUser(userInfo);
 	}
+
+	class OnHndl {
+	public:
+		OnHndl(StrViewA cmd, RefCntPtr<AbstractServiceControl> owner):cmd(cmd),owner(owner) {}
+		static void dummy() {}
+		template<typename Fn>
+		auto operator>>(Fn &&fn) -> decltype(fn(ArgList(), Stream()), dummy()) {
+			owner->addCommand(cmd, std::forward<Fn>(fn));
+		}
+		template<typename Fn>
+		auto operator>>(Fn &&fn) -> decltype(fn(ArgList()), dummy()) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList &args, const Stream &) {
+				return fn(args);
+			});
+		}
+		template<typename Fn>
+		auto operator>>(Fn &&fn) -> decltype(fn(), dummy()) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList, const Stream &) {
+				return fn();
+			});
+		}
+	protected:
+		StrViewA cmd;
+		RefCntPtr<AbstractServiceControl> owner;
+	};
+
+	///Adds command easy
+	OnHndl on(StrViewA cmd) {return OnHndl(cmd, *this);}
+
 };
 
 

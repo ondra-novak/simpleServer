@@ -22,7 +22,7 @@
 #include "../http_headers.h"
 #include "../logOutput.h"
 #include "../vla.h"
-
+#include <ext/stdio_filebuf.h>
 
 
 namespace simpleServer {
@@ -229,8 +229,8 @@ void LinuxService::processRequest(Stream s) {
 }
 
 void LinuxService::addCommand(StrViewA command,
-		UserCommandFn fn) {
-	cmdMap[std::string(command)] = fn;
+		UserCommandFn &&fn) {
+	cmdMap.emplace(std::string(command),std::move(fn));
 }
 
 void LinuxService::stop() {
@@ -300,7 +300,12 @@ int LinuxService::enterDaemon(Action &&action) {
 			//starting in daemon mode, become new session leader
 			setsid();
 			//send exit code 0 to the umbilical cord
-			writeExitCode(writeEnd,0);
+			try {
+				writeExitCode(writeEnd,0);
+			} catch (SystemException &e) {
+				//in case of EPIPE, continue - other end is already closed
+				if (e.getErrNo() != EPIPE) throw;
+			}
 			closeStd();
 			writeEnd.close();
 			return 0;
@@ -332,38 +337,36 @@ int LinuxService::enterDaemon(Action &&action) {
 int LinuxService::startService(StrViewA name, ServiceHandler hndl,
 		ArgList args) {
 
-	try {
+	if (checkPidFile()) return 255;
+	initControlFile();
 
-		if (checkPidFile()) return 255;
-		mother = TCPListen::create(createNetAddr(),-1,30000);
+	addCommand("stop",[=](ArgList, Stream sx) {
+		this->stop();
+		waitEnd.push(sx);
+		return getpid();
+	});
+	addCommand("status",[=](ArgList, Stream sx) {
+		sx << "Service '" << name << "' is running as pid " << getpid() ;
+		return 0;
+	});
+	addCommand("wait",[=](ArgList, Stream sx) {
+		waitEnd.push(sx);
+		return 0;
+	});
+	addCommand("pidof",[=](ArgList, Stream sx) {
+		sx << getpid() ;
+		return 0;
+	});
 
-		addCommand("stop",[=](ArgList, Stream sx) {
-			this->stop();
-			waitEnd.push(sx);
-			return getpid();
-		});
-		addCommand("status",[=](ArgList, Stream sx) {
-			sx << "Service '" << name << "' is running as pid " << getpid() ;
-			return 0;
-		});
-		addCommand("wait",[=](ArgList, Stream sx) {
-			waitEnd.push(sx);
-			return 0;
-		});
-		addCommand("pidof",[=](ArgList, Stream sx) {
-			sx << getpid() ;
-			return 0;
-		});
+	int ret = hndl(this, name, args);
+	unlink(controlFile.c_str());
+	return ret;
 
-		int ret = hndl(this, name, args);
-		unlink(controlFile.c_str());
-		return ret;
 
-	} catch (...) {
-		unlink(controlFile.c_str());
-		throw;
-	}
+}
 
+void LinuxService::initControlFile() {
+	mother = TCPListen::create(createNetAddr(),-1,30000);
 }
 
 LinuxService::LinuxService(std::string controlFile):controlFile(controlFile) {
@@ -486,15 +489,30 @@ void LinuxService::cleanWaitings() {
 	}
 }
 
+static std::pair<FD,FD> makePipe() {
+	int fd[2];
+	pipe2(fd,O_CLOEXEC);
+	return {
+		FD(fd[0]),FD(fd[1])
+	};
+}
+
 void LinuxService::enableRestart()  {
 	if (restartEnabled || !daemonEntered) return;
 	do {
 		time_t startTime;
 		time(&startTime);
 
+		auto cerr = makePipe();
+
 
 		pid_t chld = fork();
-		if (chld == 0) break;
+		if (chld == 0) {
+			dup3(cerr.second.get(), 2, O_CLOEXEC);
+			break;
+		}
+		cerr.second.close();
+
 		if (chld == -1) {
 			int e = errno;
 			if (e != EINTR) {
@@ -503,6 +521,14 @@ void LinuxService::enableRestart()  {
 		}
 
 		closeStd();
+
+		__gnu_cxx::stdio_filebuf<char> filebuf(cerr.first.get(), std::ios::in);
+		std::istream is(&filebuf); // 2
+
+		std::string line;
+		while (std::getline(is, line)) {
+			logNote("stderr: $1", line);
+		}
 
 		int status;
 		if (waitpid(chld,&status, 0) == -1) {
@@ -513,7 +539,9 @@ void LinuxService::enableRestart()  {
 		}
 
 		if (WIFEXITED(status)) {
-			exit(WEXITSTATUS(status));
+			int x = WEXITSTATUS(status);
+			logProgress("Normal exit: $1", x);
+			exit(x);
 		}
 		if (WIFSIGNALED(status)) {
 			int signal =  WTERMSIG(status);
@@ -525,12 +553,15 @@ void LinuxService::enableRestart()  {
 		time_t endTime;
 		time(&endTime);
 		if (endTime - startTime < 5) {
-			logError("The service crashed with status $1", WTERMSIG(status));
+			logError("The service crashed with status $1 (no restart)", WTERMSIG(status));
 			exit(255);
 		}
 		logError("The service crashed with status $1. Restarting...", WTERMSIG(status));
-		sleep(3);
+		sleep(1);
 		logRotate();
+		if (access(controlFile.c_str(),0) != 0) {
+			initControlFile();
+		}
 	}
 	while (true);
 	restartEnabled = true;
