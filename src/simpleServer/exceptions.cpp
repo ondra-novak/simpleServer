@@ -21,7 +21,7 @@ std::string SystemException::getMessage() const {
 
 std::string HTTPStatusException::getMessage() const {
 	std::ostringstream s;
-	s << "HTTP Exception: " << code << message;
+	s << "HTTP Exception: " << code << " " << message;
 	return s.str();
 }
 

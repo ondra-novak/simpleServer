@@ -102,6 +102,7 @@ void HttpClientParser::sendAsync(StrViewA method, StrViewA url, SendHeaders&& he
 
 Stream HttpClientParser::read() {
 	conn.flush();
+	hdrs.clear();
 	return parseResponse(hdrs.parse(conn));
 }
 
