@@ -491,7 +491,9 @@ void LinuxService::cleanWaitings() {
 
 static std::pair<FD,FD> makePipe() {
 	int fd[2];
-	pipe2(fd,O_CLOEXEC);
+	if (!pipe2(fd,O_CLOEXEC)) {
+		throw SystemException(errno, "Can't create pipe");
+	}
 	return {
 		FD(fd[0]),FD(fd[1])
 	};
