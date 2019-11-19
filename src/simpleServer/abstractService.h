@@ -187,7 +187,7 @@ public:
 		OnHndl(StrViewA cmd, RefCntPtr<AbstractServiceControl> owner):cmd(cmd),owner(owner) {}
 		static void dummy() {}
 		template<typename Fn>
-		auto operator>>(Fn &&fn) -> decltype(fn(ArgList(), Stream()), dummy()) {
+		auto operator>>(Fn &&fn) -> decltype(fn(ArgList(), std::declval<Stream>()), dummy()) {
 			owner->addCommand(cmd, std::forward<Fn>(fn));
 		}
 		template<typename Fn>
