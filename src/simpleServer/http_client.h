@@ -279,7 +279,7 @@ protected:
 	RefCntPtr<PoolControl> pool;
 	std::string userAgent;
 	std::shared_ptr<IHttpsProvider> httpsProvider;
-	std::unique_ptr<IHttpProxyProvider> proxyProvider;
+	std::shared_ptr<IHttpProxyProvider> proxyProvider;
 	int iotimeout = -1;
 	int connect_timeout = 30000;
 	AsyncProvider asyncProvider;
