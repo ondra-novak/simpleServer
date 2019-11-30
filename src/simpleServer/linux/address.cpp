@@ -213,12 +213,12 @@ class GaiError: public SystemException {
 public:
 	GaiError(int e):SystemException(e) {}
 	std::string getMessage() const {
-		return gai_strerror(this->err);
+		return std::string("GaiError: ")+gai_strerror(this->err);
 	}
 };
 
 #ifndef AI_CANONIDN
-# define AI_CANONIDN	0x0080	/* Translate canonical name from IDN format. */
+# define AI_CANONIDN	0
 #endif
 
 static NetAddr createUnixAddress(StrViewA file) {
