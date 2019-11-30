@@ -9,7 +9,7 @@
 
 
 #ifndef POLLRDHUP
-#define POLLRDHUP 0x2000
+#define POLLRDHUP 0
 #endif
 
 #include "../exceptions.h"

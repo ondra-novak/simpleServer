@@ -28,7 +28,7 @@ namespace simpleServer {
 
 
 #ifndef POLLRDHUP
-#define POLLRDHUP 0x2000
+#define POLLRDHUP 0
 #endif
 
 class SSLTcpStream: public TCPStream {
