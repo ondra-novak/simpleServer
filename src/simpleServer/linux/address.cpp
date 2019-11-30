@@ -217,6 +217,10 @@ public:
 	}
 };
 
+#ifndef AI_CANONIDN
+# define AI_CANONIDN	0x0080	/* Translate canonical name from IDN format. */
+#endif
+
 static NetAddr createUnixAddress(StrViewA file) {
 	unsigned int perms = 0;
 	auto seppos = file.indexOf(":");
