@@ -6,6 +6,7 @@
  */
 
 
+#include <errno.h>
 #include "../realpath.h"
 #include "../exceptions.h"
 

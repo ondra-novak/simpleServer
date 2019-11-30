@@ -7,6 +7,11 @@
 
 #include <poll.h>
 
+
+#ifndef POLLRDHUP
+#define POLLRDHUP 0x2000
+#endif
+
 #include "../exceptions.h"
 
 namespace simpleServer {

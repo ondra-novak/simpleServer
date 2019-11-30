@@ -102,7 +102,7 @@ void FileStream::implWriteAsync(const BinaryView& data, Callback&& cb) {
 }
 
 bool FileStream::implFlush() {
-	::syncfs(fd);
+	::fsync(fd);
 	return true;
 }
 

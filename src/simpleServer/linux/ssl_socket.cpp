@@ -26,6 +26,11 @@ namespace simpleServer {
 #define TLS_client_method TLSv1_2_client_method
 #endif
 
+
+#ifndef POLLRDHUP
+#define POLLRDHUP 0x2000
+#endif
+
 class SSLTcpStream: public TCPStream {
 public:
 
