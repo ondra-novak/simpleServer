@@ -22,7 +22,7 @@
 #include "../http_headers.h"
 #include "../logOutput.h"
 #include "../vla.h"
-#include <ext/stdio_filebuf.h>
+#include "fdstream.h"
 
 
 namespace simpleServer {
@@ -524,8 +524,7 @@ void LinuxService::enableRestart()  {
 
 		closeStd();
 
-		__gnu_cxx::stdio_filebuf<char> filebuf(cerr.first.get(), std::ios::in);
-		std::istream is(&filebuf); // 2
+		boost::fdistream is(cerr.first.get());
 
 		std::string line;
 		while (std::getline(is, line)) {
