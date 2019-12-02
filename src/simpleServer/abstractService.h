@@ -1,6 +1,9 @@
 #pragma once
 #include <functional>
+#include <iostream>
 #include "shared/refcnt.h"
+#include "shared/streams.h"
+#include "abstractStream.h"
 #include "stringview.h"
 
 
@@ -185,23 +188,36 @@ public:
 	class OnHndl {
 	public:
 		OnHndl(StrViewA cmd, RefCntPtr<AbstractServiceControl> owner):cmd(cmd),owner(owner) {}
-		static void dummy() {}
+		static void dummy();
+		static std::ostream &dummy_stream_ref();
+
 		template<typename Fn>
-		auto operator>>(Fn &&fn) -> decltype(fn(ArgList(), std::declval<Stream>()), dummy()) {
+		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(ArgList(), std::declval<Stream>()), dummy()) {
 			owner->addCommand(cmd, std::forward<Fn>(fn));
 		}
 		template<typename Fn>
-		auto operator>>(Fn &&fn) -> decltype(fn(ArgList()), dummy()) {
+		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(ArgList()), dummy()) {
 			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList &args, const Stream &) {
 				return fn(args);
 			});
 		}
 		template<typename Fn>
-		auto operator>>(Fn &&fn) -> decltype(fn(), dummy()) {
+		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(), dummy()) {
 			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList, const Stream &) {
 				return fn();
 			});
 		}
+
+		template<typename Fn>
+		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(ArgList(), dummy_stream_ref()), dummy()) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList args, Stream s) {
+				ondra_shared::ostream<Stream> out(std::move(s));
+				return fn(args, out);
+			});
+		}
+
+
+
 	protected:
 		StrViewA cmd;
 		RefCntPtr<AbstractServiceControl> owner;
@@ -209,7 +225,7 @@ public:
 
 	///Adds command easy
 	OnHndl on(StrViewA cmd) {return OnHndl(cmd, *this);}
-
+	OnHndl on_run() {return OnHndl("run", *this);}
 };
 
 
