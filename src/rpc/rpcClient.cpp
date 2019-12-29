@@ -69,6 +69,7 @@ void HttpJsonRpcClient::parseResponse(HttpResponse&& resp) {
 						break;
 					}
 				}
+				data = b.read(false);
 			}
 		} else {
 			throw HTTPStatusException(resp.getStatus(), resp.getMessage());
