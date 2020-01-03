@@ -21,66 +21,60 @@ var RpcClient = (function(){
 	
 	RpcClient.prototype.call2 = function(method,args,retryCnt) {
 		if (!retryCnt) retryCnt = 0;
-		
-		
-		return new Promise(function(ok, fail) {
 
-			var id = this.nextId++;
-			function retryCallback(status, statusText, decision) {			
-				if (decision) {
-					this.call2(method,args, retryCnt+1).then(ok,fail);
-				} else {
-					fail({code:status,message:statusText});
-				}
+		function retryCallback(status, statusText, decision) {			
+			if (decision) {
+				return this.call2(method,args, retryCnt+1);
+			} else {
+				throw {code:status,message:statusText};
 			}
-			
-			var req = {
-					jsonrpc: "2.0",
-					id:this.nextId,
-					method:method,
-					params: args
-			};
-			if (Object.keys(this.context).length) {
-				req.context = this.context;
-			}
-			
-			var xhr = new XMLHttpRequest;
-			xhr.open("POST", this.url);
-			xhr.setRequestHeader("Content-Type","application/json");
-			xhr.setRequestHeader("Accept","application/json");
-			xhr.onreadystatechange = function() {
-				if (xhr.readyState == 4) {
-					if (xhr.status != 200) {
-						this.onConnectionError(
-								[xhr.status,xhr.statusText],
-								retryCnt,
-								retryCallback.bind(this,xhr.status,xhr.statusText));
+		}
+		
+
+		var id = this.nextId++;
+		var req = {
+				jsonrpc: "2.0",
+				id:this.nextId,
+				method:method,
+				params: args
+		};
+		if (Object.keys(this.context).length) {
+			req.context = this.context;
+		}
+		return fetch(this.url, {
+			method: "POST",
+			headers: {
+				"Content-Type":"application/json",
+				"Accept":"application/json"
+			},
+			body: JSON.stringify(req)
+		}).then(function(resp) {
+			if (resp.status != 200) {
+					return this.onConnectionError(
+							[resp.status,resp.statusText],retryCnt,
+							retryCallback.bind(this,xhr.status,xhr.statusText));
+			} else {
+				return resp.json().then(function(jres) {
+					if (jres.error) {
+						throw jres.error;
 					} else {
-						var jres;
-						try {
-							 jres= JSON.parse(xhr.responseText);
-						} catch (e) {
-							var msg = "Response parse error";
-							this.onConnectionError(
-									[1,msg],
-									retryCnt,
-									retryCallback.bind(this,1,msg));
-							return;
-						} 
-						if (jres.error) {
-							fail(jres.error);
-						} else {
-							if (jres.context) {
-								this.updateContext(jres.context);
-							}
-							ok(jres.result);
+						if (jres.context) {
+							this.updateContext(jres.context);
 						}
+						return jres.result;
 					}
-				}
-			}.bind(this);			
-			xhr.send(JSON.stringify(req));
-			
-		}.bind(this));
+				}.bind(this),function(err){
+					var msg = "Response parse error";
+					return this.onConnectionError(
+							[1,err],retryCnt,
+							retryCallback.bind(this,1,err));
+				}.bind(this));
+			}			
+		}.bind(this), function(err) {
+			return this.onConnectionError(
+					[0,err],retryCnt,
+					retryCallback.bind(this,0,err));
+		}.bind(this));		
 	};
 	
 	RpcClient.prototype.updateContext = function(newCtx) {
@@ -97,9 +91,14 @@ var RpcClient = (function(){
 	};
 	
 	RpcClient.prototype.onConnectionError = function(details, retryCnt, callback) {
-		if (retryCnt > 3) callback(false);
+		if (retryCnt > 3) 
+			return callback(false);
 		else {
-			setTimeout(callback.bind(null,true),retryCnt*500);
+			return new Promise(function(ok){
+				setTimeout(function(){
+					ok(callback(true));
+				},retryCnt*500);
+			});
 		}
 	};
 	
@@ -109,46 +108,34 @@ var RpcClient = (function(){
 	
 	RpcClient.prototype.methods = function(retryCnt) {
 		if (!retryCnt) retryCnt = 0;
-		return new Promise(function(ok, fail) {
-
-			function retryCallback(status, statusText, decision) {			
-				if (decision) {
-					this.methods(retryCnt+1).then(ok,fail);
-				} else {
-					fail({code:status,message:statusText});
-				}
+		function retryCallback(status, statusText, decision) {			
+			if (decision) {
+				return this.methods(retryCnt+1);
+			} else {
+				fail({code:status,message:statusText});
 			}
+		}
+		return fetch(this.url,{		
+			method: "POST",
+			headers: {
+				"Content-Type":"text/plain",
+				"Accept":"application/json"
+			},
+			body:""
+		}).then(function(resp){
+			if (resp.status == 200) {
+					return resp.json();
+			} else {
+				return this.onConnectionError(
+						[resp.status,resp.statusText],retryCnt,
+						retryCallback.bind(this,xhr.status,xhr.statusText));
+			}				
+		}.bind(this)).catch(function(err) {
+			return this.onConnectionError(
+					[0,err], retryCnt,
+					retryCallback.bind(this,0,err));
 
-			var xhr = new XMLHttpRequest;
-			xhr.open("POST", this.url);
-			xhr.setRequestHeader("Accept","application/json");
-			xhr.onreadystatechange = function() {
-				
-				if (xhr.readyState == 4) {
-					if (xhr.status != 200) {
-						this.onConnectionError(
-								[xhr.status,xhr.statusText],
-								retryCnt,
-								retryCallback.bind(this,xhr.status,xhr.statusText));
-					} else {
-						var jres;
-						try {
-							 jres= JSON.parse(xhr.responseText);
-						} catch (e) {
-							var msg = "Response parse error";
-							this.onConnectionError(
-									[1,msg],
-									retryCnt,
-									retryCallback.bind(this,1,msg));
-							return;
-						}
-						ok(jres);
-					}
-				}
-				
-			}.bind(this);
-			xhr.send("");
-		}.bind(this));		
+		}.bind(this));
 	};
 	
 	RpcClient.prototype.createObject = function(prefix) {

@@ -54,14 +54,16 @@ function start() {
 	var ctxHint = false;	
 	themeToggle.setAttribute("class",localStorage["theme"]);
 
-	var wsrpc = new WsRpcClient("");
-	wsrpc.connect().then(function() {		
-		rpc = wsrpc;
-		systemMessage("WebSocket enabled", "Successfully connected to websocket",false);
-		rpc.onnotify = function(name, params) {
-			outputNotify(name,params);
-		}
-	});
+	if (location.hash.indexOf("nows")==-1) {
+		var wsrpc = new WsRpcClient("");
+		wsrpc.connect().then(function() {		
+			rpc = wsrpc;
+			systemMessage("WebSocket enabled", "Successfully connected to websocket",false);
+			rpc.onnotify = function(name, params) {
+				outputNotify(name,params);
+			}
+		});
+	}
 
 	
 	function setInput(z) {
