@@ -205,7 +205,7 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 	} else if (vpath.empty()) {
 		req.redirectToFolderRoot();
 	} else {
-		Resource *selRes = nullptr;
+		const Resource *selRes = nullptr;
 		StrViewA fname;
 		QueryParser qp(vpath);
 		auto splt = qp.getPath().split("/");
@@ -215,6 +215,27 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 		if (fname == "index.html") selRes = consoleEnabled?&client_index_html:nullptr;
 		else if (fname == "styles.css") selRes = consoleEnabled?&client_styles_css:nullptr;
 		else if (fname == "rpc.js") selRes = &client_rpc_js;
+		else if (fname == "methods") {
+			StrViewA cb = qp["callback"];
+			Value methods;
+			{
+				RpcServer &srv(rpcserver);
+				RpcServerEnum &enm = static_cast<RpcServerEnum &>(srv);
+				Array methodsArr;
+				enm.forEach([&methodsArr](Value v){methodsArr.push_back(v);});
+				methods = methodsArr;
+			}
+			if (cb.empty()) {
+				auto stream = req.sendResponse("application/json");
+				methods.serialize(stream);
+			} else {
+				auto stream = req.sendResponse("text/javascript");
+				stream << cb << "(";
+				methods.serialize(stream);
+				stream << ");\r\n";
+			}
+			return true;
+		}
 
 		if (selRes == nullptr) {
 			req.sendErrorPage(404);

@@ -50,13 +50,16 @@ var RpcClient = (function(){
 			body: JSON.stringify(req)
 		}).then(function(resp) {
 			if (resp.status != 200) {
-					return this.onConnectionError(
-							[resp.status,resp.statusText],retryCnt,
-							retryCallback.bind(this,xhr.status,xhr.statusText));
+					return Promise.resolve(this.onConnectionError(
+									[resp.status,resp.statusText],retryCnt))
+							.then(retryCallback.bind(this,xhr.status,xhr.statusText));
 			} else {
 				return resp.json().then(function(jres) {
 					if (jres.error) {
-						throw jres.error;
+						return this.onError(jres.error).then(function(z) {
+							if (z === undefined) return this.call2(method,args);
+							else return z;
+						}.bind(this));
 					} else {
 						if (jres.context) {
 							this.updateContext(jres.context);
@@ -65,15 +68,13 @@ var RpcClient = (function(){
 					}
 				}.bind(this),function(err){
 					var msg = "Response parse error";
-					return this.onConnectionError(
-							[1,err],retryCnt,
-							retryCallback.bind(this,1,err));
+					return Promise.resolve(this.onConnectionError(
+							[1,err],retryCnt)).then(retryCallback.bind(this,1,err));
 				}.bind(this));
 			}			
 		}.bind(this), function(err) {
-			return this.onConnectionError(
-					[0,err],retryCnt,
-					retryCallback.bind(this,0,err));
+			return Promise.resolve(this.onConnectionError(
+					[0,err],retryCnt)).then(retryCallback.bind(this,0,err));
 		}.bind(this));		
 	};
 	
@@ -90,14 +91,12 @@ var RpcClient = (function(){
 		return this.call2(method,args,0);
 	};
 	
-	RpcClient.prototype.onConnectionError = function(details, retryCnt, callback) {
+	RpcClient.prototype.onConnectionError = function(details, retryCnt) {
 		if (retryCnt > 3) 
-			return callback(false);
+			return false;
 		else {
 			return new Promise(function(ok){
-				setTimeout(function(){
-					ok(callback(true));
-				},retryCnt*500);
+				setTimeout(function(){ok(true);},retryCnt*500);
 			});
 		}
 	};
@@ -115,24 +114,19 @@ var RpcClient = (function(){
 				fail({code:status,message:statusText});
 			}
 		}
-		return fetch(this.url,{		
-			method: "POST",
-			headers: {
-				"Content-Type":"text/plain",
-				"Accept":"application/json"
-			},
-			body:""
-		}).then(function(resp){
+		var m = "methods";
+		if (this.url && !this.url.endsWith("/")) m = "/" + m;
+		return fetch(this.url+m).then(function(resp){
 			if (resp.status == 200) {
 					return resp.json();
 			} else {
-				return this.onConnectionError(
-						[resp.status,resp.statusText],retryCnt,
+				return Promise.resolve(this.onConnectionError(
+						[resp.status,resp.statusText],retryCnt)).then(
 						retryCallback.bind(this,xhr.status,xhr.statusText));
 			}				
 		}.bind(this)).catch(function(err) {
-			return this.onConnectionError(
-					[0,err], retryCnt,
+			return Promise.resolve(this.onConnectionError(
+					[0,err], retryCnt)).then(
 					retryCallback.bind(this,0,err));
 
 		}.bind(this));
@@ -174,6 +168,10 @@ var RpcClient = (function(){
 			return obj;
 		}.bind(this));		
 	};
+
+	RpcClient.prototype.onError=function(details) {
+		return Promise.reject(details);
+	}
 
 
 	return RpcClient;
@@ -253,8 +251,8 @@ var WsRpcClient  = (function(){
 	WsRpcClient.prototype.onclose = function() {	
 		this.socket = null;
 		if (Object.keys(this.waiting).length != 0) {
-			this.onConnectionError([-1,"WebSocket closed"],this.retryCnt++,
-				function(resp) {
+			Promise.resolve(this.onConnectionError([-1,"WebSocket closed"],this.retryCnt++)).
+				then(function(resp) {
 					var w = this.waiting;
 					this.waiting = {};
 					for (var x in w) {
@@ -286,7 +284,10 @@ var WsRpcClient  = (function(){
 		} else if (jdata.error) {
 			var id = jdata.id;
 			var reg = this.waiting[id];
-			if (reg) reg.error(jdata.error);
+			if (reg) reg.ok(this.onError(jdata.error).then(function(z) {
+					if (z == undefined) return this.call2(reg.method, reg.args);
+					else return z;
+				}.bind(this)));
 			delete this.waiting[id];
 		} else if (jdata.method) {
 			this.onnotify(jdata.method, jdata.params, jdata.jsonrpc, jdata.id)
