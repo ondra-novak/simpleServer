@@ -150,6 +150,12 @@ public:
 	virtual ~IHttpsProvider() {}
 };
 
+class IHttpDnsProvider {
+public:
+	virtual NetAddr query(const std::string &addr, unsigned int port) = 0;
+	virtual ~IHttpDnsProvider() {}
+};
+
 
 class HttpResponse {
 public:
@@ -194,6 +200,8 @@ IHttpProxyProvider *newNoProxyProvider();
  */
 IHttpProxyProvider *newBasicProxyProvider(const StrViewA &addrport, bool secure, bool force_http10);
 
+IHttpDnsProvider *newCachedDNSProvider(unsigned int ttl_min);
+
 class HttpClient {
 public:
 
@@ -209,7 +217,8 @@ public:
 	 */
 	HttpClient(const StrViewA &userAgent = StrViewA("simpleServer::HttpClient (https://www.github.com/ondra-novak/simpleServer)"),
 				IHttpsProvider *https = nullptr,
-				IHttpProxyProvider *proxy = nullptr);
+				IHttpProxyProvider *proxy = nullptr,
+				IHttpDnsProvider *dns = nullptr);
 
 	virtual HttpResponse request(const StrViewA &method, const StrViewA &url, SendHeaders &&headers);
 	virtual HttpResponse request(const StrViewA &method, const StrViewA &url, SendHeaders &&headers, BinaryView data);
@@ -280,10 +289,12 @@ protected:
 	std::string userAgent;
 	std::shared_ptr<IHttpsProvider> httpsProvider;
 	std::shared_ptr<IHttpProxyProvider> proxyProvider;
+	std::shared_ptr<IHttpDnsProvider> dnsProvider;
 	int iotimeout = -1;
 	int connect_timeout = 30000;
 	AsyncProvider asyncProvider;
 
+	NetAddr resolve(const std::string &addrport, unsigned int port);
 
 	void send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, SendHeaders &&hdrs);
 	void send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, SendHeaders &&hdrs, const BinaryView &data);

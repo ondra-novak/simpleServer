@@ -354,13 +354,19 @@ IHttpProxyProvider* newBasicProxyProvider(const StrViewA &addrport, bool secure,
 
 }
 
-HttpClient::HttpClient(const StrViewA& userAgent, IHttpsProvider* https, IHttpProxyProvider* proxy)
+HttpClient::HttpClient(const StrViewA& userAgent, IHttpsProvider* https, IHttpProxyProvider* proxy, IHttpDnsProvider *dns)
 	:pool(new PoolControl)
 	,userAgent(userAgent)
 	,httpsProvider(https)
 	,proxyProvider(proxy?proxy:newNoProxyProvider())
+	,dnsProvider(dns)
 {
 
+}
+
+NetAddr HttpClient::resolve(const std::string &addrport, unsigned int port) {
+	if (dnsProvider) return dnsProvider->query(addrport, port);
+	else return NetAddr::create(addrport,port,NetAddr::IPvAll);
 }
 
 template<typename Fn>
@@ -379,7 +385,7 @@ auto HttpClient::forConnection(const ParsedUrl &nfo, Fn &&fn) -> decltype(fn(std
 	}
 
 
-	NetAddr addr = NetAddr::create(nfo.addrport,nfo.https?443:80,NetAddr::IPvAll);
+	NetAddr addr = resolve(nfo.addrport,nfo.https?443:80);
 	auto factory = TCPConnect::create(addr,connect_timeout,iotimeout);
 	Stream s = factory->create();
 	s->setAsyncProvider(asyncProvider);
@@ -414,7 +420,7 @@ void HttpClient::forConnectionAsync(const ParsedUrl &nfo,  Fn &&fn)  {
 	}
 
 
-	NetAddr addr = NetAddr::create(nfo.addrport,nfo.https?443:80,NetAddr::IPvAll);
+	NetAddr addr = resolve(nfo.addrport,nfo.https?443:80);
 	auto factory = TCPConnect::create(addr,connect_timeout,iotimeout);
 	Fn fn2(fn);
 	std::string hostname(nfo.addrport);
@@ -652,6 +658,50 @@ void connectWebSocketAsync(HttpClient &client, StrViewA url, SendHeaders &&hdrs,
 
 }
 
+IHttpDnsProvider *newCachedDNSProvider(unsigned int ttl_min) {
+	class Provider: public IHttpDnsProvider {
+	public:
+		using Sync = std::unique_lock<std::recursive_mutex>;
+
+
+		using AddrPort = std::pair<std::string, int>;
+		using NetAddrExp = std::pair<NetAddr, std::chrono::steady_clock::time_point>;
+
+		struct HashAddrPort {
+			std::size_t operator()(const AddrPort &x) const {
+				std::hash<std::string> h1;
+				std::hash<int> h2;
+				return h1(x.first)*11+h2(x.second);
+			}
+		};
+		using AddrMap = std::unordered_map<AddrPort, NetAddrExp, HashAddrPort>;
+
+
+		virtual NetAddr query(const std::string &addr, unsigned int port) {
+			Sync _(lock);
+			auto now = std::chrono::steady_clock::now();
+			AddrPort key(addr,port);
+			auto iter = addrMap.find(key);
+			if (iter == addrMap.end() || iter->second.second < now) {
+				NetAddr a = NetAddr::create(addr,port,NetAddr::IPvAll);
+				auto exp = now + std::chrono::minutes(ttl_min);
+				addrMap.emplace(key, NetAddrExp(a, exp));
+				return a;
+			} else {
+				return iter->second.first;
+			}
+		}
+
+		Provider(unsigned int ttl_min):ttl_min(ttl_min) {}
+
+	protected:
+		unsigned int ttl_min;
+		std::recursive_mutex lock;
+		AddrMap addrMap;
+	};
+
+	return new Provider(ttl_min);
+}
 
 
 } /* namespace simpleServer */
