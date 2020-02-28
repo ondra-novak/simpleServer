@@ -448,6 +448,7 @@ void HttpClient::forConnectionAsync(const ParsedUrl &nfo,  Fn &&fn)  {
 
 void HttpClient::send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, SendHeaders &&hdrs) {
 	hdrs("Host",parsed.host);
+	hdrs("User-Agent", userAgent);
 	conn->send(method, parsed.path, std::move(hdrs));
 }
 
@@ -466,6 +467,7 @@ HttpClient&& HttpClient::setConnectTimeout(int t_ms) {
 
 void HttpClient::send(PHttpConn conn, StrViewA method, const ParsedUrl &parsed, SendHeaders &&hdrs, const BinaryView &data) {
 	hdrs("Host",parsed.host);
+	hdrs("User-Agent", userAgent);
 	conn->send(method, parsed.path, std::move(hdrs),data);
 }
 
@@ -531,6 +533,11 @@ void HttpClient::request_async(const StrViewA& method,
 	std::string m(method);
 	std::string u(url);
 	SendHeaders h(std::move(headers));
+
+	h("Host",parsed.host);
+	h("User-Agent", userAgent);
+
+
 	RequestCallback c(cb);
 	RefCntPtr<AbstractHttpConnPool> p = RefCntPtr<AbstractHttpConnPool>::staticCast(pool);
 
