@@ -354,9 +354,11 @@ IHttpProxyProvider* newBasicProxyProvider(const StrViewA &addrport, bool secure,
 
 }
 
+StrViewA HttpClient::defUserAgent("simpleServer::HttpClient (https://www.github.com/ondra-novak/simpleServer");
+
 HttpClient::HttpClient(const StrViewA& userAgent, IHttpsProvider* https, IHttpProxyProvider* proxy, IHttpDnsProvider *dns)
 	:pool(new PoolControl)
-	,userAgent(userAgent)
+	,userAgent(userAgent.empty()?defUserAgent:userAgent)
 	,httpsProvider(https)
 	,proxyProvider(proxy?proxy:newNoProxyProvider())
 	,dnsProvider(dns)

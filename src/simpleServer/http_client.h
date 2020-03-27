@@ -215,10 +215,12 @@ public:
 	 * @param proxy pointer to proxy provider. The ownership is transfered to the HttpClient. Do not share the provider
 	 *   with other instances. If this pointer is null, then newNoProxyProvider() is used
 	 */
-	HttpClient(const StrViewA &userAgent = StrViewA("simpleServer::HttpClient (https://www.github.com/ondra-novak/simpleServer)"),
+	HttpClient(const StrViewA &userAgent = StrViewA(),
 				IHttpsProvider *https = nullptr,
 				IHttpProxyProvider *proxy = nullptr,
 				IHttpDnsProvider *dns = nullptr);
+
+	static StrViewA defUserAgent;
 
 	virtual HttpResponse request(const StrViewA &method, const StrViewA &url, SendHeaders &&headers);
 	virtual HttpResponse request(const StrViewA &method, const StrViewA &url, SendHeaders &&headers, BinaryView data);
