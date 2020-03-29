@@ -66,14 +66,14 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 				return svc->runCommand("run", ArgList(), Stream());
 			});
 			return svc->enterDaemon([&]{
-				return svc->startService(name, handler, remainArgs);
+				return svc->startService(name, std::move(handler), remainArgs);
 			});
 
 		} else if (command == "run") {
 			svc->onInit([&]{
 				return svc->runCommand("run", ArgList(), Stream());
 			});
-			return svc->startService(name, handler, remainArgs);
+			return svc->startService(name, std::move(handler), remainArgs);
 		} else if (command == "stop") {
 			handleExcept = true;
 			svc->stopOtherService();return 0;
@@ -88,7 +88,7 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 				return svc->runCommand("run", ArgList(), Stream());
 			});
 			return svc->enterDaemon([&]{
-				return svc->startService(name, handler, remainArgs);
+				return svc->startService(name, std::move(handler), remainArgs);
 			});
 		} else if (command == "status") {
 			if (svc->checkPidFile()) {return 0;}
@@ -103,7 +103,7 @@ int ServiceControl::create(StrViewA name, StrViewA pidfile, StrViewA command, Se
 						retval = ret;
 						return ret;
 					});
-					auto retval2 = svc->startService(name, handler, ArgList());
+					auto retval2 = svc->startService(name, std::move(handler), ArgList());
 					if (retval2) return retval2;else return retval;
 				} else {
 					handleExcept = true;
@@ -334,7 +334,7 @@ int LinuxService::enterDaemon(Action &&action) {
 }
 
 
-int LinuxService::startService(StrViewA name, ServiceHandler hndl,
+int LinuxService::startService(StrViewA name, ServiceHandler &&hndl,
 		ArgList args) {
 
 	if (checkPidFile()) return 255;

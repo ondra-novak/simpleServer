@@ -35,7 +35,7 @@ protected:
 	int enterDaemon(Action &&action);
 
 
-	int startService(StrViewA name, ServiceHandler hndl, ArgList args);
+	int startService(StrViewA name, ServiceHandler &&hndl, ArgList args);
 
 
 	std::string controlFile;
