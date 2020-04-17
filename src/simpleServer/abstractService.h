@@ -197,20 +197,20 @@ public:
 		}
 		template<typename Fn>
 		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(ArgList()), dummy()) {
-			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList &args, const Stream &) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList &args, const Stream &) mutable {
 				return fn(args);
 			});
 		}
 		template<typename Fn>
 		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(), dummy()) {
-			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList, const Stream &) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList, const Stream &) mutable {
 				return fn();
 			});
 		}
 
 		template<typename Fn>
 		auto operator>>(Fn &&fn) -> decltype(std::declval<Fn>()(ArgList(), dummy_stream_ref()), dummy()) {
-			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList args, Stream s) {
+			owner->addCommand(cmd, [fn = std::forward<Fn>(fn)](ArgList args, Stream s) mutable{
 				ondra_shared::ostream<Stream> out(std::move(s));
 				return fn(args, out);
 			});
