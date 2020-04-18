@@ -52,7 +52,7 @@ var RpcClient = (function(){
 			if (resp.status != 200) {
 					return Promise.resolve(this.onConnectionError(
 									[resp.status,resp.statusText],retryCnt))
-							.then(retryCallback.bind(this,xhr.status,xhr.statusText));
+							.then(retryCallback.bind(this,resp.status,resp.statusText));
 			} else {
 				return resp.json().then(function(jres) {
 					if (jres.error) {
