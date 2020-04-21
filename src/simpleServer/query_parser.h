@@ -29,7 +29,7 @@ public:
 
 	bool empty() const {return pmap.empty();}
 
-	void parse(StrViewA vpath);
+	void parse(StrViewA vpath, bool postBody);
 
 	StrViewA getPath() const;
 

@@ -7,7 +7,7 @@ namespace simpleServer {
 
 
 QueryParser::QueryParser(StrViewA vpath) {
-	parse(vpath);
+	parse(vpath, false);
 }
 
 QueryParser::ParamMap::const_iterator QueryParser::begin() const {
@@ -39,7 +39,7 @@ static inline int fromHexDigit(char c) {
 			:0;
 }
 
-void QueryParser::parse(StrViewA vpath) {
+void QueryParser::parse(StrViewA vpath, bool postBody) {
 
 	enum State {
 		readingPath,
@@ -56,14 +56,14 @@ void QueryParser::parse(StrViewA vpath) {
 
 	Part pathPart;
 	Part keyPart;
-	State state =readingPath;
-	State nxstate = readingPath;
+	State state =postBody?readingKey:readingPath;
+	State nxstate = state;
 
 
 	auto iter = vpath.begin();
 	auto e = vpath.end();
 	std::size_t mark = data.size();
-	int specCharBuff;
+	int specCharBuff = 0;
 
 	auto wrfn = [&](char c) {
 		data.push_back(c);
