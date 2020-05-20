@@ -158,6 +158,7 @@ void HttpRpcConnContext::exportToHeader(SendHeaders &hdrs) {
 
 bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpath) const {
 
+	if (!req.allowMethods({"GET","POST"})) return true;
 	StrViewA method = req.getMethod();
 	if (method == "POST") {
 		RpcServer &srv(rpcserver);
