@@ -152,6 +152,7 @@ public:
 	SendHeaders &&disableCache();
 
 	SendHeaders &&eTag(StrViewA str);
+	SendHeaders &&filename(StrViewA str);
 
 
 	///Clear content of object

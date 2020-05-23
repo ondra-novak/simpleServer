@@ -1,5 +1,6 @@
 #include <cstring>
 #include "http_headers.h"
+#include <sstream>
 
 namespace simpleServer {
 
@@ -201,5 +202,17 @@ HeaderValue simpleServer::SendHeaders::operator [](StrViewA key) const {
 			return HeaderValue(x->second);
 		}
 }
+SendHeaders&& SendHeaders::filename(StrViewA str) {
+	std::ostringstream buff;
+	buff << "Attachment; filename=\"";
+	for (char c: str) {
+		if (c >= 0 && c<32 ) c = '_';
+		else if (c == '"') c = '_';
+		buff.put(c);
+	}
+	buff.put('"');
+	return operator()("Content-Disposition", buff.str());
+}
 
 }
+

@@ -298,24 +298,28 @@ void HTTPRequestData::sendErrorPage(int statusCode) {
 void HTTPRequestData::sendErrorPage(int statusCode, StrViewA statusMessage, StrViewA desc) {
 
 	if (statusMessage.empty()) statusMessage = getStatusCodeMsg(statusCode);
+	if (statusCode == 204 || statusCode == 304 || statusCode / 100 == 1) {
+		sendResponse(HTTPResponse(statusCode,statusMessage).contentLength(0));
+	} else {
 
-	std::ostringstream body;
-	body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-			"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
-			"<html xmlns=\"http://www.w3.org/1999/xhtml\">"
-			"<head>"
-			"<title>" << statusCode << " " << statusMessage <<"</title>"
-			"</head>"
-			"<body>"
-			"<h1>"  << statusCode << " " << statusMessage <<"</h1>"
-			"<p><![CDATA[" << desc << "]]></p>"
-			"<hr />"
-			"<small><em>Powered by Bredy's simpleServer - C++x17 simpleServer- <a href=\"https://github.com/ondra-novak/simpleServer\">sources available under MIT licence</a></em></small>"
-			"</body>"
-			"</html>";
+		std::ostringstream body;
+		body << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+				"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
+				"<html xmlns=\"http://www.w3.org/1999/xhtml\">"
+				"<head>"
+				"<title>" << statusCode << " " << statusMessage <<"</title>"
+				"</head>"
+				"<body>"
+				"<h1>"  << statusCode << " " << statusMessage <<"</h1>"
+				"<p><![CDATA[" << desc << "]]></p>"
+				"<hr />"
+				"<small><em>Powered by Bredy's simpleServer - C++x17 simpleServer- <a href=\"https://github.com/ondra-novak/simpleServer\">sources available under MIT licence</a></em></small>"
+				"</body>"
+				"</html>";
 
-	if (statusCode >= 500) keepAlive = false;
-	sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
+		if (statusCode >= 500) keepAlive = false;
+		sendResponse(StrViewA("application/xhtml+xml"), BinaryView(StrViewA(body.str())), statusCode, statusMessage);
+	}
 }
 
 Stream HTTPRequestData::sendResponse(StrViewA contentType) {
