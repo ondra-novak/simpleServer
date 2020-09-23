@@ -20,3 +20,11 @@ add_custom_target( test bin/simpleServer_test DEPENDS bin/simpleServer_test)
 cmake_policy(POP)  
 
          
+         
+         
+install(TARGETS simpleServer
+        DESTINATION "lib"
+        ) 
+INSTALL(FILES ${simpleServer_HDR}
+        DESTINATION "include/simpleServer" 
+        )
