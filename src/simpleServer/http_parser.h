@@ -57,6 +57,7 @@ public:
 	HTTPResponse &&cacheForever() {SendHeaders::cacheForever();return std::move(*this);}
 	HTTPResponse &&disableCache() {SendHeaders::disableCache();return std::move(*this);}
 	HTTPResponse &&eTag(StrViewA str) {SendHeaders::eTag(str);return std::move(*this);}
+	HTTPResponse &&filename(StrViewA str) {SendHeaders::filename(str);return std::move(*this);}
 
 
 	void clear();
