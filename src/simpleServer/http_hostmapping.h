@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../../shared/shared_object.h"
 #include "stringview.h"
 
 #include "http_parser.h"
@@ -81,6 +82,39 @@ protected:
 
 };
 
+class AutoHostMappingHandler {
+public:
+
+	AutoHostMappingHandler();
+
+	void operator()(const HTTPRequest &req);
+	bool operator()(const HTTPRequest &req, const StrViewA &vpath);
+
+	AutoHostMappingHandler & operator>>(const HTTPMappedHandler &handler);
+
+
+
+protected:
+
+	HTTPMappedHandler handler;
+
+	struct MapItem {
+		std::string host;
+		std::string path;
+	};
+
+	using MapData = std::vector<MapItem>;
+	using PMapData = ondra_shared::SharedObject<MapData>;
+
+	PMapData mapData;
+
+	struct CmpMapItems {
+		bool operator()(const MapItem &a, const StrViewA &b) const;
+		bool operator()(const StrViewA &a, const MapItem &b) const;
+		bool operator()(const MapItem &a, const MapItem &b) const;
+	};
+
+};
 
 
 

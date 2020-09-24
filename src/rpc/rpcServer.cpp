@@ -377,10 +377,17 @@ void RpcHttpServer::start() {
 			}
 		};
 	}
-	HostMappingHandler hostMap;
-	hostMap.setMapping(hostMapping);
-	HttpStaticPathMapperHandler stHandler(hndl);
-	(*this)>>(hostMap>>HTTPMappedHandler(stHandler));
+	if (!hostMapping.empty()) {
+		HostMappingHandler hostMap;
+		hostMap.setMapping(hostMapping);
+		HttpStaticPathMapperHandler stHandler(hndl);
+		(*this)>>(hostMap>>HTTPMappedHandler(stHandler));
+	} else {
+		AutoHostMappingHandler hostMap;
+		HttpStaticPathMapperHandler stHandler(hndl);
+		(*this)>>(hostMap>>HTTPMappedHandler(stHandler));
+
+	}
 }
 
 void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream wsstream) const {

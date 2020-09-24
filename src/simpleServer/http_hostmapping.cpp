@@ -135,5 +135,68 @@ HostMappingHandler &HostMappingHandler::operator >>(const HTTPMappedHandler& han
 	return *this;
 }
 
+AutoHostMappingHandler::AutoHostMappingHandler() {
+	mapData = mapData.make();
 }
 
+void AutoHostMappingHandler::operator ()(const HTTPRequest &req) {
+	if (!this->operator ()(req,req.getPath())) {
+		req.sendErrorPage(404);
+	}
+}
+
+bool AutoHostMappingHandler::operator ()(const HTTPRequest &req, const StrViewA &vpath) {
+	CmpMapItems cmp;
+	{
+		StrViewA host = req.getHost();
+		auto md = mapData.lock_shared();
+		auto iter = std::lower_bound(md->begin(), md->end(), host, cmp);
+		if (iter != md->end() && StrViewA(iter->host) == host && vpath.substr(0, iter->path.length()) == StrViewA(iter->path)) {
+			return handler(req, vpath.substr(iter->path.length()));
+		}
+	}
+	{
+		std::string host = req.getHost();
+		std::size_t pathLen = 0;
+		while (pathLen != vpath.npos && !handler(req, vpath.substr(pathLen))) {
+			pathLen = vpath.indexOf("/", pathLen+1);
+		}
+		if (pathLen != vpath.npos) {
+			auto md = mapData.lock();
+			auto iter = std::lower_bound(md->begin(), md->end(), StrViewA(host), cmp);
+			if (iter != md->end() && iter->host == host) {
+				iter->path = vpath.substr(0,pathLen);
+			} else {
+				md->insert(iter, MapItem{
+					std::string(host), std::string(vpath.substr(0,pathLen))
+				});
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+AutoHostMappingHandler& AutoHostMappingHandler::operator >>(
+		const HTTPMappedHandler &handler) {
+	this->handler = handler;
+	return *this;
+}
+
+
+bool AutoHostMappingHandler::CmpMapItems::operator ()(
+		const MapItem &a, const StrViewA &b) const {
+	return StrViewA(a.host) < b;
+}
+
+bool AutoHostMappingHandler::CmpMapItems::operator ()(
+		const StrViewA &a, const MapItem &b) const {
+	return a < StrViewA(b.host);
+}
+
+bool AutoHostMappingHandler::CmpMapItems::operator ()(
+		const MapItem &a, const MapItem &b) const {
+	return a.host < b.host;
+}
+
+}
