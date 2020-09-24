@@ -152,7 +152,8 @@ bool AutoHostMappingHandler::operator ()(const HTTPRequest &req, const StrViewA 
 		auto md = mapData.lock_shared();
 		auto iter = std::lower_bound(md->begin(), md->end(), host, cmp);
 		if (iter != md->end() && StrViewA(iter->host) == host && vpath.substr(0, iter->path.length()) == StrViewA(iter->path)) {
-			return handler(req, vpath.substr(iter->path.length()));
+			bool res = handler(req, vpath.substr(iter->path.length()));
+			if (res || !iter->path.empty()) return res;
 		}
 	}
 	{

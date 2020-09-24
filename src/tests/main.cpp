@@ -78,7 +78,10 @@ void runServerTest() {
 			} else if (req->getPath() == "/204") {
 				req->sendResponse("text/plain","empty",204);
 			} else {
-				req->sendFile("text/plain",req->getPath().substr(1));
+				if (!req->sendFile("text/plain",req->getPath().substr(1))) {
+					req->sendErrorPage(404);
+				}
+
 			}
 		}
 

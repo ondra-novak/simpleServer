@@ -777,7 +777,7 @@ static std::pair<StrViewA, StrViewA> mimeTypes[] = {
        {"ods","application/vnd.oasis.opendocument.spreadsheet"}
 };
 
-void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool etag) {
+bool HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool etag) {
 	char *fname = (char *)alloca(pathname.length+1);
 	std::memcpy(fname, pathname.data, pathname.length);
 	fname[pathname.length] = 0;
@@ -804,7 +804,7 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 
 		struct stat statbuf;
 		if (stat(fname,&statbuf) == -1) {
-			sendErrorPage(404);
+			return false;
 		} else {
 			static char hexChars[]="0123456789ABCDEF";
 
@@ -826,7 +826,7 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 				tag = tag.trim(&isspace);
 				if (tag == curEtag) {
 					sendErrorPage(304);
-					return;
+					return true;
 				}
 			}
 			resp("ETag", curEtag);
@@ -835,8 +835,7 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 
 	std::fstream file(fname, std::ios::binary | std::ios::in );
 	if (!file) {
-		sendErrorPage(404);
-		logInfo("Failed to open file: $1", fname);
+		return false;
 	} else {
 		file.seekg(0,std::ios::end);
 		std::size_t sz = file.tellg();
@@ -865,6 +864,7 @@ void HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 		}
 
 	}
+	return true;
 }
 
 StrViewA HTTPRequestData::getHost() const {

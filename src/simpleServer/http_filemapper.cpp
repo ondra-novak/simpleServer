@@ -21,8 +21,7 @@ HttpFileMapper::HttpFileMapper(std::string &&documentRoot, std::string &&index)
 
 bool HttpFileMapper::mapFile(const HTTPRequest& req, StrViewA fullPathname) {
 	StrViewA mime = mapMime(fullPathname);
-	req.sendFile(fullPathname, mime, true);
-	return true;
+	return req.sendFile(fullPathname, mime, true);
 }
 
 void HttpFileMapper::operator ()(const HTTPRequest& req) {
