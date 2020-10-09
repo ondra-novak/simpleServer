@@ -13,7 +13,7 @@ namespace simpleServer {
 class HttpFileMapper {
 public:
 
-	HttpFileMapper(std::string &&documentRoot, std::string &&index);
+	HttpFileMapper(std::string &&documentRoot, std::string &&index, std::size_t cache_secs = 0);
 
 	virtual bool mapFile(const HTTPRequest &req, StrViewA fullPathname);
 	virtual StrViewA mapMime(StrViewA fullPathname);
@@ -29,6 +29,7 @@ public:
 protected:
 	std::string documentRoot;
 	std::string index;
+	std::size_t cache_secs;
 
 
 };

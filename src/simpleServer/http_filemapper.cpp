@@ -11,9 +11,11 @@ char HttpFileMapper::pathSeparator = '\\';
 char HttpFileMapper::pathSeparator = '/';
 #endif
 
-HttpFileMapper::HttpFileMapper(std::string &&documentRoot, std::string &&index)
+HttpFileMapper::HttpFileMapper(std::string &&documentRoot, std::string &&index, std::size_t cache_secs)
 	:documentRoot(std::move(documentRoot))
-	,index(std::move(index)) {
+	,index(std::move(index))
+	,cache_secs(cache_secs)
+{
 /*	if (this->documentRoot.empty() || this->documentRoot[this->documentRoot.length()-1] != pathSeparator) {
 		this->documentRoot.push_back(pathSeparator);
 	}*/
@@ -21,7 +23,7 @@ HttpFileMapper::HttpFileMapper(std::string &&documentRoot, std::string &&index)
 
 bool HttpFileMapper::mapFile(const HTTPRequest& req, StrViewA fullPathname) {
 	StrViewA mime = mapMime(fullPathname);
-	return req.sendFile(fullPathname, mime, true);
+	return req.sendFile(fullPathname, mime, true, cache_secs);
 }
 
 void HttpFileMapper::operator ()(const HTTPRequest& req) {

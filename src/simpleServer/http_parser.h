@@ -287,7 +287,7 @@ public:
 	 * from the content of the file.
 	 */
 
-	bool sendFile(StrViewA content_type, StrViewA pathname, bool etag = true);
+	bool sendFile(StrViewA content_type, StrViewA pathname, bool etag = true, std::size_t cache_secs=0);
 
 	bool redirectToFolderRoot(Redirect type);
 
@@ -518,11 +518,12 @@ public:
 	 * @param etag true to support ETag. If file is not changed, 304 header can be generated. Note that
 	 * etag generation is implementation depended. It could be encoded time of modification, or has generated
 	 * from the content of the file.
+	 * @param cache_secs cache every file locally for given count of seconds
 	 * @retval true successfuly send
 	 * @retval false file not found
 	 */
 
-	bool sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true)const {return (*this)->sendFile(content_type, pathname, etag);}
+	bool sendFile(StrViewA pathname, StrViewA content_type = StrViewA(), bool etag = true, std::size_t cache_secs=0)const {return (*this)->sendFile(content_type, pathname, etag, cache_secs);}
 
 	///Begin of the headers
 	ReceivedHeaders::HdrMap::const_iterator begin() const {

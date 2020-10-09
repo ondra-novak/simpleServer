@@ -777,7 +777,7 @@ static std::pair<StrViewA, StrViewA> mimeTypes[] = {
        {"ods","application/vnd.oasis.opendocument.spreadsheet"}
 };
 
-bool HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool etag) {
+bool HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool etag, std::size_t cache_secs) {
 	char *fname = (char *)alloca(pathname.length+1);
 	std::memcpy(fname, pathname.data, pathname.length);
 	fname[pathname.length] = 0;
@@ -830,6 +830,7 @@ bool HTTPRequestData::sendFile(StrViewA content_type,StrViewA pathname, bool eta
 				}
 			}
 			resp("ETag", curEtag);
+			if (cache_secs) resp.cacheFor(cache_secs);
 		}
 	}
 
