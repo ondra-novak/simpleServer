@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <map>
 #include <unordered_map>
@@ -88,14 +89,70 @@ enum class Redirect {
 	permanent_repeat = 308,
 };
 
+class HTTPCounters: public RefCntObj {
+public:
+	void report(std::size_t reqTime_us);
+
+	struct Data {
+		///accumulated count of requests
+		std::size_t requests;
+		///accumulated count of total time in microseconds- to see average request time, use requests/reqtime
+		std::size_t reqtime;
+		///accumulated request time squared - can be used to calculate deviation
+		std::size_t reqtime2;
+		///accumulated count of requests
+		std::size_t long_requests;
+		///accumulated count of total time in microseconds- to see average request time, use requests/reqtime
+		std::size_t long_reqtime;
+		///accumulated request time squared - can be used to calculate deviation
+		std::size_t long_reqtime2;
+		///accumulated count of requests
+		std::size_t very_long_requests;
+		///accumulated count of total time in microseconds- to see average request time, use requests/reqtime
+		std::size_t very_long_reqtime;
+		///accumulated request time squared - can be used to calculate deviation
+		std::size_t very_long_reqtime2;
+	};
+
+	Data getCounters() const;
+
+
+
+	std::size_t getLongResponeTime() const {
+		return long_respone_us;
+	}
+
+	void setLongResponeTime(std::size_t us) {
+		long_respone_us = us;
+	}
+
+	std::size_t getVeryLongResponeTime() const {
+		return very_long_respone_us;
+	}
+
+	void setVeryLongResponeTime(std::size_t us) {
+		very_long_respone_us = us;
+	}
+
+
+protected:
+	std::size_t long_respone_us = 1000*1000;
+	std::size_t very_long_respone_us = 5000*1000;
+	std::atomic<std::size_t> reqCount, reqTime, reqTime2;
+	std::atomic<std::size_t> long_reqCount, long_reqTime, long_reqTime2;
+	std::atomic<std::size_t> very_long_reqCount, very_long_reqTime, very_long_reqTime2;
+};
+
+using PHTTPCounters = RefCntPtr<HTTPCounters>;
+
 
 class HTTPRequestData: public RefCntObj   {
 
 
 public:
 
-	HTTPRequestData();
-	HTTPRequestData(LogObject curLog);
+	HTTPRequestData(const PHTTPCounters &cntrs);
+	HTTPRequestData(const PHTTPCounters &cntrs, LogObject curLog);
 
 
 	typedef ReceivedHeaders::HdrMap HdrMap;
@@ -293,6 +350,7 @@ public:
 
 
 	LogObject log;
+	PHTTPCounters counters;
 
 protected:
 
@@ -309,6 +367,12 @@ protected:
 	Stream originStream;
 	Stream reqStream;
 	bool responseSent;
+
+	std::chrono::steady_clock::time_point req_start;
+
+	void report_beginRequest();
+	void report_endRequest();
+
 
 	///in case that keepalive is enabled, contains handler to call for second and othe requests
 	HTTPHandler keepAliveHandler;
@@ -356,7 +420,7 @@ public:
 	 *
 	 *
 	 * */
-	static bool parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true);
+	static bool parseHttp(Stream stream, HTTPHandler handler,  bool keepAlive=true, const PHTTPCounters &counters = nullptr);
 
 
 

@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 #include <string.h>
+#include <chrono>
 
 #include <cstdlib>
 
@@ -86,10 +87,23 @@ static const char* CRLF = "\r\n";
 
 
 
-HTTPRequestData::HTTPRequestData()
-	:log(AbstractLogProvider::create(), TaskCounter<HTTPRequestData>("http:")) {}
-HTTPRequestData::HTTPRequestData(LogObject curLog)
-	:log(curLog.getProvider()->create(), TaskCounter<HTTPRequestData>("http:")) {}
+HTTPRequestData::HTTPRequestData(const PHTTPCounters &cntrs)
+	:log(AbstractLogProvider::create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs) {}
+HTTPRequestData::HTTPRequestData(const PHTTPCounters &cntrs, LogObject curLog)
+	:log(curLog.getProvider()->create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs)  {}
+
+void HTTPRequestData::report_beginRequest() {
+	req_start = std::chrono::steady_clock::now();
+}
+
+void HTTPRequestData::report_endRequest() {
+	if (counters != nullptr) {
+		auto end_time = std::chrono::steady_clock::now();
+		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(end_time - req_start).count();
+		counters->report(dur);
+	}
+
+}
 
 
 template<typename Fn>
@@ -152,10 +166,10 @@ static StrViewA getStatusCodeMsg(int code) {
 }
 
 
-bool HTTPRequest::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) {
+bool HTTPRequest::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive, const PHTTPCounters &counters) {
 
 
-	RefCntPtr<HTTPRequestData> req(new HTTPRequestData);
+	RefCntPtr<HTTPRequestData> req(new HTTPRequestData(counters));
 
 	return req->parseHttp(stream, handler, keepAlive);
 
@@ -163,6 +177,9 @@ bool HTTPRequest::parseHttp(Stream stream, HTTPHandler handler, bool keepAlive) 
 
 
 void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handler) {
+
+	report_beginRequest();
+
 
 	if (versionStr == "HTTP/0.9") {
 		version = http09;
@@ -172,6 +189,7 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 		version = http11;
 	} else {
 		sendErrorPage(505);
+		report_endRequest();
 		return;
 	}
 	keepAlive = version == http11;
@@ -188,6 +206,8 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 			sendErrorPage(500, StrViewA("InternalError"), e.what());
 		}
 	}
+
+	report_endRequest();
 
 }
 
@@ -906,6 +926,34 @@ bool HTTPRequestData::allowMethods(std::initializer_list<StrViewA> methods) {
 	return allowMethodsImpl(methods.begin(),methods.end());
 }
 
+void HTTPCounters::report(std::size_t reqTime_us) {
+	if (reqTime_us<long_respone_us) {
+		++reqCount;
+		reqTime+=(reqTime_us);
+		reqTime2+=(reqTime_us*reqTime_us);
+	} else if (reqTime_us < very_long_respone_us) {
+		++long_reqCount;
+		long_reqTime+=(reqTime_us);
+		long_reqTime2+=(reqTime_us*reqTime_us);
+	} else  {
+		++very_long_reqCount;
+		very_long_reqTime+=(reqTime_us);
+		very_long_reqTime2+=(reqTime_us*reqTime_us);
+	}
+}
 
+HTTPCounters::Data HTTPCounters::getCounters() const {
+	return {
+		reqCount.load(),
+		reqTime.load(),
+		reqTime2.load(),
+		long_reqCount.load(),
+		long_reqTime.load(),
+		long_reqTime2.load(),
+		very_long_reqCount.load(),
+		very_long_reqTime.load(),
+		very_long_reqTime2.load()
+	};
+}
 }
 

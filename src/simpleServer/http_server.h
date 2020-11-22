@@ -17,6 +17,7 @@ namespace _intr {
 	class MiniServerImpl: public RefCntObj {
 	public:
 
+
 		const AsyncProvider& getAp() const {
 			return ap;
 		}
@@ -52,6 +53,13 @@ namespace _intr {
 		void runCycle();
 		void stopCycle();
 
+		const PHTTPCounters& getCounters() const {
+			return counters;
+		}
+
+		void setCounters(const PHTTPCounters &counters) {
+			this->counters = counters;
+		}
 
 		ErrorHandler ehndl;
 		PreHTTPHandler preHandler;
@@ -62,6 +70,7 @@ namespace _intr {
 		StreamFactory sf;
 		AsyncProvider ap;
 		HTTPHandler hndl;
+		PHTTPCounters counters;
 
 
 	};
@@ -100,6 +109,8 @@ public:
 	 *  @note preHandler shoudl putBack the read bytes if it rejected the request
 	 */
 	PreHTTPHandler &preHandler;
+
+	PHTTPCounters counters;
 
 
 };

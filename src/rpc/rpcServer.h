@@ -64,6 +64,7 @@ public:
 	void addRPCPath(String path, const Config &cfg);
 	void addPath(String path, simpleServer::HTTPMappedHandler hndl);
 	void setHostMapping(const String &mapping);
+	void addStats(String path);
 
 	void start();
 

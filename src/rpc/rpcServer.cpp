@@ -427,6 +427,29 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 	}
 }
 
+void RpcHttpServer::addStats(String path) {
+	addPath(path, [cntr = this->counters](simpleServer::HTTPRequest req, StrViewA ){
+
+		auto data = cntr->getCounters();
+		json::Value out = json::Object
+				("short_requests", data.requests)
+				("short_time", data.reqtime)
+				("short_time_sqr", data.reqtime2)
+				("long_requests", data.long_requests)
+				("long_time", data.long_reqtime)
+				("long_time_sqr", data.long_reqtime2)
+				("very_long_requests", data.very_long_requests)
+				("very_long_time", data.very_long_reqtime)
+				("very_long_time_sqr", data.very_long_reqtime2)
+				("total_requests", data.very_long_requests+data.long_requests+data.requests)
+				("total_time", data.very_long_reqtime+data.long_reqtime+data.reqtime)
+				("total_time_sqr", data.very_long_reqtime2+data.long_reqtime2+data.reqtime2);
+
+		auto s = req.sendResponse("application/json");
+		out.serialize(std::move(s));
+		return true;
+	});
+}
 
 } /* namespace hflib */
 

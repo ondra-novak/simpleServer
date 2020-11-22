@@ -38,13 +38,11 @@ MiniHttpServer::MiniHttpServer(NetAddr port, unsigned int threads, unsigned int 
 
 MiniHttpServer::MiniHttpServer(StreamFactory sf,unsigned int threads, unsigned int dispatchers)
 :MiniHttpServer(sf,initializeAsyncProvider(threads,dispatchers))
-
 {
 }
 
 MiniHttpServer::MiniHttpServer(NetAddr port, AsyncProvider asyncProvider)
 :MiniHttpServer(initializeStreamFactory(port),asyncProvider)
-
 {
 }
 
@@ -52,12 +50,14 @@ static RefCntPtr<_intr::MiniServerImpl> initServerCore(StreamFactory sf, AsyncPr
 	RefCntPtr<_intr::MiniServerImpl> srv = new _intr::MiniServerImpl;
 	srv->setAp(ap);
 	srv->setSf(sf);
+	srv->setCounters(new HTTPCounters);
 	return srv;
 }
 
 MiniHttpServer::MiniHttpServer(StreamFactory sf, AsyncProvider asyncProvider)
 :srv(initServerCore(sf,asyncProvider)), onError(srv->ehndl), preHandler(srv->preHandler)
 {
+	counters = srv->getCounters();
 }
 
 MiniHttpServer::~MiniHttpServer() {
@@ -95,14 +95,14 @@ void _intr::MiniServerImpl::runCycle() {
 						//try preHandler
 						if (!me->preHandler(s)) {
 							//if preHandler rejected request, continue with http
-							HTTPRequest::parseHttp(s, me->hndl, true);
+							HTTPRequest::parseHttp(s, me->hndl, true, counters);
 						}
 					}
 				});
 				me->runCycle();
 			} else {
 
-				HTTPRequest::parseHttp(s, me->hndl, true);
+				HTTPRequest::parseHttp(s, me->hndl, true, counters);
 				me->runCycle();
 			}
 		} else {
