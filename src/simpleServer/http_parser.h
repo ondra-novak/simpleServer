@@ -91,7 +91,8 @@ enum class Redirect {
 
 class HTTPCounters: public RefCntObj {
 public:
-	void report(std::size_t reqTime_us);
+	void report(std::size_t reqTime_ms);
+	HTTPCounters();
 
 	struct Data {
 		///accumulated count of requests
@@ -119,25 +120,25 @@ public:
 
 
 	std::size_t getLongResponeTime() const {
-		return long_respone_us;
+		return long_respone_ms;
 	}
 
-	void setLongResponeTime(std::size_t us) {
-		long_respone_us = us;
+	void setLongResponeTime(std::size_t ms) {
+		long_respone_ms = ms;
 	}
 
 	std::size_t getVeryLongResponeTime() const {
-		return very_long_respone_us;
+		return very_long_respone_ms;
 	}
 
-	void setVeryLongResponeTime(std::size_t us) {
-		very_long_respone_us = us;
+	void setVeryLongResponeTime(std::size_t ms) {
+		very_long_respone_ms = ms;
 	}
 
 
 protected:
-	std::size_t long_respone_us = 1000*1000;
-	std::size_t very_long_respone_us = 5000*1000;
+	std::size_t long_respone_ms = 10000;
+	std::size_t very_long_respone_ms = 50000;
 	std::atomic<std::size_t> reqCount, reqTime, reqTime2;
 	std::atomic<std::size_t> long_reqCount, long_reqTime, long_reqTime2;
 	std::atomic<std::size_t> very_long_reqCount, very_long_reqTime, very_long_reqTime2;

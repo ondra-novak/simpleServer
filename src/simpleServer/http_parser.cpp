@@ -88,9 +88,13 @@ static const char* CRLF = "\r\n";
 
 
 HTTPRequestData::HTTPRequestData(const PHTTPCounters &cntrs)
-	:log(AbstractLogProvider::create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs) {}
+	:log(AbstractLogProvider::create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs) {
+	report_beginRequest();
+}
 HTTPRequestData::HTTPRequestData(const PHTTPCounters &cntrs, LogObject curLog)
-	:log(curLog.getProvider()->create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs)  {}
+	:log(curLog.getProvider()->create(), TaskCounter<HTTPRequestData>("http:")),counters(cntrs)  {
+	report_beginRequest();
+}
 
 void HTTPRequestData::report_beginRequest() {
 	req_start = std::chrono::steady_clock::now();
@@ -99,7 +103,7 @@ void HTTPRequestData::report_beginRequest() {
 void HTTPRequestData::report_endRequest() {
 	if (counters != nullptr) {
 		auto end_time = std::chrono::steady_clock::now();
-		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(end_time - req_start).count();
+		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(end_time - req_start).count()/100;
 		counters->report(dur);
 	}
 
@@ -189,7 +193,6 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 		version = http11;
 	} else {
 		sendErrorPage(505);
-		report_endRequest();
 		return;
 	}
 	keepAlive = version == http11;
@@ -206,8 +209,6 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 			sendErrorPage(500, StrViewA("InternalError"), e.what());
 		}
 	}
-
-	report_endRequest();
 
 }
 
@@ -734,6 +735,7 @@ void HTTPRequestData::readBodyAsync_cont1(std::size_t maxSize, HTTPHandler compl
 
 void HTTPRequestData::handleKeepAlive() {
 	reqStream = nullptr;
+	report_endRequest();
 //	logDebug("Called handleKeepAlive: $1", (std::uintptr_t)this);
 
 	if (keepAliveHandler != nullptr && keepAlive) {
@@ -926,19 +928,19 @@ bool HTTPRequestData::allowMethods(std::initializer_list<StrViewA> methods) {
 	return allowMethodsImpl(methods.begin(),methods.end());
 }
 
-void HTTPCounters::report(std::size_t reqTime_us) {
-	if (reqTime_us<long_respone_us) {
+void HTTPCounters::report(std::size_t reqTime_ms) {
+	if (reqTime_ms<long_respone_ms) {
 		++reqCount;
-		reqTime+=(reqTime_us);
-		reqTime2+=(reqTime_us*reqTime_us);
-	} else if (reqTime_us < very_long_respone_us) {
+		reqTime+=(reqTime_ms);
+		reqTime2+=(reqTime_ms*reqTime_ms);
+	} else if (reqTime_ms < very_long_respone_ms) {
 		++long_reqCount;
-		long_reqTime+=(reqTime_us);
-		long_reqTime2+=(reqTime_us*reqTime_us);
+		long_reqTime+=(reqTime_ms);
+		long_reqTime2+=(reqTime_ms*reqTime_ms);
 	} else  {
 		++very_long_reqCount;
-		very_long_reqTime+=(reqTime_us);
-		very_long_reqTime2+=(reqTime_us*reqTime_us);
+		very_long_reqTime+=(reqTime_ms);
+		very_long_reqTime2+=(reqTime_ms*reqTime_ms);
 	}
 }
 
@@ -955,5 +957,13 @@ HTTPCounters::Data HTTPCounters::getCounters() const {
 		very_long_reqTime2.load()
 	};
 }
+
+HTTPCounters::HTTPCounters()
+:reqCount(0), reqTime(0), reqTime2(0)
+,long_reqCount(0), long_reqTime(0), long_reqTime2(0)
+,very_long_reqCount(0), very_long_reqTime(0), very_long_reqTime2(0)
+{
+
 }
 
+}
