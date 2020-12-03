@@ -427,8 +427,8 @@ void RpcHandler::operator ()(simpleServer::HTTPRequest httpreq, WebSocketStream 
 	}
 }
 
-void RpcHttpServer::addStats(String path) {
-	addPath(path, [cntr = this->counters](simpleServer::HTTPRequest req, StrViewA ){
+void RpcHttpServer::addStats(String path, std::function<json::Value()> customStats) {
+	addPath(path, [cntr = this->counters, customStats = std::move(customStats)](simpleServer::HTTPRequest req, StrViewA ){
 
 		auto data = cntr->getCounters();
 		json::Value out = json::Object
@@ -444,6 +444,11 @@ void RpcHttpServer::addStats(String path) {
 				("total_requests", (data.very_long_requests+data.long_requests+data.requests))
 				("total_time", (data.very_long_reqtime+data.long_reqtime+data.reqtime)*0.1)
 				("total_time_sqr", (data.very_long_reqtime2+data.long_reqtime2+data.reqtime2)*0.01);
+
+		if (customStats) {
+			auto custom = customStats();
+			out = out.merge(custom);
+		}
 
 		auto s = req.sendResponse("application/json");
 		out.serialize(std::move(s));
