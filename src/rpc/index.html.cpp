@@ -365,6 +365,34 @@ function updateContextView(rpc) {
 	}
 }
 
+function callRpc(rpc, cmd) {
+		var r;
+		if (cmd.method=="/multicall") {
+			var m = cmd.args[0];
+			var plst = cmd.args[1].map(function(d) {
+				return rpc.call2(m, d).catch(function(x) {
+					return {"ERROR":x};
+				});
+			});
+            r = Promise.all(plst);
+		} else if (cmd.method=="/logrec") {
+			var m = cmd.args[0];
+			var args = cmd.args[1];
+			var oldctx = rpc.context;
+			var ctx = cmd.args[2];
+			rpc.context = ctx;
+			r = rpc.call2(m, args);
+			return r.then(function(x) {
+				rpc.context = oldctx; return x;
+			},function(e) {
+				rpc.context = oldctx; throw e;
+			});
+		} else {
+			r = rpc.call2(cmd.method, cmd.args)
+		}
+		return r;
+}
+
 function addControls(rpc, root, cmd) {
 	root.classList.add("row");
     var res = document.createElement("div");
@@ -381,7 +409,7 @@ function addControls(rpc, root, cmd) {
 			res.classList.remove("result");
 			res.classList.remove("error");
 			res.classList.add("pending");
-			rpc.call2(cmd.method, cmd.args)
+			callRpc(rpc, cmd)
 			   .then(function(x) {clearElement(res); return x;},
 					   function(x) {clearElement(res); throw x;})
 			   .then(outputResult.bind(null, res),outputError.bind(null,res));
@@ -421,11 +449,10 @@ function sendCommand(rpc, cmd) {
 		var d = addControls(rpc,root, parsed);
 	    window.output.appendChild(root);
 		scroll();
-		return rpc.call2(parsed.method, parsed.args)
-			.then(outputResult.bind(null,d), outputError.bind(null,d))			
-			.then(scroll)
-			.then(updateContextView.bind(null,rpc))
-			
+		return callRpc(rpc, parsed)
+				.then(outputResult.bind(null,d), outputError.bind(null,d))			
+				.then(scroll)
+				.then(updateContextView.bind(null,rpc));				
 	} else {
 		parsed = parseContextChange(cmd);
 		if (parsed) {
@@ -570,13 +597,29 @@ function formatJson(json) {
 }
 	
 function parseCmd(cmd) {
-	var i1 = /^ *([-a-zA-Z0-9_.]+)[ ]*([{[][\s\S]*)$/;
+	var i1 = /^ *(\/?[-a-zA-Z0-9_.]+)[ ]*([{[][\s\S]*)$/;
 	var m = i1.exec(cmd);
 	if (m && m[2].length) {
-		return {
-			method: m[1],
-			args: eval("("+m[2]+")")
-		};
+		var args = m[2];
+		var k1 = args.indexOf("?[");
+		var k2 = args.indexOf("]?");
+		if (k1 != -1 && k2 != -1 && k1 < k2) {
+			var lst = JSON.parse(args.substr(k1+1,k2-k1));
+			var tmpl1 = args.substr(0,k1);
+			var tmpl2 = args.substr(k2+2);
+			var data = lst.map(function(x) {
+				return eval("("+tmpl1+JSON.stringify(x)+tmpl2+")");
+			});
+			return {
+				method:"/multicall",
+				args: [m[1],data],
+			};
+		} else {
+			return {
+				method: m[1],
+				args: eval("("+args+")"),
+			};
+		}
 	} else {
 		return null;
 	}
