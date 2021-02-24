@@ -619,7 +619,7 @@ Stream HTTPRequestData::sendHeaders(int code, const HTTPResponse* resp,
 
 	KeepAliveFn nxfn(this,originStream.getAsyncProvider());
 
-	log.progress("$1 $2 $3 $4 $5 $6", host, method, path, code, lgCtxType, lgCtxLen);
+	log.info("$1 $2 $3 $4 $5 $6", host, method, path, code, lgCtxType, lgCtxLen);
 
 	//when code 204, server should not generate any content
 	//so transfer encoding and content type should not apper in headers

@@ -71,7 +71,7 @@ public:
 
 
 static void handleLogging(const LogObject &logObj, const Value &v, const RpcRequest &req) noexcept {
-	if (logObj.isLogLevelEnabled(LogLevel::progress)) {
+	if (logObj.isLogLevelEnabled(LogLevel::info)) {
 		try {
 			Value diagData = req.getDiagData();
 			//do not log notifications
@@ -85,7 +85,7 @@ static void handleLogging(const LogObject &logObj, const Value &v, const RpcRequ
 			if (!diagData.defined()) diagData = nullptr;
 			if (!context.defined()) context = nullptr;
 			Value output = {method,args,context,diagData};
-			logObj.progress("$1", output.toString());
+			logObj.info("$1", output.toString());
 		} catch (...) {
 
 		}
