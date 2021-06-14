@@ -34,13 +34,19 @@ public:
 	void enableConsole(bool e) {
 		consoleEnabled = e;
 	}
+	void enableCORS(bool e) {
+		corsEnabled = e;
+	}
 
 protected:
+
+	static void updateHeaders(bool cors, HTTPResponse &resp, const HeaderValue &origin, bool options) ;
 
 
 	RpcServer &rpcserver;
 	std::size_t maxReqSize=10*1024*1024;
 	bool consoleEnabled = false;
+	bool corsEnabled = false;
 
 
 
@@ -57,6 +63,7 @@ public:
 		bool enableWS = true;
 		bool enableDirect = true;
 		std::size_t maxReqSize = 0;
+		bool enableCORS = false;
 	};
 
 

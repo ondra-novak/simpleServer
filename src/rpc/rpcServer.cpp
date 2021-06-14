@@ -156,20 +156,43 @@ void HttpRpcConnContext::exportToHeader(SendHeaders &hdrs) {
 	}
 }
 
+void RpcHandler::updateHeaders(bool cors, HTTPResponse &resp, const HeaderValue &origin, bool options)  {
+	if (cors && origin.defined()) {
+		resp("Access-Control-Allow-Origin", origin);
+		if (options) {
+			resp("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+			resp("Access-Control-Allow-Headers", "Content-Type");
+			resp("Access-Control-Max-Age","86400");
+		}
+	}
+	if (!options){
+		resp.contentType("application/json");
+	}
+}
+
 bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpath) const {
 
-	if (!req.allowMethods({"GET","POST"})) return true;
+	if (!req.allowMethods({"GET","POST","OPTIONS"})) return true;
 	StrViewA method = req.getMethod();
+	HeaderValue origin = req["Origin"];
+	if (method == "OPTIONS") {
+		HTTPResponse resp(204);
+		updateHeaders(corsEnabled, resp, origin, true);
+		req.sendResponse(resp, "");
+		return true;
+	}
 	if (method == "POST") {
 		RpcServer &srv(rpcserver);
-		req.readBodyAsync(maxReqSize, [&srv](HTTPRequest httpreq){
+		req.readBodyAsync(maxReqSize, [&srv, origin, cors = corsEnabled](HTTPRequest httpreq){
 			auto x = httpreq.getUserBuffer();
 			if (x.empty()) {
 
 				RpcServerEnum &enm = static_cast<RpcServerEnum &>(srv);
 				Array methods;
 				enm.forEach([&methods](Value v){methods.push_back(v);});
-				Stream out = httpreq.sendResponse("application/json");
+				HTTPResponse resp(200);
+				updateHeaders(cors, resp, origin, false);
+				Stream out = httpreq.sendResponse(resp);
 				Value(methods).serialize(out);
 				out.flush();
 
@@ -177,13 +200,13 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 				Value rdata = Value::fromString(StrViewA(BinaryView(x)));
 				Stream out;
 				RefCntPtr<HttpRpcConnContext> ctx = new HttpRpcConnContext(httpreq,false);
-				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,logObj = LogObject(httpreq->log,"RPC"),out,ctx](
+				RpcRequest rrq = RpcRequest::create(rdata,[httpreq,cors, origin, logObj = LogObject(httpreq->log,"RPC"),out,ctx](
 							const Value &v, const RpcRequest &req) mutable {
 
 					if (out == nullptr) {
 						HTTPResponse hdrs(200);
 						ctx->exportToHeader(hdrs);
-						hdrs.contentType("application/json");
+						updateHeaders(cors, hdrs, origin, false);
 						out = httpreq.sendResponse(hdrs);
 					}
 					handleLogging(logObj,v,req);
@@ -227,7 +250,9 @@ bool RpcHandler::operator ()(simpleServer::HTTPRequest req, const StrViewA &vpat
 				methods = methodsArr;
 			}
 			if (cb.empty()) {
-				auto stream = req.sendResponse("application/json");
+				HTTPResponse resp(200);
+				updateHeaders(corsEnabled, resp, origin, false);
+				auto stream = req.sendResponse(resp);
 				methods.serialize(stream);
 			} else {
 				auto stream = req.sendResponse("text/javascript");
@@ -259,6 +284,7 @@ void RpcHttpServer::addRPCPath(String path, const Config &cfg) {
 	if (cfg.maxReqSize) h.setMaxReqSize(cfg.maxReqSize);
 	enableDirect = cfg.enableDirect;
 	h.enableConsole(cfg.enableConsole);
+	h.enableCORS(cfg.enableCORS);
 	if (cfg.enableWS) {
 		WebSocketHandlerWithContext ws(h);
 		auto h2 = [=](HTTPRequest req, StrViewA vpath) mutable {
