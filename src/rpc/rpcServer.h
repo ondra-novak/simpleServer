@@ -107,6 +107,7 @@ public:
 
 	HttpRpcConnContext(const simpleServer::HTTPRequest &req, bool secure):req(req),secure(secure) {}
 	virtual Value retrieve(StrViewA key) const;
+	virtual Value retrieve(std::string_view key) const;
 	void exportToHeader(SendHeaders &hdrs);
 
 	bool isSecure() const {return secure;}

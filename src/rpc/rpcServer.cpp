@@ -92,7 +92,9 @@ static void handleLogging(const LogObject &logObj, const Value &v, const RpcRequ
 	}
 }
 
-
+Value HttpRpcConnContext::retrieve(std::string_view key) const {
+	retrieve(StrViewA(key));
+}
 
 Value HttpRpcConnContext::retrieve(StrViewA key) const {
 	Value sup = RpcConnContext::retrieve(key);
