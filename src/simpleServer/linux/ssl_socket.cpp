@@ -53,6 +53,7 @@ public:
 	~SSLTcpStream() {
 		SSL_free(ssl);
 		SSL_CTX_free(ctx);
+		sck = 0; //the socket is in original stream, so we don't need to close it now.
 	}
 
 	virtual BinaryView implRead(MutableBinaryView buffer, bool nonblock) override;
