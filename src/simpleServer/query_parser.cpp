@@ -76,7 +76,7 @@ void QueryParser::parse(StrViewA vpath, bool postBody) {
 		return p;
 	};
 
-	UrlDecode<decltype(wrfn)> urlDecode(wrfn);
+	UrlDecode<decltype(wrfn) &> urlDecode(wrfn);
 
 	while (iter != e) {
 		char c = *iter++;

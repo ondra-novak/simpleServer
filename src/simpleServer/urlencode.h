@@ -16,7 +16,7 @@ extern const char *urlEncode_validChards;
 template<typename Fn>
 class UrlEncode {
 public:
-	UrlEncode(const_ref<Fn> fn):fn(fn) {}
+	UrlEncode(Fn && fn):fn(std::forward<Fn>(fn)) {}
 
 	void operator()(char item) const {
 		//char validchrs =
@@ -30,6 +30,9 @@ public:
 			fn(item);
 		}
 	}
+	void operator()(const std::string_view &str) const {
+		for (const auto &c: str) (*this)(c);
+	}
 protected:
 	Fn fn;
 
@@ -39,7 +42,7 @@ template<typename Fn>
 class UrlDecode {
 public:
 
-	UrlDecode(const_ref<Fn> fn):fn(fn),acc(0) {}
+	UrlDecode(Fn &&fn):fn(std::forward<Fn>(fn)),acc(0) {}
 
 	void operator()(char item) const {
 
@@ -60,6 +63,10 @@ public:
 		}
 
 	}
+	void operator()(const std::string_view &str) const {
+		for (const auto &c: str) (*this)(c);
+	}
+
 protected:
 	Fn fn;
 	mutable unsigned char acc;
@@ -67,6 +74,14 @@ protected:
 
 };
 
+template<typename WriteFn>
+auto urlEncoder(WriteFn &&fn) {
+	return UrlEncode<WriteFn>(std::forward<WriteFn>(fn));
+}
+template<typename ReadFn>
+auto urlDecoder(ReadFn &&fn) {
+	return UrlEncode<ReadFn>(std::forward<ReadFn>(fn));
+}
 
 template<typename Container>
 std::string urlDecode(const Container &container) {
