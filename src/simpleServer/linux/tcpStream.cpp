@@ -179,7 +179,11 @@ void TCPStream::implReadAsync(const MutableBinaryView& buffer, Callback&& cb) {
 	MutableBinaryView b(buffer);
 
 	auto fn = [me,cbc=std::move(cb),b](AsyncState state) mutable {
-		me->asyncReadCallback(b, std::move(cbc), state);
+		try {
+			me->asyncReadCallback(b, std::move(cbc), state);
+		} catch (...) {
+			cbc(asyncError, BinaryView(0,0));
+		}
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck, POLLIN),iotimeout, fn);
@@ -192,7 +196,11 @@ void TCPStream::implWriteAsync(const BinaryView& data, Callback&& cb) {
 	BinaryView b(data);
 
 	auto fn = [me,cbc=std::move(cb), b](AsyncState state) mutable  {
-		me->asyncWriteCallback(b,std::move(cbc),state);
+		try {
+			me->asyncWriteCallback(b,std::move(cbc),state);
+		} catch (...) {
+			cbc(asyncError, BinaryView(0,0));
+		}
 	};
 
 	asyncProvider->runAsync(AsyncResource(sck,POLLOUT),iotimeout,fn);
