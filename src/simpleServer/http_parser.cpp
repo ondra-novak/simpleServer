@@ -197,6 +197,12 @@ void HTTPRequestData::runHandler(const Stream& stream, const HTTPHandler& handle
 	}
 	keepAlive = version == http11;
 
+	HeaderValue reqid = this->operator []("X-Request-Id");
+	if (reqid.defined()) {
+		LogObject lg(this->log,std::string("req:").append(reqid));
+		lg.swap(this->log);
+	}
+
 	try {
 		reqStream= prepareStream(stream);
 		handler(HTTPRequest(this));
