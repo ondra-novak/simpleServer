@@ -32,9 +32,9 @@ public:
 
 	}
 	virtual std::string toString(bool) const override {
-		char perms[10];
+		char perms[20];
 		if (permissions) {
-			snprintf(perms,10,":%03o", permissions);
+			snprintf(perms,20,":%03o", permissions);
 			return std::string(sockAddr.sun_path).append(perms);
 		} else {
 			return sockAddr.sun_path;
