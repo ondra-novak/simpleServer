@@ -118,7 +118,7 @@ public:
 	~ChunkedStreamWrap() noexcept {
 		try {
 			writeEof();
-			implFlush();
+			ChunkedStreamWrap::implFlush();
 			fn();
 		} catch (...) {
 

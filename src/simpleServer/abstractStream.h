@@ -763,15 +763,15 @@ public:
 	}
 	template<typename Fn>
 	void readAsync(Fn &&completion) const {
-		return (*this)->readAsync(std::forward<Fn>(completion));
+		(*this)->readAsync(std::forward<Fn>(completion));
 	}
 	template<typename Fn>
 	void readAsync(const MutableBinaryView &buffer, Fn &&completion) const {
-		return (*this)->readAsync(buffer,std::forward<Fn>(completion));
+		(*this)->readAsync(buffer,std::forward<Fn>(completion));
 	}
 	template<typename Fn>
 	void writeAsync(const BinaryView &data, const Fn &completion, bool alldata = false) const {
-		return (*this)->writeAsync(data, completion, alldata);
+		(*this)->writeAsync(data, completion, alldata);
 	}
 
 	AsyncProvider setAsyncProvider(AsyncProvider asyncProvider) const {

@@ -15,7 +15,7 @@ public:
 	~ChunkedStream() noexcept {
 		try {
 			if (wrBuff.size)
-				implCloseOutput();
+			    ChunkedStream::implCloseOutput();
 		}
 		catch (...) {
 			//don't bother with exception
