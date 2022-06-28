@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../shared/shared_object.h"
+#include "../../../shared/shared_lockable_ptr.h"
 #include "stringview.h"
 
 #include "http_parser.h"
@@ -104,7 +104,7 @@ protected:
 	};
 
 	using MapData = std::vector<MapItem>;
-	using PMapData = ondra_shared::SharedObject<MapData>;
+	using PMapData = ondra_shared::shared_lockable_ptr<MapData>;
 
 	PMapData mapData;
 

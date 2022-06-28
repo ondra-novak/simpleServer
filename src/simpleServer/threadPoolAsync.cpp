@@ -1,5 +1,4 @@
 #include "threadPoolAsync.h"
-#include "shared/defer.tcc"
 
 #include <thread>
 
@@ -8,10 +7,9 @@
 #include "exceptions.h"
 
 namespace simpleServer {
-using ondra_shared::defer;
 
 ThreadPoolAsyncImpl::~ThreadPoolAsyncImpl() {
-	stop();
+    ThreadPoolAsyncImpl::stop();
 }
 
 void ThreadPoolAsyncImpl::cancel(const AsyncResource& resource) {
@@ -111,7 +109,7 @@ PStreamEventDispatcher ThreadPoolAsyncImpl::getListener() {
 void ThreadPoolAsyncImpl::runAsync(const AsyncResource& resource, int timeout,  CompletionFn &&fn) {
 
 	if (exitFlag) {
-		defer >> std::bind(fn, asyncCancel);
+	    fn(asyncCancel);
 		return;
 	}
 
@@ -179,36 +177,16 @@ void ThreadPoolAsyncImpl::worker() noexcept {
 
 	using namespace ondra_shared;
 
-	DeferContext defer(ondra_shared::defer_root);
 
 	for(;;) {
 
 
 		if (!dQueue.pump()) {
 			dQueue.quit();
-			defer_yield();
 			threadCount.dec();
 			return;
 		}
 
-		defer_yield();
-/*		PStreamEventDispatcher lst = tQueue.pop();
-		if (lst == nullptr) {
-			tQueue.push(nullptr);
-			threadCount.dec();
-			return;
-		}
-
-
-		auto t = lst->wait();
-		tQueue.push(lst);
-		if (t == nullptr) {
-			threadCount.dec();
-			return;
-		}
-
-		t();
-*/
 		if (static_cast<unsigned int>(threadCount.getCounter()) > reqThreadCount) {
 			Sync _(lock);
 			if (static_cast<unsigned int>(threadCount.getCounter()) > reqThreadCount) {
@@ -241,14 +219,14 @@ void ThreadPoolAsync::stop() {
 
 ThreadPoolAsync::~ThreadPoolAsync() {
 	if (!(*this)->isShared()) {
-		(*this)->stop();
+		ThreadPoolAsync::stop();
 	}
 }
 
 void ThreadPoolAsyncImpl::runAsync(CustomFn&& completion) {
 
 	if (exitFlag) {
-		defer >> std::move(completion);
+		completion();
 		return;
 	}
 

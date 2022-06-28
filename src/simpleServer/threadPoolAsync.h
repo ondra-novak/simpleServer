@@ -5,14 +5,14 @@
 #include "shared/msgqueue.h"
 #include "shared/countdown.h"
 #include "shared/dispatcher.h"
-#include "shared/defer.h"
+
 
 namespace simpleServer {
 
 using ondra_shared::MsgQueue;
 using ondra_shared::Countdown;
 using ondra_shared::Dispatcher;
-using ondra_shared::DeferContext;
+
 
 
 

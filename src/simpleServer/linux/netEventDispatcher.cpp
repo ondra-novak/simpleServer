@@ -14,11 +14,9 @@
 #include "../exceptions.h"
 #include "../mt.h"
 #include "netEventDispatcher.h"
-#include "../defer.h"
 
 namespace simpleServer {
 
-using ondra_shared::defer;
 
 static LinuxEventDispatcher::Task empty_task([](AsyncState){},asyncOK);
 
@@ -104,7 +102,7 @@ void LinuxEventDispatcher::addIntrWaitHandle() {
 
 void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, CompletionFn &&complfn) {
 	if (exitFlag || complfn == nullptr) {
-		defer >> std::bind(std::move(complfn), asyncCancel);
+	    complfn(asyncCancel);
 		return;
 	}
 
@@ -122,7 +120,7 @@ void LinuxEventDispatcher::runAsync(const AsyncResource &resource, int timeout, 
 
 void LinuxEventDispatcher::runAsync(CustomFn &&completion)  {
 	if (exitFlag || completion == nullptr) {
-		defer >> completion;
+		completion();
 		return;
 	}
 

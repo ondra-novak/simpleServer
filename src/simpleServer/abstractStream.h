@@ -2,7 +2,6 @@
 #pragma once
 #include "shared/refcnt.h"
 #include "shared/stringview.h"
-#include "shared/defer.h"
 #include "asyncProvider.h"
 #include "exceptions.h"
 
@@ -15,7 +14,6 @@ using ondra_shared::StringView;
 using ondra_shared::StrViewA;
 using ondra_shared::MutableBinaryView;
 using ondra_shared::BinaryView;
-using ondra_shared::defer;
 
 enum WriteMode {
 	///perform writing non-blocking. If it is impossible, nothing is written
@@ -563,9 +561,7 @@ public:
 				}
 			});
 		} else {
-			defer >> [=] {
 				callbackFn(asyncOK,remainData);
-			};
 		}
 
 	}
