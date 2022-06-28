@@ -24,6 +24,8 @@ AsyncProvider::operator Worker() const {
 
 		virtual void flush() noexcept {}
 
+		virtual void clear() noexcept  {}
+
 		RefCntPtr<AbstractAsyncProvider> async;
 	};
 
