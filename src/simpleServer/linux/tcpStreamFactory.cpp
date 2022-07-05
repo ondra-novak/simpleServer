@@ -12,8 +12,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "../raii.h"
-
 
 #include "../exceptions.h"
 #include "async.h"

@@ -13,7 +13,8 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 
-#include "../raii.h"
+#include <shared/handle.h>
+
 #include "../abstractStreamFactory.h"
 
 #include "../exceptions.h"
