@@ -1,6 +1,7 @@
 #pragma once
 #include "shared/stringview.h"
 
+#include <cstdint>
 namespace simpleServer {
 
 using ondra_shared::StrViewA;

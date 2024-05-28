@@ -5,6 +5,7 @@
 #include "asyncProvider.h"
 #include "exceptions.h"
 
+#include <cstdint>
 
 namespace simpleServer {
 
