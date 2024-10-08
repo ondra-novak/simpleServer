@@ -212,6 +212,10 @@ Stream HttpClientParser::getBody() const {
 	return body;
 }
 
+Stream HttpClientParser::getConnection() const {
+    return conn;
+}
+
 void HttpClientParser::discardBody() {
 	while (!body.read(false).empty()) {}
 }
@@ -636,7 +640,7 @@ WebSocketStream connectWebSocket(HttpClient &client, StrViewA url, SendHeaders &
 	if (resp.getStatus() != 101 || resp.getHeaders()["Upgrade"] != "websocket") {
 		throw HTTPStatusException(resp.getStatus(), resp.getMessage());
 	}
-	return WebSocketStream(new _details::WebSocketStreamImpl(resp.getBody(),rnd));
+	return WebSocketStream(new _details::WebSocketStreamImpl(resp.getConnection(),rnd));
 }
 void connectWebSocketAsync(HttpClient &client, StrViewA url, SendHeaders &&hdrs, std::function<void(AsyncState, WebSocketStream)> cb) {
 	std::string tmp;

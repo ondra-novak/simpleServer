@@ -168,6 +168,7 @@ public:
 
 	int getStatus() const {return parser->getStatus();}
 	StrViewA getMessage() const {return parser->getMessage();}
+	Stream getConnection() const {return parser->getConnection();}
 	Stream getBody() const {return parser->getBody();}
 	const ReceivedHeaders &getHeaders() const {return parser->getHeaders();}
 	void disableKeepAlive() {pool = nullptr;}
