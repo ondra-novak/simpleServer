@@ -4,6 +4,7 @@
 #include "shared/stringview.h"
 #include "asyncProvider.h"
 #include "exceptions.h"
+#include <cstdint>
 
 
 namespace simpleServer {
