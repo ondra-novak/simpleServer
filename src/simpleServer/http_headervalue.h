@@ -1,5 +1,6 @@
 #pragma once
 #include "shared/stringview.h"
+#include <cstdint>
 
 #include <cstdint>
 namespace simpleServer {
